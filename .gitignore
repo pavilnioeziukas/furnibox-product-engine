@@ -1,0 +1,25 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Data
+data/
+output/
+logs/
+
+# Excel laikini failai
+~$*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Python virtual environment
+.venv/
+venv/
