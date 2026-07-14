@@ -1,47 +1,14 @@
-import xmlrpc.client
+from config import load_settings
+from odoo_client import OdooClient
 
-URL = "https://odoo.furnibox.lt"
-DB = "odoodb"
-USERNAME = "e.kriukonis@gmail.com"
 
-api_key = input("API Key: ")
+def main():
+    settings = load_settings()
+    client = OdooClient(settings)
+    uid = client.authenticate()
 
-common = xmlrpc.client.ServerProxy(f"{URL}/xmlrpc/2/common")
-uid = common.authenticate(DB, USERNAME, api_key, {})
+    print(f"Odoo API ryšys veikia. UID = {uid}")
 
-if not uid:
-    print("Prisijungti nepavyko.")
-    quit()
 
-print(f"Prisijungta. UID = {uid}")
-
-models = xmlrpc.client.ServerProxy(f"{URL}/xmlrpc/2/object")
-
-products = models.execute_kw(
-    DB,
-    uid,
-    api_key,
-    "product.product",
-    "search_read",
-    [[]],
-    {
-        "fields": [
-            "default_code",
-            "name",
-            "active"
-        ],
-        "limit": 10,
-        "order": "default_code"
-    }
-)
-
-print()
-
-for p in products:
-    print(
-        p["default_code"],
-        "|",
-        p["name"],
-        "|",
-        p["active"]
-    )
+if __name__ == "__main__":
+    main()
