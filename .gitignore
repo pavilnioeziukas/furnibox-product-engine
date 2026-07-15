@@ -1,16 +1,19 @@
-# Environment
+# Environment – prisijungimo duomenys
 .env
+.env.*
+!.env.example
 
 # Python
 __pycache__/
 *.py[cod]
 
-# Data
+# Sugeneruoti duomenys ir rezultatai
 data/
 output/
+output_*/
 logs/
 
-# Excel laikini failai
+# Laikini Excel failai
 ~$*.xlsx
 
 # OS
