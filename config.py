@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from output_paths import environment_output_dir
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -25,7 +26,7 @@ def load_settings() -> Settings:
     missing = [k for k, v in values.items() if not v]
     if missing:
         raise ValueError("Neužpildyti .env laukai: " + ", ".join(missing))
-    output_dir = BASE_DIR / "output"
+    output_dir = environment_output_dir(BASE_DIR)
     log_dir = BASE_DIR / "logs"
     output_dir.mkdir(exist_ok=True)
     log_dir.mkdir(exist_ok=True)

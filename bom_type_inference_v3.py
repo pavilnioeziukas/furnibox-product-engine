@@ -19,6 +19,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from output_paths import environment_output_dir
+
 
 def text(value: object) -> str:
     """Suvienodina tekstą palyginimui, bet nekeičia šaltinio failų."""
@@ -243,11 +245,18 @@ def main() -> None:
     args = parser.parse_args()
 
     base = Path(__file__).resolve().parent
-    odoo_path = args.odoo_map or base / "output" / "Odoo_MAP.xlsx"
-    comparison_path = args.comparison or base / "output" / "MAP_Comparison.xlsx"
-    output_path = args.output or base / "output" / "BOM_Type_Review.xlsx"
+    # Tikslinės aplinkos palyginimas ir rezultatas laikomi jos aplanke.
+    # Tačiau BOM tipo etalonas VISADA imamas iš Production, nes Stage DB
+    # yra senesnė ir gali turėti pasenusius arba prieštaringus BOM tipus.
+    target_output_dir = environment_output_dir(base)
+    production_output_dir = base / "output" / "production"
+    odoo_path = args.odoo_map or production_output_dir / "Odoo_MAP.xlsx"
+    comparison_path = args.comparison or target_output_dir / "MAP_Comparison.xlsx"
+    output_path = args.output or target_output_dir / "BOM_Type_Review.xlsx"
 
-    # 1 ŽINGSNIS: pasirenkame po vieną aktyvų etaloninį BOM kiekvienam produktui.
+    # 1 ŽINGSNIS: pasirenkame po vieną aktyvų PRODUCTION etaloninį BOM
+    # kiekvienam produktui, nepriklausomai nuo testuojamos aplinkos.
+    print("BOM tipo etalonas:", odoo_path)
     references = load_reference_boms(odoo_path)
 
     # 2 ŽINGSNIS: paimame 891 produktą, kuriam MAP palyginimas siūlo kurti BOM.
@@ -298,3 +307,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
