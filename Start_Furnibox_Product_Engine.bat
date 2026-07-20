@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_FILE=app_v2.py"
+set "APP_FILE=app_v12.py"
 if not exist "%APP_FILE%" set "APP_FILE=app.py"
 
 if exist ".venv\Scripts\pythonw.exe" (
