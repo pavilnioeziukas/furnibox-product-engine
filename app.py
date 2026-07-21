@@ -129,6 +129,15 @@ class FurniboxApp(tk.Tk):
         )
         self.bom_button.pack(fill="x", pady=3)
 
+        assembled_button = ttk.Button(
+            actions,
+            text="9. Surenkamų spintelių statistika",
+            command=lambda: self.run_script("assembled_cabinet_statistics.py"),
+            style="Action.TButton",
+        )
+        assembled_button.pack(fill="x", pady=3)
+        self.action_buttons.append(assembled_button)
+
         ttk.Separator(actions).pack(fill="x", pady=12)
         ttk.Button(actions, text="Atidaryti rezultatų aplanką", command=self.open_output).pack(fill="x", pady=3)
         ttk.Button(actions, text="Išvalyti žurnalą", command=self.clear_log).pack(fill="x", pady=3)
