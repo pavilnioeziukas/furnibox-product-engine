@@ -32,8 +32,8 @@ class FurniboxAppV12(FurniboxApp):
                 "bom_import_pilot_v2.py",
             ),
             (
-                "12. Paruošti visų BOM importą pagal lygius",
-                "bom_import_v1.py",
+                "12. Paruošti visų Manufacture BOM importą",
+                "bom_import_manufacture_v1.py",
             ),
             (
                 "13. Paruošti esamų BOM naujas versijas",

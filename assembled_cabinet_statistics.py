@@ -192,9 +192,14 @@ def fetch_report_rows(
 
         # Odoo sąrašuose Internal Reference gali būti rodomas laužtiniuose skliaustuose.
         # Atrenkame tik tuos produktus, kurių tikrasis kodas baigiasi "-A".
-        code = internal_reference.strip("[]").strip()
+        code = internal_reference.strip("[]").strip().upper()
 
-        if not code.upper().endswith("-A"):
+        # Įtraukiami tik produktai, kurių Internal Reference baigiasi "-A".
+        if not code.endswith("-A"):
+            continue
+
+        # HRD yra furnitūros komplektai, o ne surenkamos spintelės.
+        if "HRD" in code:
             continue
 
         order_id = line["order_id"][0]
