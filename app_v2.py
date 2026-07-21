@@ -110,7 +110,7 @@ class FurniboxApp(tk.Tk):
         action_specs = [
             ("1. Patikrinti Odoo prisijungimą", lambda: self.run_script("test_odoo.py")),
             ("2. Nuskaityti Odoo duomenis", lambda: self.run_script("main.py")),
-            ("3. Palyginti produktus", lambda: self.run_script("product_detection.py")),
+            ("3. Palyginti produktus", lambda: self.run_script("product_detection_v3.py")),
             ("4. Generuoti Reform MAP", lambda: self.run_script("reform_map.py")),
             ("5. Generuoti Odoo MAP", lambda: self.run_script("odoo_map.py")),
             ("6. Palyginti MAP", lambda: self.run_script(first_existing("map_comparison_v2.py", "map_comparison.py"))),
