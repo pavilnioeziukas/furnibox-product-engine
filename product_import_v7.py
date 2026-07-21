@@ -24,8 +24,49 @@ from product_import_v3 import (
 )
 
 
-REVIEW_PARENT_CATEGORIES = {"CABINET HARDWARE", "FRONT HARDWARE", "INTERIOR STORAGE"}
+# Šios parent kategorijos buvo rankiniu būdu patikrintos per pirmąjį Stage
+# importą. Todėl naujuose paleidimuose jų nebereikia grąžinti į REVIEW lapą.
+REVIEW_PARENT_CATEGORIES = set()
 CLEAR_COMPONENT_GROUPS = {"CABINET PART", "SHELF PART", "ACCESSORIES", "CABINET ACCESSORIES"}
+
+# 2026-07-16 Stage pilote patvirtintos trūkstamų komponentų taisyklės.
+# Jos paimtos iš sėkmingai importuoto Odoo_Remaining_46_Products_Import.xlsx.
+# External ID naudojami todėl, kad po Stage atnaujinimo jie išlieka tokie patys
+# kaip dabartinėje Production bazėje.
+APPROVED_COMPONENT_RULES = {
+    "INTERIOR STORAGE": {
+        "category": "__export__.product_category_12_8d605b38",
+        "routes": "purchase_stock.route_warehouse0_buy",
+        "vendor": "__export__.res_partner_9_b2e3c075",
+    },
+    "FRONT HARDWARE": {
+        "category": "__export__.product_category_10_74eb6563",
+        "routes": "purchase_stock.route_warehouse0_buy",
+        "vendor": "__export__.res_partner_9_b2e3c075",
+    },
+    "BLANK": {
+        "category": "__export__.product_category_16_9cb79bdc",
+        "routes": "stock.route_warehouse0_mto",
+        "vendor": "__export__.res_partner_86_3ef81eee",
+    },
+    "FASTENER": {
+        "category": "__export__.product_category_17_842598e0",
+        "routes": "purchase_stock.route_warehouse0_buy",
+        "vendor": "__export__.res_partner_9_b2e3c075",
+    },
+    "FASTENERS": {
+        "category": "__export__.product_category_17_842598e0",
+        "routes": "purchase_stock.route_warehouse0_buy",
+        "vendor": "__export__.res_partner_9_b2e3c075",
+    },
+}
+
+# Reform šaltinyje šiam vienam produktui pavadinimas yra #N/A. Edgaras
+# patvirtino laikiną aiškiai matomą pavadinimą, kad kortelę būtų galima rasti
+# ir vėliau pervadinti Odoo.
+APPROVED_PRODUCT_NAMES = {
+    "EUB-P-ACC02-MIS012": "Rename",
+}
 EXPECTED_PARENT_CATEGORY_NAMES = {
     # Reform CABINETS are finished/assembled cabinets.  Existing Stage data also
     # contains similarly coded Flatpack products, so majority voting is unsafe.
@@ -132,6 +173,12 @@ def infer_component_rules(reform_products, reference):
             "evidence": sum(votes[group].values()),
         }
 
+    # Rankiniu būdu patvirtintos taisyklės turi pirmenybę prieš statistinį
+    # spėjimą iš reference eksporto. Taip tas pats produktas po Stage bazės
+    # atnaujinimo nebegrįžta į rankinę peržiūrą.
+    for group, approved in APPROVED_COMPONENT_RULES.items():
+        rules[group] = {**approved, "evidence": "approved Stage pilot"}
+
     for group in CLEAR_COMPONENT_GROUPS:
         rule = rules.get(group, {})
         missing_fields = [name for name in ("category", "routes", "vendor") if not rule.get(name)]
@@ -206,7 +253,12 @@ def parent_row(sku, product, category_map, route_profile):
         return None
     return {
         "Internal reference": product["sku"],
-        "name": product.get("name_1") or product.get("name_2") or product["sku"],
+        "name": (
+            APPROVED_PRODUCT_NAMES.get(sku)
+            or product.get("name_1")
+            or product.get("name_2")
+            or product["sku"]
+        ),
         "route_ids/id": route_profile["manufacture"],
         "type": "Storable Product",
         "categ_id": mapping["external_id"],
@@ -409,4 +461,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
