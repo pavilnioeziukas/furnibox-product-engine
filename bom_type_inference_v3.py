@@ -151,6 +151,10 @@ def business_rule(category: str, sku: str) -> tuple[str, str] | None:
         # Plautuvės ir sifono dalys gaunamos bei laikomos atskirai. Pardavimo
         # metu Odoo turi išskleisti komplektą į komponentus, o ne kurti MO.
         return "phantom", "PATVIRTINTA TAISYKLĖ: SINK KOMPONENTAI ATEINA ATSKIRAI = KIT"
+    if category == "LED HARDWARE":
+        # Linijinio LED apšvietimo rinkiniai išduodami kaip komponentų
+        # komplektai. Jiems neturi būti kuriamas MO ar priskiriamos operacijos.
+        return "phantom", "PATVIRTINTA TAISYKLĖ: LED HARDWARE = KIT"
     if category == "INTERIOR STORAGE":
         # Šie trys komplektai turi kelis komponentus / tvirtinimo detales ir
         # atitinka esamus Production gamybinius analogus.
@@ -259,7 +263,7 @@ def main() -> None:
     print("BOM tipo etalonas:", odoo_path)
     references = load_reference_boms(odoo_path)
 
-    # 2 ŽINGSNIS: paimame 891 produktą, kuriam MAP palyginimas siūlo kurti BOM.
+    # 2 ŽINGSNIS: paimame produktus, kuriems MAP palyginimas siūlo kurti BOM.
     new_boms = load_new_boms(comparison_path)
 
     # 3 ŽINGSNIS: pirmiausia taikome patvirtintas verslo taisykles.
@@ -307,4 +311,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

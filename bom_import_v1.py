@@ -34,13 +34,63 @@ from output_paths import environment_output_dir, environment_slug
 
 
 IMPORT_HEADERS = [
-    "default_code", "Product_tmpl_id/.id", "qty",
-    "BoM Lines/Component/Internal Reference", "Product_id/.id", "product_qty",
+    "Product_tmpl_id/id", "qty",
+    "BoM Lines/Component/External ID", "product_qty",
     "BoM Type", "Reference", "mo_autodone_by_wo", "auto_plan",
-    "operation_ids/name", "operation_ids/workcenter_id/.id",
+    "operation_ids/name", "operation_ids/workcenter_id/id",
     "operation_ids/time_mode", "operation_ids/time_cycle_manual",
     "operation_ids/sequence",
 ]
+
+
+def load_external_ids(
+    client: OdooClient, model: str, res_ids: set[int]
+) -> dict[int, str]:
+    """Grąžina po vieną tikrą External ID kiekvienam Odoo įrašui."""
+    if not res_ids:
+        return {}
+    rows = client.search_read_all(
+        "ir.model.data",
+        [["model", "=", model], ["res_id", "in", sorted(res_ids)]],
+        ["module", "name", "res_id"],
+    )
+    grouped: dict[int, list[str]] = {}
+    for row in rows:
+        res_id = int(row["res_id"])
+        external_id = f"{row['module']}.{row['name']}"
+        grouped.setdefault(res_id, []).append(external_id)
+
+    # Jei įrašas turi kelis External ID, prioritetas teikiamas __export__ ID.
+    result = {}
+    for res_id, values in grouped.items():
+        result[res_id] = sorted(
+            set(values),
+            key=lambda value: (not value.startswith("__export__."), value),
+        )[0]
+    return result
+
+
+def attach_product_external_ids(client: OdooClient, products: dict) -> None:
+    """Vidinius produkto ID pakeičia importui skirtais External ID laukais."""
+    template_ids = {
+        int(product["template_id"]) for product in products.values()
+        if product.get("template_id")
+    }
+    product_ids = {
+        int(product["product_id"]) for product in products.values()
+        if product.get("product_id")
+    }
+    template_external_ids = load_external_ids(
+        client, "product.template", template_ids
+    )
+    product_external_ids = load_external_ids(
+        client, "product.product", product_ids
+    )
+    for product in products.values():
+        template_id = int(product["template_id"])
+        product_id = int(product["product_id"])
+        product["template_external_id"] = template_external_ids.get(template_id, "")
+        product["product_external_id"] = product_external_ids.get(product_id, "")
 
 
 def load_stage_subcategories(client: OdooClient, parent_skus: set[str]) -> dict[str, str]:
@@ -69,13 +119,13 @@ def load_stage_subcategories(client: OdooClient, parent_skus: set[str]) -> dict[
     return result
 
 
-def load_stage_workcenter_ids(client: OdooClient) -> dict[str, int]:
-    """Grąžina unikalių aktyvių Stage darbo centrų Database ID pagal vardą."""
+def load_stage_workcenter_ids(client: OdooClient) -> dict[str, str]:
+    """Grąžina unikalių aktyvių Stage darbo centrų External ID pagal vardą."""
     rows = client.search_read_all(
         "mrp.workcenter", [], ["id", "name", "active"],
         context={"active_test": False},
     )
-    grouped = {}
+    grouped: dict[str, int] = {}
     duplicates = set()
     for row in rows:
         if not row.get("active", True):
@@ -88,7 +138,12 @@ def load_stage_workcenter_ids(client: OdooClient) -> dict[str, int]:
         grouped[name] = int(row["id"])
     for name in duplicates:
         grouped.pop(name, None)
-    return grouped
+    external_ids = load_external_ids(client, "mrp.workcenter", set(grouped.values()))
+    return {
+        name: external_ids[res_id]
+        for name, res_id in grouped.items()
+        if res_id in external_ids
+    }
 
 
 def prepare_boms(parents, lines, levels, bom_types, products, subcategories,
@@ -109,6 +164,8 @@ def prepare_boms(parents, lines, levels, bom_types, products, subcategories,
         parent = products.get(sku)
         if not parent:
             messages.append("Stage nerastas BOM produktas")
+        elif not parent.get("template_external_id"):
+            messages.append("BOM produktas neturi product.template External ID")
         if not bom_lines:
             messages.append("BOM neturi komponentų")
         if not bom_type:
@@ -119,6 +176,10 @@ def prepare_boms(parents, lines, levels, bom_types, products, subcategories,
             component = products.get(component_sku)
             if not component:
                 messages.append(f"Stage nerastas komponentas: {component_sku}")
+            elif not component.get("product_external_id"):
+                messages.append(
+                    f"Komponentas neturi product.product External ID: {component_sku}"
+                )
 
         subcategory = subcategories.get(sku, "")
         if bom_type == "Manufacture this product":
@@ -175,11 +236,9 @@ def import_rows(record: dict, products: dict, workcenters: dict[str, str]):
         component = products[line["component"]] if line else None
         manufacture = record["type"] == "Manufacture this product"
         rows.append([
-            parent["display_sku"] if first else None,
-            parent["template_id"] if first else None,
+            parent["template_external_id"] if first else None,
             1 if first else None,
-            component["display_sku"] if component else None,
-            component["product_id"] if component else None,
+            component["product_external_id"] if component else None,
             line["quantity"] if line else None,
             record["type"] if first else None,
             reference if first else None,
@@ -206,7 +265,10 @@ def style_sheet(ws, widths=None):
         if widths and index <= len(widths):
             width = widths[index - 1]
         else:
-            values = [len(str(ws.cell(row, index).value or "")) for row in range(1, min(ws.max_row, 300) + 1)]
+            values = [
+                len(str(ws.cell(row, index).value or ""))
+                for row in range(1, min(ws.max_row, 300) + 1)
+            ]
             width = min(max(values, default=12) + 2, 55)
         ws.column_dimensions[get_column_letter(index)].width = width
 
@@ -223,7 +285,7 @@ def write_workbook(path: Path, ready, review, diagnostics, products, workcenters
         for record in (row for row in ready if row["level"] == level):
             for row in import_rows(record, products, workcenters):
                 ws.append(row)
-        style_sheet(ws, [30, 42, 8, 42, 42, 12, 28, 40, 22, 14, 28, 38, 18, 24, 20])
+        style_sheet(ws, [42, 8, 42, 12, 28, 40, 22, 14, 28, 38, 18, 24, 20])
 
     # 2. REVIEW leidžia prieš importą matyti, kas pateko ir kas buvo sustabdyta.
     ws = wb.create_sheet("REVIEW", 0)
@@ -248,8 +310,13 @@ def write_workbook(path: Path, ready, review, diagnostics, products, workcenters
     ws.append(["Ready for import", len(ready)])
     ws.append(["Not ready", len(review) - len(ready)])
     ws.append(["KIT ready", sum(record["type"] == "KIT" for record in ready)])
-    ws.append(["Manufacture ready", sum(record["type"] == "Manufacture this product" for record in ready)])
-    for (level, status), count in sorted(Counter((r["level"], r["status"]) for r in review).items()):
+    ws.append([
+        "Manufacture ready",
+        sum(record["type"] == "Manufacture this product" for record in ready),
+    ])
+    for (level, status), count in sorted(
+        Counter((r["level"], r["status"]) for r in review).items()
+    ):
         ws.append([f"lv{level} {status}", count])
     style_sheet(ws)
 
@@ -263,6 +330,20 @@ def write_workbook(path: Path, ready, review, diagnostics, products, workcenters
     wb.save(path)
 
 
+def write_import_file(path: Path, records, products, workcenters):
+    """Sukuria vieno lygio švarų failą, skirtą tiesioginiam Odoo importui."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "BOM import"
+    ws.append(IMPORT_HEADERS)
+    for record in records:
+        for row in import_rows(record, products, workcenters):
+            ws.append(row)
+    style_sheet(ws, [42, 8, 42, 12, 28, 40, 22, 14, 28, 38, 18, 24, 20])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
+
+
 def main() -> None:
     base = Path(__file__).resolve().parent
     if environment_slug() != "stage":
@@ -272,6 +353,10 @@ def main() -> None:
     types_path = output_dir / "BOM_Type_Review.xlsx"
     references_path = base / "output" / "production" / "BOM_Operations_Reference.xlsx"
     output_path = output_dir / "BOM_Import_All_Levels.xlsx"
+    lv2_output_path = output_dir / "BOM_Import_All_lv2.xlsx"
+    lv1_output_path = output_dir / "BOM_Import_All_lv1.xlsx"
+    kit_lv2_output_path = output_dir / "BOM_Import_KIT_lv2.xlsx"
+    kit_lv1_output_path = output_dir / "BOM_Import_KIT_lv1.xlsx"
 
     # 1 ŽINGSNIS: nuskaitome naujus BOM, jų tipus ir apskaičiuojame lygius.
     parents, lines = load_new_bom_graph(comparison_path)
@@ -286,6 +371,7 @@ def main() -> None:
         row["component"] for values in lines.values() for row in values
     }
     products = load_odoo_product_ids(client, wanted)
+    attach_product_external_ids(client, products)
     subcategories = load_stage_subcategories(client, set(parents))
 
     # 3 ŽINGSNIS: Production etalonai nustato Manufacture operacijas ir laikus.
@@ -299,13 +385,36 @@ def main() -> None:
     )
     write_workbook(output_path, ready, review, diagnostics, products, workcenters)
 
+    # 5 ŽINGSNIS: sukuriami atskiri tiesioginio importo failai.
+    lv2_ready = [record for record in ready if record["level"] == 2]
+    lv1_ready = [record for record in ready if record["level"] == 1]
+    write_import_file(lv2_output_path, lv2_ready, products, workcenters)
+    write_import_file(lv1_output_path, lv1_ready, products, workcenters)
+
+    # 6 ŽINGSNIS: atskiri KIT-only failai naudojami, kai Manufacture BOM jau
+    # buvo importuoti ankstesniu veiksmu. Taip išvengiama jų dubliavimo.
+    kit_ready = [record for record in ready if record["type"] == "KIT"]
+    kit_lv2_ready = [record for record in kit_ready if record["level"] == 2]
+    kit_lv1_ready = [record for record in kit_ready if record["level"] == 1]
+    write_import_file(kit_lv2_output_path, kit_lv2_ready, products, workcenters)
+    write_import_file(kit_lv1_output_path, kit_lv1_ready, products, workcenters)
+
     print("Prisijungta prie Stage Odoo. UID=", uid)
-    print("\nVISŲ BOM IMPORTO FAILAS SUKURTAS")
-    print("Failas:", output_path)
+    print("\nVISŲ BOM IMPORTO FAILAI SUKURTI")
+    print("Kontrolinis failas:", output_path)
+    print("Odoo importas lv2:", lv2_output_path, f"({len(lv2_ready)} BOM)")
+    print("Odoo importas lv1:", lv1_output_path, f"({len(lv1_ready)} BOM)")
+    print("\nKIT-ONLY IMPORTO FAILAI (kai Manufacture jau importuoti)")
+    print("KIT importas lv2:", kit_lv2_output_path, f"({len(kit_lv2_ready)} BOM)")
+    print("KIT importas lv1:", kit_lv1_output_path, f"({len(kit_lv1_ready)} BOM)")
+    print("Iš viso KIT:", len(kit_ready))
     print("Visi nauji BOM:", len(review))
     print("Paruošti importui:", len(ready))
     print("Dar neparuošti:", len(review) - len(ready))
-    print("Importo lygiai:", ", ".join(f"lv{x}" for x in sorted({r['level'] for r in ready})) or "nėra")
+    print(
+        "Importo lygiai:",
+        ", ".join(f"lv{x}" for x in sorted({r["level"] for r in ready})) or "nėra",
+    )
     print("Diagnostikos įrašai:", len(diagnostics))
     print("Odoo pakeitimų neatlikta.")
 
