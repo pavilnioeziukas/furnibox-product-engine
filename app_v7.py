@@ -130,6 +130,10 @@ class FurniboxApp(tk.Tk):
                 "product_import_v4.py",
                 "product_import.py",
             ))),
+            (
+                "7A. Paruošti naujų Cabinet Parts kainų failą",
+                lambda: self.run_script("cabinet_parts_price_v1.py"),
+            ),
         ]
         for text, command in action_specs:
             button = ttk.Button(actions, text=text, command=command, style="Action.TButton")

@@ -50,6 +50,31 @@ class OdooClient:
             offset += batch_size
         return rows
 
+    def ensure_external_ids(self, model, record_ids, batch_size=500):
+        """Sugeneruoja trūkstamus Odoo ``__export__`` ID per standartinį eksportą.
+
+        ``export_data`` nekeičia verslo laukų. Eksportuojant techninį ``id``
+        lauką Odoo sukuria External ID tiems įrašams, kurie jo dar neturi.
+        """
+        if self.uid is None:
+            self.authenticate()
+
+        unique_ids = sorted({int(record_id) for record_id in record_ids})
+        exported = 0
+        for offset in range(0, len(unique_ids), batch_size):
+            batch = unique_ids[offset:offset + batch_size]
+            self.models.execute_kw(
+                self.settings.db,
+                self.uid,
+                self.settings.api_key,
+                model,
+                "export_data",
+                [batch, ["id"]],
+                {"context": {"import_compat": True}},
+            )
+            exported += len(batch)
+        return exported
+
     def products(self):
         return self.search_read_all(
             "product.product",

@@ -32,6 +32,10 @@ class FurniboxAppV12(FurniboxApp):
                 "bom_import_pilot_v2.py",
             ),
             (
+                "11A. Paruošti produktų External ID (tik Stage)",
+                "external_id_prepare_v1.py",
+            ),
+            (
                 "12. Paruošti visų Manufacture BOM importą",
                 "bom_import_manufacture_v1.py",
             ),

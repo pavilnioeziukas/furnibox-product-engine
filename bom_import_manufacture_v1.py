@@ -6,7 +6,7 @@ nuskaito Odoo ir sukuria Excel failą – jokių BOM Odoo sistemoje nekuria.
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -28,8 +28,9 @@ from output_paths import environment_output_dir, environment_slug
 
 
 IMPORT_HEADERS = [
-    "Product/Internal Reference", "qty",
-    "BoM Lines/Component/Internal Reference", "product_qty",
+    "Product/Internal Reference", "Product/External ID", "qty",
+    "BoM Lines/Component/Internal Reference",
+    "BoM Lines/Component/External ID", "product_qty",
     "BoM Type", "Reference", "mo_autodone_by_wo", "auto_plan",
     "operation_ids/name", "operation_ids/workcenter_id",
     "operation_ids/time_mode", "operation_ids/time_cycle_manual",
@@ -43,9 +44,10 @@ def load_stage_products_by_sku(
 ) -> tuple[dict[str, dict], set[str]]:
     """Randa Stage produktus pagal Internal Reference ir aptinka dublikatus.
 
-    Importo failas sąmoningai nenaudoja aplinkai specifinių External ID. Vienas
+    Internal Reference naudojamas produktams surasti ir žmogaus patikrai, o
+    importo ryšiams papildomai paimami tikslūs Stage External ID. Vienas
     Internal Reference turi rodyti į lygiai vieną produkto variantą ir vieną
-    produkto šabloną; kitu atveju Odoo importo susiejimas būtų dviprasmis.
+    produkto šabloną; kitu atveju susiejimas būtų dviprasmis.
     """
     rows = client.search_read_all(
         "product.product",
@@ -58,6 +60,46 @@ def load_stage_products_by_sku(
         sku = canon(row.get("default_code"))
         if sku in wanted_skus:
             grouped.setdefault(sku, []).append(row)
+
+    product_ids = {
+        int(row["id"]) for matches in grouped.values() for row in matches
+    }
+    template_ids = {
+        int(row["product_tmpl_id"][0])
+        for matches in grouped.values()
+        for row in matches
+        if row.get("product_tmpl_id")
+    }
+    def load_external_ids(model: str, res_ids: set[int]) -> dict[int, str]:
+        """Grąžina tikslų konkretaus Odoo modelio External ID pagal res_id."""
+        if not res_ids:
+            return {}
+        xml_rows = client.search_read_all(
+            "ir.model.data",
+            [
+                ["model", "=", model],
+                ["res_id", "in", sorted(res_ids)],
+            ],
+            ["module", "name", "res_id"],
+        )
+        candidates: dict[int, list[str]] = defaultdict(list)
+        for xml_row in xml_rows:
+            module = str(xml_row.get("module") or "").strip()
+            name = str(xml_row.get("name") or "").strip()
+            if module and name:
+                candidates[int(xml_row["res_id"])].append(f"{module}.{name}")
+
+        result = {}
+        for res_id, values in candidates.items():
+            # Jei yra stabilus modulio XML ID, rinktis jį prieš __export__ ID.
+            result[res_id] = sorted(
+                set(values),
+                key=lambda value: (value.startswith("__export__."), value),
+            )[0]
+        return result
+
+    product_external_ids = load_external_ids("product.product", product_ids)
+    template_external_ids = load_external_ids("product.template", template_ids)
 
     products = {}
     duplicates = set()
@@ -76,6 +118,12 @@ def load_stage_products_by_sku(
             "display_sku": str(row["default_code"]).strip(),
             "product_id": next(iter(product_ids)),
             "template_id": next(iter(template_ids)),
+            "product_external_id": product_external_ids.get(
+                next(iter(product_ids)), ""
+            ),
+            "template_external_id": template_external_ids.get(
+                next(iter(template_ids)), ""
+            ),
         }
     return products, duplicates
 
@@ -118,6 +166,8 @@ def prepare_manufacture_boms(
             messages.append("Stage Internal Reference neunikalus BOM produktui")
         elif sku not in products:
             messages.append("Stage nerastas BOM produktas")
+        elif not products[sku]["template_external_id"]:
+            messages.append("BOM produktas neturi product.template External ID")
         if not bom_lines:
             messages.append("BOM neturi komponentų")
         for line in bom_lines:
@@ -127,6 +177,11 @@ def prepare_manufacture_boms(
                 )
             elif line["component"] not in products:
                 messages.append(f"Stage nerastas komponentas: {line['component']}")
+            elif not products[line["component"]]["product_external_id"]:
+                messages.append(
+                    "Komponentas neturi product.product External ID: "
+                    f"{line['component']}"
+                )
 
         subcategory = subcategories.get(sku, "")
         if not subcategory:
@@ -190,8 +245,10 @@ def import_rows(record: dict, products: dict):
         component = products[line["component"]] if line else None
         yield [
             parent["display_sku"] if first else None,
+            parent["template_external_id"] if first else None,
             1 if first else None,
             component["display_sku"] if component else None,
+            component["product_external_id"] if component else None,
             line["quantity"] if line else None,
             MANUFACTURE if first else None,
             reference if first else None,
@@ -272,10 +329,10 @@ def write_workbook(path: Path, ready, review, diagnostics, products) -> None:
 
 
 def write_import_workbook(path: Path, records, products) -> None:
-    """Sukuria vieno lapo failą, paruoštą tiesioginiam Odoo importui."""
+    """Sukuria švarų vieno lapo failą tiesioginiam Odoo importui."""
     wb = Workbook()
     ws = wb.active
-    ws.title = "BOM_import"
+    ws.title = "BOM import"
     ws.append(IMPORT_HEADERS)
     for record in records:
         for row in import_rows(record, products):
@@ -320,23 +377,20 @@ def main() -> None:
         operation_templates, workcenters, duplicate_workcenters, duplicate_skus,
     )
     write_workbook(output_path, ready, review, diagnostics, products)
-    ready_by_level = {
-        level: [record for record in ready if record["level"] == level]
-        for level in (2, 1)
-    }
-    write_import_workbook(lv2_output_path, ready_by_level[2], products)
-    write_import_workbook(lv1_output_path, ready_by_level[1], products)
+    lv2_ready = [record for record in ready if record["level"] == 2]
+    lv1_ready = [record for record in ready if record["level"] == 1]
+    write_import_workbook(lv2_output_path, lv2_ready, products)
+    write_import_workbook(lv1_output_path, lv1_ready, products)
 
     print("Prisijungta prie Stage Odoo. UID=", uid)
     print("\nVISŲ MANUFACTURE BOM IMPORTO FAILAS SUKURTAS")
     print("Failas:", output_path)
-    print("Odoo importas lv2:", lv2_output_path)
-    print("Odoo importas lv1:", lv1_output_path)
+    print("Odoo importas lv2:", lv2_output_path, f"({len(lv2_ready)} BOM)")
+    print("Odoo importas lv1:", lv1_output_path, f"({len(lv1_ready)} BOM)")
     print("Visi nauji Manufacture BOM:", len(review))
     print("Paruošti importui:", len(ready))
     print("Dar neparuošti:", len(review) - len(ready))
     print("Diagnostikos įrašai:", len(diagnostics))
-    print("Importo eiliškumas: pirmiausia lv2, po to lv1.")
     print("Odoo pakeitimų neatlikta.")
 
 
