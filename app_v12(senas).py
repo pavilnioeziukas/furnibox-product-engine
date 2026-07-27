@@ -1,7 +1,7 @@
 """Furnibox Product Engine GUI v12 su visu BOM paruošimo procesu.
 
 Ši versija remiasi stabilia ``app_v7`` GUI baze ir pati prideda visus
-BOM proceso veiksmus (9–13). Todėl jai nereikia tarpinių ``app_v8–v11``
+BOM proceso veiksmus (9–14). Todėl jai nereikia tarpinių ``app_v8–v11``
 failų.
 """
 
@@ -19,7 +19,7 @@ class FurniboxAppV12(FurniboxApp):
             if isinstance(child, ttk.Separator)
         )
 
-        # 9–13 žingsniai sudėti čia viena aiškia seka. Visi generatoriai tik
+        # 9–14 žingsniai sudėti čia viena aiškia seka. Visi generatoriai tik
         # paruošia Excel failus ir patys Odoo duomenų nekeičia.
         extra_actions = [
             ("9. Paruošti vieno BOM Stage pilotą", "bom_import_pilot_v1.py"),
@@ -36,11 +36,15 @@ class FurniboxAppV12(FurniboxApp):
                 "external_id_prepare_v1.py",
             ),
             (
-                "12. Paruošti visų Manufacture ir KIT BOM importą",
-                "bom_import_manufacture_v5.py",
+                "12. Paruošti visų Manufacture BOM importą",
+                "bom_import_manufacture_v1.py",
             ),
             (
-                "13. Paruošti esamų BOM naujas versijas",
+                "13. Paruošti visų KIT ir Manufacture BOM importą",
+                "bom_import_v1.py",
+            ),
+            (
+                "14. Paruošti esamų BOM naujas versijas",
                 "bom_version_import_v1.py",
             ),
         ]
