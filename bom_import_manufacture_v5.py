@@ -65,6 +65,22 @@ APACK_FAMILY_FALLBACKS = {
     "BOH": "BAS",
     "HCO": "HIG",
 }
+KIT_PARENT_CATEGORIES = {
+    # Reform baziniai produktai, kurių BOM Odoo turi būti KIT.
+    # CABINET SHELF yra teisėtas KIT, tačiau jam negeneruojama atskira -A versija.
+    "CABINETS",
+    "CABINET SHELF",
+}
+
+
+def is_kit_bom_parent(sku: str, product: dict) -> bool:
+    """Tikras Reform tėvinis produktas, kuriam leidžiama kurti bazinį KIT."""
+    code = canon(sku)
+    return bool(
+        product.get("is_parent")
+        and canon(product.get("category")) in KIT_PARENT_CATEGORIES
+        and not code.endswith("-A")
+    )
 
 
 def add_generated_apack_boms(parents, lines, levels, bom_types):
@@ -548,14 +564,27 @@ def prepare_manufacture_boms(
 
 def prepare_kit_boms(
     parents, lines, levels, bom_types, products, duplicate_skus,
-    generated_cabinet_from,
+    generated_cabinet_from, reform_products,
 ):
     """Patikrina bazinius ir sugeneruotus surinktų spintelių KIT BOM."""
     kit_skus = {sku for sku in parents if bom_types.get(sku) == KIT}
     ready = []
     review = []
     diagnostics = []
+    excluded = []
     for sku in sorted(kit_skus, key=lambda value: (levels[value], value)):
+        is_generated_cabinet = sku in generated_cabinet_from
+        reform_product = reform_products.get(sku, {})
+        if not is_generated_cabinet and not is_kit_bom_parent(sku, reform_product):
+            excluded.append({
+                "sku": sku,
+                "category": str(reform_product.get("category") or "").strip(),
+                "reason": (
+                    "KIT atmestas: Reform tėvinio produkto kategorija nėra "
+                    "CABINETS arba CABINET SHELF"
+                ),
+            })
+            continue
         bom_lines = lines.get(sku, [])
         messages = []
         if sku in duplicate_skus:
@@ -600,7 +629,7 @@ def prepare_kit_boms(
             diagnostics.extend(
                 [sku, f"lv{levels[sku]}", message] for message in messages
             )
-    return ready, review, diagnostics
+    return ready, review, diagnostics, excluded
 
 
 def import_rows(record: dict, products: dict, batch_reference: str):
@@ -828,9 +857,9 @@ def main() -> None:
         operation_templates, workcenters, duplicate_workcenters, duplicate_skus,
         generated_from, generated_hrd_from,
     )
-    kit_ready, kit_review, kit_diagnostics = prepare_kit_boms(
+    kit_ready, kit_review, kit_diagnostics, kit_excluded = prepare_kit_boms(
         parents, lines, levels, bom_types, products, duplicate_skus,
-        generated_cabinet_from,
+        generated_cabinet_from, reform_products,
     )
     write_workbook(
         output_path, ready, review, diagnostics, products, batch_reference
@@ -876,6 +905,13 @@ def main() -> None:
     print("KIT paruošti importui:", len(kit_ready))
     print("KIT dar neparuošti:", len(kit_review) - len(kit_ready))
     print("KIT diagnostikos įrašai:", len(kit_diagnostics))
+    print("Neleistinų kategorijų produktai pašalinti iš KIT:", len(kit_excluded))
+    for item in kit_excluded:
+        print(
+            "  -",
+            item["sku"],
+            f"(Reform kategorija: {item['category'] or 'nenustatyta'})",
+        )
     print("Odoo pakeitimų neatlikta.")
 
 
