@@ -1,0 +1,97 @@
+import xmlrpc.client
+
+class OdooClient:
+    def __init__(self, settings):
+        self.settings = settings
+        self.uid = None
+        self.common = xmlrpc.client.ServerProxy(
+            f"{settings.url}/xmlrpc/2/common", allow_none=True
+        )
+        self.models = xmlrpc.client.ServerProxy(
+            f"{settings.url}/xmlrpc/2/object", allow_none=True
+        )
+
+    def authenticate(self):
+        uid = self.common.authenticate(
+            self.settings.db,
+            self.settings.login,
+            self.settings.api_key,
+            {},
+        )
+        if not uid:
+            raise PermissionError("Odoo autentifikacija nepavyko.")
+        self.uid = int(uid)
+        return self.uid
+
+    def search_read_all(self, model, domain, fields, order="id asc", context=None, batch_size=1000):
+        if self.uid is None:
+            self.authenticate()
+        rows = []
+        offset = 0
+        while True:
+            batch = self.models.execute_kw(
+                self.settings.db,
+                self.uid,
+                self.settings.api_key,
+                model,
+                "search_read",
+                [domain],
+                {
+                    "fields": fields,
+                    "limit": batch_size,
+                    "offset": offset,
+                    "order": order,
+                    "context": context or {},
+                },
+            )
+            rows.extend(batch)
+            if len(batch) < batch_size:
+                break
+            offset += batch_size
+        return rows
+
+    def products(self):
+        return self.search_read_all(
+            "product.product",
+            [],
+            [
+                "id", "default_code", "name", "active",
+                "product_tmpl_id", "categ_id", "uom_id",
+                "type", "standard_price", "currency_id", "write_date",
+            ],
+            context={"active_test": False},
+        )
+
+    def boms(self):
+        return self.search_read_all(
+            "mrp.bom",
+            [],
+            [
+                "id", "code", "active", "product_tmpl_id", "product_id",
+                "product_qty", "product_uom_id", "type",
+                "company_id", "write_date",
+            ],
+            context={"active_test": False},
+        )
+
+    def bom_lines(self):
+        return self.search_read_all(
+            "mrp.bom.line",
+            [],
+            [
+                "id", "bom_id", "product_id", "product_qty",
+                "product_uom_id", "sequence", "company_id", "write_date",
+            ],
+        )
+
+    def purchase_order_lines(self):
+        return self.search_read_all(
+            "purchase.order.line",
+            [["order_id.state", "in", ["purchase", "done"]]],
+            [
+                "id", "order_id", "partner_id", "product_id",
+                "product_qty", "price_unit", "currency_id",
+                "date_order", "company_id", "write_date",
+            ],
+            order="product_id asc, date_order desc, id desc",
+        )

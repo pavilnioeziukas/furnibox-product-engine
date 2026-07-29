@@ -26,6 +26,14 @@ from bom_import_pilot_v2 import choose_operation_template, load_operation_templa
 from bom_import_pilot_v2 import family_token
 from bom_import_v1 import load_stage_subcategories
 from config import load_settings
+from manifest.manifest_writer import (
+    calculate_file_hash,
+    write_import_package_manifest,
+)
+from validated_dataset import (
+    DatasetBuilder,
+    write_validated_dataset,
+)
 from odoo_client import OdooClient
 from output_paths import environment_output_dir, environment_slug
 from product_import_v3 import apack_sku
@@ -883,6 +891,52 @@ def main() -> None:
         kit_output_path, kit_ready, products, batch_reference
     )
 
+    dataset = DatasetBuilder().build(
+        environment=environment,
+        batch_reference=batch_reference,
+        source_file=reform_input_path.name,
+        source_file_hash=calculate_file_hash(reform_input_path),
+        manufacture_records=ready,
+        kit_records=kit_ready,
+    )
+    dataset_path = write_validated_dataset(dataset)
+
+    manifest_path = write_import_package_manifest(
+        environment=environment,
+        batch_reference=batch_reference,
+        source_file=reform_input_path,
+        manufacture_records=ready,
+        kit_records=kit_ready,
+        output_files=[
+            (
+                output_path,
+                len(ready),
+                "Manufacture BOM review and level-based import package",
+            ),
+            (
+                lv2_output_path,
+                len(lv2_ready),
+                "Manufacture BOM level 2 import",
+            ),
+            (
+                lv1_output_path,
+                len(lv1_ready),
+                "Manufacture BOM level 1 import",
+            ),
+            (
+                apack_output_path,
+                len(apack_ready),
+                "Generated APACK BOM import",
+            ),
+            (
+                kit_output_path,
+                len(kit_ready),
+                "KIT BOM import",
+            ),
+        ],
+        product_engine_version="v5",
+    )
+
     print(f"Prisijungta prie {environment.title()} Odoo. UID=", uid)
     print("\nVISŲ MANUFACTURE BOM IMPORTO FAILAS SUKURTAS")
     print("Failas:", output_path)
@@ -912,6 +966,8 @@ def main() -> None:
             item["sku"],
             f"(Reform kategorija: {item['category'] or 'nenustatyta'})",
         )
+    print("Importo paketo manifestas:", manifest_path)
+    print("Validated Product Dataset:", dataset_path)
     print("Odoo pakeitimų neatlikta.")
 
 
