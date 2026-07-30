@@ -36,6 +36,7 @@ class BomReleasePlanItem:
     product_exists: bool
     product_id: int | None
     product_template_id: int | None
+    parent_external_id_ready: bool
 
     active_bom_count: int
     active_bom_id: int | None
@@ -48,6 +49,9 @@ class BomReleasePlanItem:
     release_reference: str
 
     missing_components: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    missing_component_external_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
     duplicate_product_ids: tuple[int, ...] = field(
@@ -66,6 +70,10 @@ class BomReleasePlanItem:
     @property
     def missing_component_count(self) -> int:
         return len(self.missing_components)
+
+    @property
+    def missing_component_external_id_count(self) -> int:
+        return len(self.missing_component_external_ids)
 
     @property
     def multiple_sequence_zero(self) -> bool:
@@ -153,6 +161,20 @@ class BomReleasePlan:
         )
 
     @property
+    def missing_parent_external_id_count(self) -> int:
+        return sum(
+            item.product_exists and not item.parent_external_id_ready
+            for item in self.items
+        )
+
+    @property
+    def missing_component_external_id_parent_count(self) -> int:
+        return sum(
+            bool(item.missing_component_external_ids)
+            for item in self.items
+        )
+
+    @property
     def multiple_sequence_zero_count(self) -> int:
         return sum(
             item.multiple_sequence_zero
@@ -185,6 +207,12 @@ class BomReleasePlan:
             ),
             "missing_component_parent_count": (
                 self.missing_component_parent_count
+            ),
+            "missing_parent_external_id_count": (
+                self.missing_parent_external_id_count
+            ),
+            "missing_component_external_id_parent_count": (
+                self.missing_component_external_id_parent_count
             ),
             "multiple_sequence_zero_count": (
                 self.multiple_sequence_zero_count

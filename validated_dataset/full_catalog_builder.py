@@ -10,14 +10,19 @@ from bom_import_manufacture_v5 import (
     add_generated_apack_boms,
     add_generated_cabinet_assembled_kits,
     add_generated_hrd_assembled_boms,
+    choose_apack_operation_template,
+    choose_hrd_assembled_operation_template,
 )
 from bom_import_pilot_v1 import calculate_levels
+from bom_import_pilot_v2 import choose_operation_template
+from operation_contract import is_cabinet_shelf
 from manifest.manifest_hash import calculate_bom_hash
 from manifest.manifest_models import ManifestComponent
 from validated_dataset.full_bom_type_catalog import FullBomTypeCatalog
 from validated_dataset.models import (
     ValidatedComponent,
     ValidatedDataset,
+    ValidatedOperation,
     ValidatedProduct,
 )
 
@@ -49,6 +54,7 @@ def build_full_validated_dataset(
     reform_products: dict[str, dict],
     reform_lines: dict[str, list[dict]],
     type_catalog: FullBomTypeCatalog,
+    operation_templates: dict[int, dict],
 ) -> ValidatedDataset:
     environment = str(environment or "").strip().lower()
     if environment == "prod":
@@ -148,6 +154,64 @@ def build_full_validated_dataset(
             if bom_types[sku] == MANUFACTURE
             else "KIT"
         )
+        generated_source = generated_from.get(sku, "")
+        category = _category_for(
+            sku,
+            generated_source,
+            reform_products,
+        )
+
+        operations: list[ValidatedOperation] = []
+        if bom_type == "MANUFACTURE":
+            template: dict = {"operations": []}
+            if not is_cabinet_shelf(sku=sku, category=category):
+                try:
+                    if sku in generated_hrd:
+                        template = choose_hrd_assembled_operation_template(
+                            operation_templates
+                        )
+                    elif sku in generated_apack:
+                        template = choose_apack_operation_template(
+                            sku,
+                            category,
+                            operation_templates,
+                        )
+                    else:
+                        template = choose_operation_template(
+                            sku,
+                            category,
+                            operation_templates,
+                        )
+                except ValueError as exc:
+                    raise FullCatalogBuildError(
+                        f"BOM {sku} operacijų etalonas nerastas: {exc}"
+                    ) from exc
+
+            for operation in template.get("operations", []):
+                operations.append(
+                    ValidatedOperation(
+                        name=str(operation.get("name") or "").strip(),
+                        workcenter=str(
+                            operation.get("workcenter") or ""
+                        ).strip(),
+                        time_mode=str(
+                            operation.get("time_mode") or ""
+                        ).strip(),
+                        time_minutes=float(
+                            operation.get("time") or 0
+                        ),
+                        sequence=int(
+                            operation.get("sequence") or 0
+                        ),
+                    )
+                )
+            if (
+                not operations
+                and not is_cabinet_shelf(sku=sku, category=category)
+            ):
+                raise FullCatalogBuildError(
+                    f"Manufacture BOM {sku} neturi operacijų."
+                )
 
         hash_components = [
             ManifestComponent(
@@ -167,13 +231,6 @@ def build_full_validated_dataset(
             components=hash_components,
         )
 
-        generated_source = generated_from.get(sku, "")
-        category = _category_for(
-            sku,
-            generated_source,
-            reform_products,
-        )
-
         products.append(
             ValidatedProduct(
                 sku=sku,
@@ -186,7 +243,7 @@ def build_full_validated_dataset(
                 content_hash=content_hash,
                 content_signature=content_signature,
                 components=components,
-                operations=[],
+                operations=operations,
             )
         )
 

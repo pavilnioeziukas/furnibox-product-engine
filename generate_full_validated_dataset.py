@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 from bom_import_manufacture_v5 import load_reform_bom_lines
+from bom_import_pilot_v2 import load_operation_templates
 from manifest.manifest_writer import calculate_file_hash
 from output_paths import environment_slug
 from product_detection_v2 import (
@@ -43,6 +44,12 @@ def main() -> None:
             base / "output" / "production" / "Odoo_MAP.xlsx"
         ),
     )
+    operation_templates = load_operation_templates(
+        base
+        / "output"
+        / "production"
+        / "BOM_Operations_Reference.xlsx"
+    )
 
     dataset = build_full_validated_dataset(
         environment=environment,
@@ -54,6 +61,7 @@ def main() -> None:
         reform_products=reform_products,
         reform_lines=reform_lines,
         type_catalog=type_catalog,
+        operation_templates=operation_templates,
     )
 
     output_path = write_validated_dataset(dataset)
@@ -62,6 +70,10 @@ def main() -> None:
     print("Aplinka:", dataset.environment)
     print("Reform BOM:", len(reform_lines))
     print("Dataset produktai:", dataset.product_count)
+    print(
+        "Operacijų eilutės:",
+        sum(product.operation_count for product in dataset.products),
+    )
     print("BOM tipai neišspręsti:", type_catalog.unresolved_count)
     print("Failas:", output_path)
 

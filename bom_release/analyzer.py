@@ -14,6 +14,10 @@ from bom_release.models import (
     ReleaseStatus,
 )
 from odoo_client import OdooClient
+from operation_contract import (
+    manufacture_operations_required,
+    product_category,
+)
 
 
 DEFAULT_SHARED_DATA_ROOT = Path(
@@ -204,6 +208,15 @@ class BomReleaseAnalyzer:
                     template_id
                 ].append(product_id)
 
+        product_external_ids = self._external_id_res_ids(
+            "product.product",
+            set(product_by_id),
+        )
+        template_external_ids = self._external_id_res_ids(
+            "product.template",
+            set(variant_ids_by_template),
+        )
+
         boms = self.client.search_read_all(
             "mrp.bom",
             [],
@@ -327,6 +340,19 @@ class BomReleaseAnalyzer:
                 )
                 != 1
             )
+            missing_component_external_ids = tuple(
+                sku
+                for sku in component_skus
+                if (
+                    len(product_ids_by_sku.get(sku, [])) == 1
+                    and product_ids_by_sku[sku][0]
+                    not in product_external_ids
+                )
+            )
+            parent_external_id_ready = (
+                template_id is not None
+                and template_id in template_external_ids
+            )
 
             parent_boms = (
                 boms_by_parent_sku.get(
@@ -413,6 +439,16 @@ class BomReleaseAnalyzer:
                     "Trūksta komponentų arba jų SKU dubliuoti."
                 )
 
+            if product_exists and not parent_external_id_ready:
+                blocking_reasons.append(
+                    "Parent product.template neturi External ID."
+                )
+
+            if missing_component_external_ids:
+                blocking_reasons.append(
+                    "Komponentų product.product trūksta External ID."
+                )
+
             if len(
                 sequence_zero_boms
             ) > 1:
@@ -442,6 +478,25 @@ class BomReleaseAnalyzer:
                 )
                 or []
             )
+            normalized_type = bom_type.upper()
+            if normalized_type in {
+                "MANUFACTURE",
+                "MANUFACTURE THIS PRODUCT",
+                "NORMAL",
+            } and operation_count == 0 and manufacture_operations_required(
+                sku=sku,
+                category=product_category(record),
+            ):
+                blocking_reasons.append(
+                    "Dataset Manufacture BOM neturi operacijų."
+                )
+            if normalized_type in {
+                "KIT",
+                "PHANTOM",
+            } and operation_count:
+                blocking_reasons.append(
+                    "Dataset KIT BOM turi gamybos operacijų."
+                )
 
             if release_boms:
                 if len(release_boms) > 1:
@@ -481,6 +536,9 @@ class BomReleaseAnalyzer:
                     product_id=product_id,
                     product_template_id=(
                         template_id
+                    ),
+                    parent_external_id_ready=(
+                        parent_external_id_ready
                     ),
                     active_bom_count=len(
                         sequence_zero_boms
@@ -538,6 +596,9 @@ class BomReleaseAnalyzer:
                     ),
                     missing_components=(
                         missing_components
+                    ),
+                    missing_component_external_ids=(
+                        missing_component_external_ids
                     ),
                     duplicate_product_ids=(
                         parent_ids
@@ -610,6 +671,26 @@ class BomReleaseAnalyzer:
         # item only if they can affect current Dataset parents. Historical
         # unresolved Odoo BOM alone does not block the release plan.
         return plan
+
+    def _external_id_res_ids(
+        self,
+        model: str,
+        res_ids: set[int],
+    ) -> set[int]:
+        if not res_ids:
+            return set()
+        rows = self.client.search_read_all(
+            "ir.model.data",
+            [
+                ["model", "=", model],
+                ["res_id", "in", sorted(res_ids)],
+            ],
+            ["res_id"],
+        )
+        return {
+            int(row["res_id"])
+            for row in rows
+        }
 
     @staticmethod
     def _resolve_parent_sku(

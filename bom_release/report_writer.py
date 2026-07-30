@@ -159,6 +159,18 @@ def write_release_plan(
     )
     summary_ws.append(
         [
+            "Parents Missing Template External ID",
+            plan.missing_parent_external_id_count,
+        ]
+    )
+    summary_ws.append(
+        [
+            "Parents with Components Missing Variant External ID",
+            plan.missing_component_external_id_parent_count,
+        ]
+    )
+    summary_ws.append(
+        [
             "Multiple Sequence 0",
             plan.multiple_sequence_zero_count,
         ]
@@ -186,6 +198,7 @@ def write_release_plan(
             "Product Exists",
             "Product ID",
             "Product Template ID",
+            "Parent External ID Ready",
             "Sequence 0 BOM Count",
             "Active BOM ID",
             "Active Reference",
@@ -196,6 +209,8 @@ def write_release_plan(
             "Release Reference",
             "Missing Component Count",
             "Missing Components",
+            "Missing Component External ID Count",
+            "Components Missing External ID",
             "Duplicate Product IDs",
             "Blocking Reasons",
             "Warnings",
@@ -219,6 +234,9 @@ def write_release_plan(
                 else "NO",
                 item.product_id,
                 item.product_template_id,
+                "YES"
+                if item.parent_external_id_ready
+                else "NO",
                 item.active_bom_count,
                 item.active_bom_id,
                 item.active_reference,
@@ -232,6 +250,10 @@ def write_release_plan(
                 item.missing_component_count,
                 "; ".join(
                     item.missing_components
+                ),
+                item.missing_component_external_id_count,
+                "; ".join(
+                    item.missing_component_external_ids
                 ),
                 "; ".join(
                     str(value)
@@ -269,6 +291,7 @@ def write_release_plan(
             "Parent SKU",
             "Blocking Reasons",
             "Missing Components",
+            "Components Missing External ID",
             "Sequence 0 BOM Count",
             "Duplicate Product IDs",
         ]
@@ -286,6 +309,9 @@ def write_release_plan(
                 ),
                 "; ".join(
                     item.missing_components
+                ),
+                "; ".join(
+                    item.missing_component_external_ids
                 ),
                 item.active_bom_count,
                 "; ".join(

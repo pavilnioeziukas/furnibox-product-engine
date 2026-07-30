@@ -62,10 +62,11 @@ EXCLUDED_APACK_SOURCES = {
     # HRD pakuotė, o ne spintelės FPACK. Iš jos APACK kurti negalima.
     "FPACK-WTP92-HRD001",
 }
-LEGACY_CABINET_APACKS = {
+LEGACY_FPACK_APACKS = {
     # Production legacy SKU naudoja APACK-USB-, nors dabartinė taisyklė iš
-    # FPACK-US- generuotų APACK-US-C-. Naudojame realiai esantį produktą.
-    "USB-C-CAB01-WAL045": "APACK-USB-C-CAB01-WAL045-A",
+    # FPACK-US- generuotų APACK-US-C-. Ta pati pora privalo būti naudojama
+    # ir generuojant APACK BOM, ir kuriant surinkto CABINET-A KIT komponentą.
+    "FPACK-US-C-CAB01-WAL045": "APACK-USB-C-CAB01-WAL045-A",
 }
 APACK_FAMILY_FALLBACKS = {
     # Naujos šeimos neturi tiesioginio Production analogo. BOH yra bazinė,
@@ -101,7 +102,9 @@ def add_generated_apack_boms(parents, lines, levels, bom_types):
             continue
         if bom_types.get(fpack) != MANUFACTURE:
             continue
-        generated = canon(apack_sku(fpack))
+        generated = canon(
+            LEGACY_FPACK_APACKS.get(fpack, apack_sku(fpack))
+        )
         if generated in parents:
             raise ValueError(
                 f"APACK jau yra MAP grafe, todėl jo negalima generuoti antrą kartą: "
@@ -170,7 +173,10 @@ def add_generated_cabinet_assembled_kits(
             component = canon(line.get("component"))
             if component.startswith("FPACK-"):
                 assembled_component = canon(
-                    LEGACY_CABINET_APACKS.get(source, apack_sku(component))
+                    LEGACY_FPACK_APACKS.get(
+                        component,
+                        apack_sku(component),
+                    )
                 )
             elif "HRD" in component:
                 assembled_component = canon(hrd_assembled_sku(component))
@@ -308,20 +314,37 @@ def load_reform_bom_lines(path: Path) -> dict[str, list[dict]]:
 def choose_apack_operation_template(
     sku: str, subcategory: str, templates: dict[int, dict]
 ) -> dict:
-    """Parenka tos pačios SKU šeimos APACK analogą ir sutvarko operacijų eilę."""
+    """Parenka tos pačios SKU šeimos ir CAB tipo APACK operacijų etaloną.
+
+    Sugeneruotas APACK paveldi šaltinio FPACK kategoriją, todėl jo negalima
+    filtruoti pagal ``subcategory``: Production APACK etalonai yra kategorijoje
+    PREPACK CABINET ASSEMBLED, o FPACK – PREPACK CABINETS.
+    """
     family = family_token(sku)
     reference_family = APACK_FAMILY_FALLBACKS.get(family, family)
+    cabinet_match = re.search(r"-CAB(\d{2})-", canon(sku))
+    cabinet_type = cabinet_match.group(1) if cabinet_match else ""
+    if not family or not cabinet_type:
+        raise ValueError(
+            f"Nepavyko nustatyti APACK SKU šeimos arba CAB tipo: {sku}"
+        )
+
     candidates = [
         value
         for value in templates.values()
-        if canon(value["subcategory"]) == canon(subcategory)
-        and canon(value["sku"]).startswith("APACK-")
+        if canon(value["sku"]).startswith("APACK-")
         and family_token(value["sku"]) == reference_family
+        and re.search(
+            rf"-CAB{re.escape(cabinet_type)}-",
+            canon(value["sku"]),
+        )
     ]
     if not candidates:
         raise ValueError(
-            "Production APACK etalonuose nėra tinkamos SKU šeimos: "
-            f"{family} (naudojamas etalonas {reference_family})"
+            "Production APACK etalonuose nėra tinkamos SKU šeimos ir CAB tipo: "
+            f"{family}/CAB{cabinet_type} "
+            f"(naudojamas etalonas {reference_family}/CAB{cabinet_type}; "
+            f"šaltinio pakategorė {subcategory})"
         )
     template = max(
         candidates,

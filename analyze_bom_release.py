@@ -121,6 +121,14 @@ def main() -> None:
         plan.missing_component_parent_count,
     )
     print(
+        "Parents Missing Template External ID:",
+        plan.missing_parent_external_id_count,
+    )
+    print(
+        "Parents with Components Missing Variant External ID:",
+        plan.missing_component_external_id_parent_count,
+    )
+    print(
         "Multiple Sequence 0:",
         plan.multiple_sequence_zero_count,
     )
