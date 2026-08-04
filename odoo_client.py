@@ -87,6 +87,18 @@ class OdooClient:
             context={"active_test": False},
         )
 
+    def products_by_ids(self, product_ids):
+        """Grąžina kainų eksportui reikalingus produktų laukus."""
+        unique_ids = sorted({int(product_id) for product_id in product_ids})
+        if not unique_ids:
+            return []
+        return self.search_read_all(
+            "product.product",
+            [["id", "in", unique_ids]],
+            ["id", "default_code", "name"],
+            context={"active_test": False},
+        )
+
     def boms(self):
         return self.search_read_all(
             "mrp.bom",

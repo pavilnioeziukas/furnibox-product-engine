@@ -59,15 +59,30 @@ def flatten_bom_lines(records):
         "Write Date": r.get("write_date") or "",
     } for r in records]
 
-def latest_purchase_prices(records):
+def latest_purchase_prices(records, products=None):
+    product_by_id = {
+        product.get("id", product.get("ID")): product
+        for product in (products or [])
+        if product.get("id", product.get("ID")) is not None
+    }
     latest = OrderedDict()
     for r in records:
         product_id = rel_id(r.get("product_id"))
         if product_id is None or product_id in latest:
             continue
+        product = product_by_id.get(product_id, {})
         latest[product_id] = {
             "Product ID": product_id,
-            "Product": rel_name(r.get("product_id")),
+            "Internal Reference": (
+                product.get("default_code")
+                or product.get("Internal Reference")
+                or ""
+            ),
+            "Name": (
+                product.get("name")
+                or product.get("Name")
+                or rel_name(r.get("product_id"))
+            ),
             "Purchase Order Line ID": r.get("id"),
             "Purchase Order ID": rel_id(r.get("order_id")),
             "Purchase Order": rel_name(r.get("order_id")),

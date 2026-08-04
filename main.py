@@ -39,7 +39,7 @@ def main():
     logging.info("BOM eilučių: %s", len(bom_lines))
 
     logging.info("Nuskaitomos patvirtintų pirkimų eilutės...")
-    purchase_prices = latest_purchase_prices(client.purchase_order_lines())
+    purchase_prices = latest_purchase_prices(client.purchase_order_lines(), products)
     logging.info("Produktų su paskutine pirkimo kaina: %s", len(purchase_prices))
 
     output_path = settings.output_dir / "Odoo_Snapshot.xlsx"
