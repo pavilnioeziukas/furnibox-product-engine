@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Prisijungimas · Furnibox Product Engine{% endblock %}
+{% block content %}
+<section class="login-card">
+  <p class="eyebrow">Vidinis įrankis</p>
+  <h1>Prisijungimas</h1>
+  <p class="muted">Įveskite bendrą piloto slaptažodį.</p>
+  <form method="post" class="stack">
+    <label>Slaptažodis<input name="password" type="password" required autofocus></label>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <button class="primary" type="submit">Prisijungti</button>
+  </form>
+</section>
+{% endblock %}

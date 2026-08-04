@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from datetime import date
 from pathlib import Path
 
@@ -21,6 +22,16 @@ from validated_dataset.full_catalog_builder import (
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generuoja pilną Validated Product Dataset.",
+    )
+    parser.add_argument(
+        "--bom-input",
+        type=Path,
+        help="Konkretus Reform BOM .xlsx failas.",
+    )
+    args = parser.parse_args()
+
     base = Path(__file__).resolve().parent
     environment = environment_slug()
 
@@ -29,7 +40,9 @@ def main() -> None:
             "Pilnas Dataset leidžiamas tik Stage arba Production."
         )
 
-    reform_path = find_bom_input(base)
+    reform_path = (args.bom_input or find_bom_input(base)).resolve()
+    if not reform_path.is_file():
+        raise FileNotFoundError(f"Nerastas Reform BOM failas: {reform_path}")
     reform_products, _, _ = load_reform_universe(
         reform_path
     )

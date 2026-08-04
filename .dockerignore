@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+!.env.example
+output
+output_*
+data
+logs
+web_state
+*.zip
+~$*.xlsx

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} · Furnibox Product Engine{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">← Grįžti į pradžią</a>
+<section class="job-head">
+  <div><p class="eyebrow">Paleidimas {{ job.id }}</p><h1>{{ job.title }}</h1><p class="muted">{{ job.created_at }}</p></div>
+  <span id="status" class="state {{ job.status|lower }}">{{ job.status }}</span>
+</section>
+<section class="grid job-grid">
+  <article class="panel"><h2>Vykdymo žurnalas</h2><pre id="log">{{ log }}</pre></article>
+  <aside class="panel"><h2>Rezultatai</h2><div id="files">
+    {% for file in job.files %}<a class="download" href="{{ url_for('download', job_id=job.id, filename=file.name) }}">{{ file.name }} <span>↓</span></a>{% else %}<p class="muted">Rezultatų dar nėra.</p>{% endfor %}
+  </div>{% if job.status in ['QUEUED','RUNNING'] %}<form method="post" action="{{ url_for('stop_job', job_id=job.id) }}"><button class="danger" type="submit">Sustabdyti</button></form>{% endif %}</aside>
+</section>
+{% endblock %}
+{% block scripts %}
+{% if job.status in ['QUEUED','RUNNING'] %}<script>
+const endpoint = {{ url_for('job_api', job_id=job.id)|tojson }};
+async function refresh(){const r=await fetch(endpoint); const j=await r.json(); document.querySelector('#status').textContent=j.status; document.querySelector('#status').className='state '+j.status.toLowerCase(); document.querySelector('#log').textContent=j.log||''; if(['QUEUED','RUNNING'].includes(j.status)){setTimeout(refresh,1500)}else{location.reload()}} refresh();
+</script>{% endif %}
+{% endblock %}

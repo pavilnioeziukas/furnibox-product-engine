@@ -12,6 +12,7 @@ data/
 output/
 output_*/
 logs/
+web_state/
 
 # Laikini Excel failai
 ~$*.xlsx
@@ -25,4 +26,5 @@ Thumbs.db
 
 # Python virtual environment
 .venv/
+.venv-web/
 venv/

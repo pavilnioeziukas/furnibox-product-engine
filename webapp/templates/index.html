@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">Production · tik skaitymas ir failų generavimas</p>
+    <h1>Produktų ir BOM paruošimas vienoje vietoje</h1>
+    <p>Įkelkite aktualų Reform BOM, paleiskite patikras ir atsisiųskite paruoštus Odoo importo failus.</p>
+  </div>
+  <div class="safety"><span>0</span><div><strong>Odoo pakeitimų</strong><small>Pilotas pats nieko neimportuoja</small></div></div>
+</section>
+
+<section class="grid status-grid">
+  <article class="panel">
+    <div class="panel-head"><div><p class="eyebrow">1 žingsnis</p><h2>Reform BOM įvestis</h2></div><span class="state {{ 'ready' if upload else 'waiting' }}">{{ 'Paruošta' if upload else 'Laukiama' }}</span></div>
+    {% if upload %}<p class="file-name">{{ upload.name }}</p>{% else %}<p class="muted">Dar neįkeltas joks .xlsx failas.</p>{% endif %}
+    <form class="upload" method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+      <input id="file" name="file" type="file" accept=".xlsx" required>
+      <button class="secondary" type="submit">Įkelti naują failą</button>
+    </form>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><div><p class="eyebrow">Dabartinė būsena</p><h2>Validated Dataset</h2></div><span class="state {{ 'ready' if dataset else 'waiting' }}">{{ 'Rastas' if dataset else 'Nėra' }}</span></div>
+    {% if dataset %}<p class="file-name">{{ dataset.name }}</p><p class="muted">{{ dataset.stat().st_size // 1024 }} KB</p>{% else %}<p class="muted">Sugeneruokite po Reform BOM įkėlimo.</p>{% endif %}
+  </article>
+</section>
+
+<section class="section-head"><div><p class="eyebrow">2 žingsnis</p><h2>Veiksmai</h2></div><p>Vienu metu vykdykite vieną sunkų veiksmą.</p></section>
+<section class="action-grid">
+  {% for key, action in actions.items() %}
+    <article class="action-card">
+      <div class="action-number">{{ loop.index }}</div>
+      <h3>{{ action.title }}</h3>
+      <p>{{ action.description }}</p>
+      <form method="post" action="{{ url_for('start_job', action_key=key) }}">
+        <button class="primary" type="submit" {% if action.requires_upload and not upload %}disabled{% endif %}>Paleisti</button>
+      </form>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="section-head"><div><p class="eyebrow">Kontrolė</p><h2>Paskutiniai paleidimai</h2></div></section>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Veiksmas</th><th>Būsena</th><th>Pradėta (UTC)</th><th>Rezultatai</th><th></th></tr></thead>
+    <tbody>
+    {% for job in jobs %}
+      <tr><td><strong>{{ job.title }}</strong></td><td><span class="state {{ job.status|lower }}">{{ job.status }}</span></td><td>{{ job.created_at[:19].replace('T', ' ') }}</td><td>{{ job.files|length }}</td><td><a href="{{ url_for('job_detail', job_id=job.id) }}">Atidaryti →</a></td></tr>
+    {% else %}<tr><td colspan="5" class="empty">Paleidimų dar nėra.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

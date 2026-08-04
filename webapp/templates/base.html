@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Furnibox Product Engine{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-mark">F</span>
+      <span>Furnibox <strong>Product Engine</strong></span>
+    </a>
+    {% if session.get('authenticated') %}
+      <form method="post" action="{{ url_for('logout') }}"><button class="link-button">Atsijungti</button></form>
+    {% endif %}
+  </header>
+  <main class="shell">{% block content %}{% endblock %}</main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
