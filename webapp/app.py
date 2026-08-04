@@ -37,6 +37,12 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "script": "main.py",
         "requires_upload": False,
     },
+    "odoo_map": {
+        "title": "Generuoti Odoo MAP",
+        "description": "Nuskaito aktyvius Odoo BOM ir sukuria Dataset generavimui reikalingą Odoo_MAP.xlsx.",
+        "script": "odoo_map.py",
+        "requires_upload": False,
+    },
     "purchase_prices": {
         "title": "Nuskaityti paskutines pirkimo kainas",
         "description": "Atnaujina komponentų paskutinių pirkimų kainų failą.",
