@@ -43,6 +43,12 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "script": "odoo_map.py",
         "requires_upload": False,
     },
+    "bom_operations_reference": {
+        "title": "Generuoti BOM operacijų etaloną",
+        "description": "Nuskaito Production BOM operacijas ir sukuria Validated Dataset reikalingą operacijų etaloną.",
+        "script": "bom_operations_reference_v1.py",
+        "requires_upload": False,
+    },
     "purchase_prices": {
         "title": "Nuskaityti paskutines pirkimo kainas",
         "description": "Atnaujina komponentų paskutinių pirkimų kainų failą.",
