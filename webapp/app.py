@@ -31,6 +31,12 @@ for directory in (UPLOAD_DIR, RUN_DIR):
 
 
 ACTIONS: dict[str, dict[str, Any]] = {
+    "stock_by_location": {
+        "title": "Generuoti SKU likučius pagal lokaciją",
+        "description": "Nuskaito Production likučius WH/Stock ir C/Stock lokacijose bei paskutinius faktinius pirkimų gavimus.",
+        "module": "run_stock_by_location",
+        "requires_upload": False,
+    },
     "odoo_snapshot": {
         "title": "Nuskaityti Odoo duomenis",
         "description": "Atnaujina tik skaitomą Odoo produktų, BOM ir kainų momentinę kopiją.",
@@ -208,7 +214,10 @@ def run_job(job_id: str, action_key: str, upload: Path | None) -> None:
     job = read_job(job_dir)
     action = ACTIONS[action_key]
     before = snapshot_outputs()
-    command = [sys.executable, "-u", str(BASE_DIR / action["script"])]
+    if action.get("module"):
+        command = [sys.executable, "-u", "-m", action["module"]]
+    else:
+        command = [sys.executable, "-u", str(BASE_DIR / action["script"])]
     for argument in action.get("args", []):
         command.append(argument.format(upload=str(upload) if upload else ""))
     if action.get("needs_dataset_arg"):
