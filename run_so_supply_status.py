@@ -29,33 +29,33 @@ def row_payload(row: Any) -> dict[str, Any]:
         "product_name": row.product_name,
         "required_qty": row.required_qty,
         "po_qty": row.po_qty,
+        "difference": row.difference,
+        "status": row.status,
+        "origins": row.origins,
+        "component_sticker_info": row.component_sticker_info,
+        "sticker_status": row.sticker_status,
+        "sticker_note": row.sticker_error,
         "received_qty": row.received_qty,
         "input_custom_qty": row.input_custom_qty,
         "sorted_qty": row.sorted_qty,
+        "sorting_pending_qty": row.sorting_pending_qty,
         "mo_demand_qty": row.mo_demand_qty,
         "mo_reserved_qty": row.mo_reserved_qty,
         "supply_status": row.supply_status,
         "supply_note": row.supply_error,
-        "data_status": getattr(
-            row,
-            "data_status",
-            "BOM–PO NEATITIKIMAS" if row.status != "PASS" else "",
-        ),
-        "data_note": getattr(
-            row,
-            "data_error",
-            "BOM ir PO SKU arba kiekis nesutampa." if row.status != "PASS" else "",
-        ),
         "receipt_numbers": row.receipt_names,
         "sorting_numbers": row.sorting_names,
         "mo_numbers": row.mo_names,
     }
+
+
 def count_supply_status(rows: list[Any], status: str) -> int:
     return sum(row.supply_status == status for row in rows)
 
 
 def total(rows: list[Any], field_name: str) -> float:
     return sum(float(getattr(row, field_name, 0.0) or 0.0) for row in rows)
+
 
 def main() -> None:
     args = parser().parse_args()
@@ -65,6 +65,7 @@ def main() -> None:
 
     client = OdooClient(OdooConfig.from_env())
     client.connect()
+
     repository = BomRepository(client)
     selector = BomSelector(repository)
     execution_engine = DatasetExecutionEngine(
@@ -75,45 +76,64 @@ def main() -> None:
     result = FurnixPoValidator(client, execution_engine).validate(so_number)
 
     rows = [row_payload(row) for row in result.rows]
+    supply_readiness = (
+        "PARUOŠTA GAMYBAI"
+        if result.status == "PASS"
+        and bool(result.rows)
+        and all(row.supply_status == "AVAILABLE / RESERVED" for row in result.rows)
+        else "DAR NEPARUOŠTA GAMYBAI"
+    )
+
     report = {
         "so_number": result.so_number,
-"mo_reserved_qty": total(result.rows, "mo_reserved_qty"),
-"mo_demand_qty": total(result.rows, "mo_demand_qty"),
-"supply_readiness": (
-    "PARUOŠTA GAMYBAI"
-    if result.status == "PASS"
-    and bool(result.rows)
-    and all(row.supply_status == "AVAILABLE / RESERVED" for row in result.rows)
-    else "DAR NEPARUOŠTA GAMYBAI"
-),
-),
-        "mo_reserved_qty": result.mo_reserved_total,
-        "mo_demand_qty": result.mo_demand_total,
         "po_number": result.po_number,
         "po_state": result.po_state,
+        "vendor_name": result.vendor_name,
+        "furnix_po_count": result.furnix_po_count,
         "data_quality_status": result.status,
+        "supply_readiness": supply_readiness,
+        "mo_reserved_qty": total(result.rows, "mo_reserved_qty"),
+        "mo_demand_qty": total(result.rows, "mo_demand_qty"),
         "error": result.error,
         "warnings": result.warnings,
+        "dataset_id": result.dataset_id,
+        "batch_reference": result.batch_reference,
+        "fallback_count": result.fallback_count,
+        "fallbacks": result.fallbacks,
         "summary": {
-"reserved_for_mo": count_supply_status(result.rows, "AVAILABLE / RESERVED"),
-"waiting_for_receipt": count_supply_status(result.rows, "NOT RECEIVED"),
-"waiting_for_sorting": (
-    count_supply_status(result.rows, "SORTING NOT DONE")
-    + count_supply_status(result.rows, "SORTING PARTIAL")
-),
-"requires_investigation": result.supply_issue_count,
+            "total_rows": len(result.rows),
+            "bom_po_mismatches": sum(row.status != "PASS" for row in result.rows),
+            "sticker_issues": result.sticker_error_count,
+            "reserved_for_mo": count_supply_status(
+                result.rows, "AVAILABLE / RESERVED"
+            ),
+            "waiting_for_receipt": count_supply_status(
+                result.rows, "NOT RECEIVED"
+            ),
+            "waiting_for_sorting": (
+                count_supply_status(result.rows, "SORTING NOT DONE")
+                + count_supply_status(result.rows, "SORTING PARTIAL")
+            ),
+            "mo_not_reserved": count_supply_status(
+                result.rows, "MO NOT RESERVED"
+            ),
+            "requires_investigation": result.supply_issue_count,
         },
         "rows": rows,
     }
+
     report_path = output_dir / f"SO_Tiekimo_Bukle_{so_number}.json"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
 
     print(f"SO: {result.so_number}")
     print(f"TIEKIMO BŪKLĖ: {report['supply_readiness']}")
-   print(
-    f"MO rezervuota: {report['mo_reserved_qty']:g} / "
-    f"{report['mo_demand_qty']:g}"
-)
+    print(
+        f"MO rezervuota: {report['mo_reserved_qty']:g} / "
+        f"{report['mo_demand_qty']:g}"
+    )
     print(f"PO: {result.po_number or '-'} ({result.po_state or '-'})")
     print(f"Duomenų kokybė: {result.status}")
     if result.error:
