@@ -10,7 +10,7 @@ from typing import Any
 from openpyxl import load_workbook
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ADDON_FIELDS = ("assembly", "storage", "packaging", "put_on_pallet", "other", "markup")
 
 
@@ -60,28 +60,86 @@ def empty_config() -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "adjustment_rate": -0.07,
-        "pricing_rules": [],
+        "bom_categories": [],
+        "bom_skus": [],
         "bom_products": [],
-        "non_bom_rules": [],
+        "non_bom_categories": [],
+        "non_bom_skus": [],
         "migration_warnings": [],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def validate_config(document: dict[str, Any]) -> dict[str, Any]:
-    if document.get("schema_version") != SCHEMA_VERSION:
+def _category_code(prefix: str, index: int) -> str:
+    return f"{prefix}-{index:03d}"
+
+
+def upgrade_config(document: dict[str, Any]) -> dict[str, Any]:
+    """Convert the per-SKU v1 structure to categories plus SKU assignments."""
+    if document.get("schema_version") == SCHEMA_VERSION:
+        return document
+    if document.get("schema_version") != 1:
         raise ValueError("Nepalaikoma SO kainodaros konfigūracijos versija.")
+    upgraded = empty_config()
+    upgraded.update({key: value for key, value in document.items() if key not in {
+        "schema_version", "pricing_rules", "non_bom_rules",
+    }})
+
+    category_ids: dict[tuple[Any, ...], str] = {}
+    for raw in document.get("pricing_rules", []):
+        rule = PricingRule(**raw)
+        signature = (rule.category_id, rule.category_name, rule.odoo_category, *rule.addons)
+        category_id = category_ids.get(signature)
+        if category_id is None:
+            category_id = _category_code("BOM", len(category_ids) + 1)
+            category_ids[signature] = category_id
+            upgraded["bom_categories"].append({
+                "id": category_id,
+                "name": rule.category_name or rule.category_id or rule.odoo_category or "Be pavadinimo",
+                "source_category_id": rule.category_id,
+                "odoo_category": rule.odoo_category,
+                **{field: getattr(rule, field) for field in ADDON_FIELDS},
+            })
+        upgraded["bom_skus"].append({"sku": rule.sku, "category_id": category_id})
+
+    non_bom_ids: dict[tuple[Any, ...], str] = {}
+    for raw in document.get("non_bom_rules", []):
+        rule = NonBomRule(**raw)
+        signature = (rule.pricing_category, rule.preparation, rule.storage, rule.bag, rule.sticker)
+        category_id = non_bom_ids.get(signature)
+        if category_id is None:
+            category_id = _category_code("NONBOM", len(non_bom_ids) + 1)
+            non_bom_ids[signature] = category_id
+            upgraded["non_bom_categories"].append({
+                "id": category_id,
+                "name": rule.pricing_category or "Be pavadinimo",
+                "preparation": rule.preparation, "storage": rule.storage,
+                "bag": rule.bag, "sticker": rule.sticker,
+            })
+        upgraded["non_bom_skus"].append({
+            "sku": rule.sku, "name": rule.name, "product_category": rule.product_category,
+            "category_id": category_id,
+        })
+    return upgraded
+
+
+def validate_config(document: dict[str, Any]) -> dict[str, Any]:
+    document = upgrade_config(document)
     adjustment = document.get("adjustment_rate")
     if isinstance(adjustment, bool) or not isinstance(adjustment, (int, float)) or not -1 < adjustment <= 0:
         raise ValueError("Korekcija turi būti didesnė nei -100 % ir ne didesnė nei 0 %.")
     seen: set[str] = set()
-    for raw in document.get("pricing_rules", []):
-        rule = PricingRule(**raw)
-        normalized = rule.sku.casefold()
+    category_ids = {row.get("id") for row in document.get("bom_categories", [])}
+    if None in category_ids or len(category_ids) != len(document.get("bom_categories", [])):
+        raise ValueError("BOM kainodaros kategorijų ID turi būti unikalūs.")
+    for raw in document.get("bom_skus", []):
+        normalized = _text(raw.get("sku")).casefold()
         if not normalized:
-            raise ValueError("Kainodaros taisyklėje trūksta SKU.")
+            raise ValueError("BOM SKU priskyrime trūksta SKU.")
         if normalized in seen:
-            raise ValueError(f"Pasikartojanti kainodaros taisyklė: {rule.sku}")
+            raise ValueError(f"Pasikartojantis BOM SKU: {raw.get('sku')}")
+        if raw.get("category_id") not in category_ids:
+            raise ValueError(f"BOM SKU {raw.get('sku')} priskirta neegzistuojanti kategorija.")
         seen.add(normalized)
     seen.clear()
     for raw in document.get("bom_products", []):
@@ -93,13 +151,17 @@ def validate_config(document: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"Pasikartojantis BOM produktas: {sku}")
         seen.add(normalized)
     seen.clear()
-    for raw in document.get("non_bom_rules", []):
-        rule = NonBomRule(**raw)
-        normalized = rule.sku.casefold()
+    non_bom_category_ids = {row.get("id") for row in document.get("non_bom_categories", [])}
+    if None in non_bom_category_ids or len(non_bom_category_ids) != len(document.get("non_bom_categories", [])):
+        raise ValueError("Ne BOM kainodaros kategorijų ID turi būti unikalūs.")
+    for raw in document.get("non_bom_skus", []):
+        normalized = _text(raw.get("sku")).casefold()
         if not normalized:
             raise ValueError("Ne BOM taisyklėje trūksta SKU.")
         if normalized in seen:
-            raise ValueError(f"Pasikartojanti ne BOM taisyklė: {rule.sku}")
+            raise ValueError(f"Pasikartojanti ne BOM taisyklė: {raw.get('sku')}")
+        if raw.get("category_id") not in non_bom_category_ids:
+            raise ValueError(f"Ne BOM SKU {raw.get('sku')} priskirta neegzistuojanti kategorija.")
         seen.add(normalized)
     return document
 
@@ -113,7 +175,7 @@ def load_config(path: Path) -> dict[str, Any]:
 def save_config(path: Path, document: dict[str, Any]) -> None:
     document = dict(document)
     document["updated_at"] = datetime.now(timezone.utc).isoformat()
-    validate_config(document)
+    document = validate_config(document)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -185,6 +247,7 @@ def migrate_legacy_workbook(source: Path) -> dict[str, Any]:
     document["bom_products"] = bom_products
     document["non_bom_rules"] = non_bom_rules
     document["migration_warnings"] = migration_warnings
+    document["schema_version"] = 1
     return validate_config(document)
 
 
@@ -225,4 +288,32 @@ def migrate_generated_audit(source: Path) -> dict[str, Any]:
     document["pricing_rules"] = list(pricing.values())
     document["bom_products"] = products
     document["non_bom_rules"] = non_bom
+    document["schema_version"] = 1
     return validate_config(document)
+
+
+def pricing_rules_from_config(document: dict[str, Any]) -> list[PricingRule]:
+    categories = {row["id"]: row for row in document["bom_categories"]}
+    result = []
+    for assignment in document["bom_skus"]:
+        category = categories[assignment["category_id"]]
+        result.append(PricingRule(
+            sku=assignment["sku"], category_id=category.get("source_category_id", ""),
+            category_name=category["name"], odoo_category=category.get("odoo_category", ""),
+            **{field: float(category.get(field, 0)) for field in ADDON_FIELDS},
+        ))
+    return result
+
+
+def non_bom_rules_from_config(document: dict[str, Any]) -> list[NonBomRule]:
+    categories = {row["id"]: row for row in document["non_bom_categories"]}
+    result = []
+    for assignment in document["non_bom_skus"]:
+        category = categories[assignment["category_id"]]
+        result.append(NonBomRule(
+            sku=assignment["sku"], name=assignment.get("name", ""),
+            product_category=assignment.get("product_category", ""), pricing_category=category["name"],
+            preparation=float(category.get("preparation", 0)), storage=float(category.get("storage", 0)),
+            bag=float(category.get("bag", 0)), sticker=float(category.get("sticker", 0)),
+        ))
+    return result

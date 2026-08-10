@@ -10,7 +10,10 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from reform_map import find_sheet, read_edges
-from so_pricing_rules import NonBomRule, PricingRule, load_config
+from so_pricing_rules import (
+    NonBomRule, PricingRule, load_config, non_bom_rules_from_config,
+    pricing_rules_from_config,
+)
 
 PRICE_FILE = "Reform_Final_Prices.xlsx"
 OUTPUT_FILE = "Reform_SO_Line_Prices.xlsx"
@@ -97,14 +100,14 @@ def load_rules(path: Path):
 
 
 def rules_from_config(document):
-    return {key(rule.sku): rule for rule in (PricingRule(**raw) for raw in document["pricing_rules"])}
+    return {key(rule.sku): rule for rule in pricing_rules_from_config(document)}
 
 
 def non_bom_from_config(document):
     return [
         (rule.sku, rule.name, rule.product_category, rule.pricing_category,
          rule.preparation, rule.storage, rule.bag, rule.sticker)
-        for rule in (NonBomRule(**raw) for raw in document["non_bom_rules"])
+        for rule in non_bom_rules_from_config(document)
     ]
 
 
@@ -405,7 +408,7 @@ def write_price_workbook(bom_rows, non_rows, details, rules, adjustment, output_
 
 def build_from_application_config(bom_path: Path, price_path: Path, config_path: Path, output_path: Path):
     document = load_config(config_path)
-    if not document["pricing_rules"] or not document["bom_products"]:
+    if not document["bom_skus"] or not document["bom_products"]:
         raise ValueError("SO kainodaros taisyklės dar nesukonfigūruotos aplikacijoje.")
     adjustment = float(document["adjustment_rate"])
     prices = load_prices(price_path)

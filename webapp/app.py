@@ -330,14 +330,21 @@ def index():
 def pricing_rules():
     document = load_config(SO_PRICING_CONFIG_PATH)
     query = request.args.get("q", "").strip().casefold()
-    rules = document["pricing_rules"]
+    assignments = document["bom_skus"]
     if query:
-        rules = [row for row in rules if query in " ".join(str(value) for value in row.values()).casefold()]
+        assignments = [row for row in assignments if query in " ".join(str(value) for value in row.values()).casefold()]
+    bom_counts = {}
+    for row in document["bom_skus"]:
+        bom_counts[row["category_id"]] = bom_counts.get(row["category_id"], 0) + 1
+    non_bom_counts = {}
+    for row in document["non_bom_skus"]:
+        non_bom_counts[row["category_id"]] = non_bom_counts.get(row["category_id"], 0) + 1
     return render_template(
         "pricing_rules.html",
         config=document,
-        rules=rules,
-        non_bom_rules=document["non_bom_rules"],
+        assignments=assignments,
+        bom_counts=bom_counts,
+        non_bom_counts=non_bom_counts,
         configured=SO_PRICING_CONFIG_PATH.exists(),
         query=request.args.get("q", "").strip(),
     )
@@ -381,37 +388,63 @@ def update_pricing_adjustment():
     return redirect(url_for("pricing_rules"))
 
 
-@app.post("/pricing-rules/<path:sku>")
-def update_pricing_rule(sku: str):
+@app.post("/pricing-rules/categories/<category_id>")
+def update_pricing_category(category_id: str):
     document = load_config(SO_PRICING_CONFIG_PATH)
-    match = next((row for row in document["pricing_rules"] if row["sku"].casefold() == sku.casefold()), None)
+    match = next((row for row in document["bom_categories"] if row["id"] == category_id), None)
     if match is None:
         abort(404)
-    for name in ("category_id", "category_name", "odoo_category"):
+    for name in ("name", "source_category_id", "odoo_category"):
         match[name] = request.form.get(name, "").strip()
     for name in ("assembly", "storage", "packaging", "put_on_pallet", "other", "markup"):
         match[name] = form_number(name)
-    document["migration_warnings"] = [
-        warning for warning in document.get("migration_warnings", []) if sku.casefold() not in warning.casefold()
-    ]
     save_config(SO_PRICING_CONFIG_PATH, document)
-    flash(f"Taisyklė {match['sku']} išsaugota.")
-    return redirect(url_for("pricing_rules", q=request.form.get("return_query", "")))
+    flash(f"BOM kategorija {match['name']} išsaugota.")
+    return redirect(url_for("pricing_rules") + "#bom-categories")
 
 
-@app.post("/pricing-rules/non-bom/<path:sku>")
-def update_non_bom_rule(sku: str):
+@app.post("/pricing-rules/bom-skus/<path:sku>")
+def update_bom_sku(sku: str):
     document = load_config(SO_PRICING_CONFIG_PATH)
-    match = next((row for row in document["non_bom_rules"] if row["sku"].casefold() == sku.casefold()), None)
+    match = next((row for row in document["bom_skus"] if row["sku"].casefold() == sku.casefold()), None)
     if match is None:
         abort(404)
-    for name in ("name", "product_category", "pricing_category"):
-        match[name] = request.form.get(name, "").strip()
+    match["category_id"] = request.form.get("category_id", "").strip()
+    try:
+        save_config(SO_PRICING_CONFIG_PATH, document)
+    except ValueError as exc:
+        abort(400, str(exc))
+    flash(f"BOM SKU {match['sku']} kategorija išsaugota.")
+    return redirect(url_for("pricing_rules", q=request.form.get("return_query", "")) + "#bom-skus")
+
+
+@app.post("/pricing-rules/non-bom-categories/<category_id>")
+def update_non_bom_category(category_id: str):
+    document = load_config(SO_PRICING_CONFIG_PATH)
+    match = next((row for row in document["non_bom_categories"] if row["id"] == category_id), None)
+    if match is None:
+        abort(404)
+    match["name"] = request.form.get("name", "").strip()
     for name in ("preparation", "storage", "bag", "sticker"):
         match[name] = form_number(name)
     save_config(SO_PRICING_CONFIG_PATH, document)
-    flash(f"Ne BOM taisyklė {match['sku']} išsaugota.")
-    return redirect(url_for("pricing_rules") + "#non-bom")
+    flash(f"Ne BOM kategorija {match['name']} išsaugota.")
+    return redirect(url_for("pricing_rules") + "#non-bom-categories")
+
+
+@app.post("/pricing-rules/non-bom-skus/<path:sku>")
+def update_non_bom_sku(sku: str):
+    document = load_config(SO_PRICING_CONFIG_PATH)
+    match = next((row for row in document["non_bom_skus"] if row["sku"].casefold() == sku.casefold()), None)
+    if match is None:
+        abort(404)
+    match["category_id"] = request.form.get("category_id", "").strip()
+    try:
+        save_config(SO_PRICING_CONFIG_PATH, document)
+    except ValueError as exc:
+        abort(400, str(exc))
+    flash(f"Ne BOM SKU {match['sku']} kategorija išsaugota.")
+    return redirect(url_for("pricing_rules") + "#non-bom-skus")
 
 
 @app.post("/upload")

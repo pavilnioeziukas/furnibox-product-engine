@@ -5,7 +5,7 @@ import unittest
 from openpyxl import Workbook, load_workbook
 
 from reform_so_line_prices import build_from_application_config, build_reform_so_line_prices
-from so_pricing_rules import migrate_legacy_workbook, save_config
+from so_pricing_rules import load_config, migrate_legacy_workbook, save_config
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
@@ -84,7 +84,13 @@ class ReformSoLinePriceTests(unittest.TestCase):
             ws = wb.create_sheet("Ne BOM pozicijos")
             ws.append(["SKU", "Name", "Group", "Category", "", "", "Preparation", "Storage", "Bag", "Sticker"])
             wb.save(legacy)
-            save_config(config, migrate_legacy_workbook(legacy))
+            migrated = migrate_legacy_workbook(legacy)
+            self.assertEqual(migrated["schema_version"], 2)
+            self.assertEqual(len(migrated["bom_categories"]), 2)
+            self.assertEqual(len(migrated["bom_skus"]), 2)
+            self.assertEqual(migrated["bom_skus"][0]["category_id"], "BOM-001")
+            save_config(config, migrated)
+            self.assertEqual(load_config(config)["schema_version"], 2)
             legacy.unlink()
 
             wb = Workbook(); ws = wb.active; ws.title = "BOM - Input"
