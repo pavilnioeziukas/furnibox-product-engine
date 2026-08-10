@@ -20,7 +20,12 @@
   </article>
   <article class="panel">
     <div class="panel-head"><div><p class="eyebrow">Dabartinė būsena</p><h2>Validated Dataset</h2></div><span class="state {{ 'ready' if dataset else 'waiting' }}">{{ 'Rastas' if dataset else 'Nėra' }}</span></div>
-    {% if dataset %}<p class="file-name">{{ dataset.name }}</p><p class="muted">{{ dataset.stat().st_size // 1024 }} KB</p>{% else %}<p class="muted">Sugeneruokite po Reform BOM įkėlimo.</p>{% endif %}
+    {% if dataset %}<p class="file-name">{{ dataset.name }}</p><p class="muted">{{ dataset.stat().st_size // 1024 }} KB</p>{% else %}<p class="muted">Įkelkite Production Validated Dataset JSON prieš tikrindami SO tiekimo būklę.</p>{% endif %}
+    <form class="upload" method="post" action="{{ url_for('upload_production_dataset') }}" enctype="multipart/form-data">
+      <label for="production-dataset">Production Validated Dataset (.json)</label>
+      <input id="production-dataset" name="file" type="file" accept=".json,application/json" required>
+      <button class="secondary" type="submit">Įkelti Production Dataset</button>
+    </form>
   </article>
 </section>
 

@@ -20,13 +20,15 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 STATE_DIR = Path(os.getenv("FURNIBOX_WEB_STATE_DIR", BASE_DIR / "web_state")).resolve()
 UPLOAD_DIR = STATE_DIR / "uploads"
 RUN_DIR = STATE_DIR / "runs"
+PRODUCTION_DATASET_DIR = STATE_DIR / "shared_data" / "validated_datasets" / "production"
+PRODUCTION_DATASET_PATH = PRODUCTION_DATASET_DIR / "latest.json"
 MAX_UPLOAD_BYTES = int(os.getenv("FURNIBOX_MAX_UPLOAD_MB", "100")) * 1024 * 1024
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FURNIBOX_WEB_SECRET", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
-for directory in (UPLOAD_DIR, RUN_DIR):
+for directory in (UPLOAD_DIR, RUN_DIR, PRODUCTION_DATASET_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -180,7 +182,11 @@ def latest_dataset() -> Path | None:
     for root in shared_roots:
         if root.exists():
             candidates.extend(root.glob("validated_datasets/**/*.json"))
-    candidates = [path for path in candidates if "Validated_Product_Dataset" in path.name]
+    candidates = [
+        path
+        for path in candidates
+        if "Validated_Product_Dataset" in path.name or path.name == "latest.json"
+    ]
     return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
 
 
@@ -312,6 +318,36 @@ def upload():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     target = UPLOAD_DIR / f"{timestamp}_{filename}"
     file.save(target)
+    return redirect(url_for("index"))
+
+
+@app.post("/upload/production-dataset")
+def upload_production_dataset():
+    """Store the active Production dataset in persistent web state.
+
+    The validator resolves this exact path, so the original uploaded filename
+    must not be used as the runtime filename.
+    """
+    file = request.files.get("file")
+    if file is None or not file.filename:
+        abort(400, "Nepasirinktas Validated Dataset JSON failas.")
+    if Path(secure_filename(file.filename)).suffix.lower() != ".json":
+        abort(400, "Leidžiamas tik .json failas.")
+
+    payload = file.read()
+    if not payload:
+        abort(400, "Įkeltas failas tuščias.")
+    try:
+        document = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        abort(400, "Failas nėra korektiškas JSON.")
+    if not isinstance(document, (dict, list)):
+        abort(400, "Validated Dataset JSON šaknis turi būti objektas arba sąrašas.")
+
+    PRODUCTION_DATASET_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = PRODUCTION_DATASET_PATH.with_suffix(".json.tmp")
+    temporary.write_bytes(payload)
+    temporary.replace(PRODUCTION_DATASET_PATH)
     return redirect(url_for("index"))
 
 
