@@ -12,8 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
+
+from so_pricing_rules import load_config, migrate_legacy_workbook, save_config
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -22,6 +24,8 @@ UPLOAD_DIR = STATE_DIR / "uploads"
 RUN_DIR = STATE_DIR / "runs"
 PRODUCTION_DATASET_DIR = STATE_DIR / "shared_data" / "validated_datasets" / "production"
 PRODUCTION_DATASET_PATH = PRODUCTION_DATASET_DIR / "latest.json"
+SO_PRICING_CONFIG_PATH = STATE_DIR / "shared_data" / "so_pricing_rules.json"
+DEFAULT_SO_PRICING_CONFIG_PATH = BASE_DIR / "manifest" / "so_pricing_rules.json"
 MAX_UPLOAD_BYTES = int(os.getenv("FURNIBOX_MAX_UPLOAD_MB", "100")) * 1024 * 1024
 
 app = Flask(__name__)
@@ -30,6 +34,9 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 for directory in (UPLOAD_DIR, RUN_DIR, PRODUCTION_DATASET_DIR):
     directory.mkdir(parents=True, exist_ok=True)
+if not SO_PRICING_CONFIG_PATH.exists() and DEFAULT_SO_PRICING_CONFIG_PATH.exists():
+    SO_PRICING_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(DEFAULT_SO_PRICING_CONFIG_PATH, SO_PRICING_CONFIG_PATH)
 
 
 ACTIONS: dict[str, dict[str, Any]] = {
@@ -70,6 +77,15 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "description": "Atnaujina komponentų paskutinių pirkimų kainų failą.",
         "script": "last_purchase_prices.py",
         "requires_upload": False,
+    },
+    "so_line_prices": {
+        "title": "Generuoti Reform SO kainas",
+        "description": "Pagal aktualų Reform BOM, komponentų kainas ir aplikacijoje valdomas taisykles sukuria audituojamą SO kainoraštį.",
+        "script": "reform_so_line_prices.py",
+        "requires_upload": True,
+        "args": ["--bom-input", "{upload}", "--rules", str(SO_PRICING_CONFIG_PATH),
+                 "--price-input", str(BASE_DIR / "output" / "production" / "Reform_Final_Prices.xlsx"),
+                 "--output-dir", "{output_dir}"],
     },
     "validated_dataset": {
         "title": "Generuoti Validated Dataset",
@@ -305,6 +321,94 @@ def index():
         dataset=latest_dataset(),
         auth_enabled=auth_enabled(),
     )
+
+
+@app.get("/pricing-rules")
+def pricing_rules():
+    document = load_config(SO_PRICING_CONFIG_PATH)
+    query = request.args.get("q", "").strip().casefold()
+    rules = document["pricing_rules"]
+    if query:
+        rules = [row for row in rules if query in " ".join(str(value) for value in row.values()).casefold()]
+    return render_template(
+        "pricing_rules.html",
+        config=document,
+        rules=rules,
+        non_bom_rules=document["non_bom_rules"],
+        configured=SO_PRICING_CONFIG_PATH.exists(),
+        query=request.args.get("q", "").strip(),
+    )
+
+
+@app.post("/pricing-rules/migrate")
+def migrate_pricing_rules():
+    file = request.files.get("file")
+    if file is None or not file.filename or Path(secure_filename(file.filename)).suffix.lower() != ".xlsx":
+        abort(400, "Pasirinkite seną kainodaros .xlsx failą.")
+    temporary = UPLOAD_DIR / f"pricing_migration_{uuid.uuid4().hex}.xlsx"
+    file.save(temporary)
+    try:
+        document = migrate_legacy_workbook(temporary)
+        save_config(SO_PRICING_CONFIG_PATH, document)
+    except ValueError as exc:
+        abort(400, str(exc))
+    finally:
+        temporary.unlink(missing_ok=True)
+    flash("Taisyklės perkeltos į aplikaciją. Seno Excel kasdieniam darbui nebereikia.")
+    return redirect(url_for("pricing_rules"))
+
+
+def form_number(name: str) -> float:
+    raw = request.form.get(name, "").strip().replace(",", ".")
+    try:
+        return float(raw)
+    except ValueError:
+        abort(400, f"Laukas „{name}“ turi būti skaičius.")
+
+
+@app.post("/pricing-rules/adjustment")
+def update_pricing_adjustment():
+    document = load_config(SO_PRICING_CONFIG_PATH)
+    document["adjustment_rate"] = form_number("adjustment_percent") / 100
+    try:
+        save_config(SO_PRICING_CONFIG_PATH, document)
+    except ValueError as exc:
+        abort(400, str(exc))
+    flash("Bendra BOM kainodaros korekcija išsaugota.")
+    return redirect(url_for("pricing_rules"))
+
+
+@app.post("/pricing-rules/<path:sku>")
+def update_pricing_rule(sku: str):
+    document = load_config(SO_PRICING_CONFIG_PATH)
+    match = next((row for row in document["pricing_rules"] if row["sku"].casefold() == sku.casefold()), None)
+    if match is None:
+        abort(404)
+    for name in ("category_id", "category_name", "odoo_category"):
+        match[name] = request.form.get(name, "").strip()
+    for name in ("assembly", "storage", "packaging", "put_on_pallet", "other", "markup"):
+        match[name] = form_number(name)
+    document["migration_warnings"] = [
+        warning for warning in document.get("migration_warnings", []) if sku.casefold() not in warning.casefold()
+    ]
+    save_config(SO_PRICING_CONFIG_PATH, document)
+    flash(f"Taisyklė {match['sku']} išsaugota.")
+    return redirect(url_for("pricing_rules", q=request.form.get("return_query", "")))
+
+
+@app.post("/pricing-rules/non-bom/<path:sku>")
+def update_non_bom_rule(sku: str):
+    document = load_config(SO_PRICING_CONFIG_PATH)
+    match = next((row for row in document["non_bom_rules"] if row["sku"].casefold() == sku.casefold()), None)
+    if match is None:
+        abort(404)
+    for name in ("name", "product_category", "pricing_category"):
+        match[name] = request.form.get(name, "").strip()
+    for name in ("preparation", "storage", "bag", "sticker"):
+        match[name] = form_number(name)
+    save_config(SO_PRICING_CONFIG_PATH, document)
+    flash(f"Ne BOM taisyklė {match['sku']} išsaugota.")
+    return redirect(url_for("pricing_rules") + "#non-bom")
 
 
 @app.post("/upload")

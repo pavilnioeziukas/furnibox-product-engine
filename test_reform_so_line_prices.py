@@ -4,7 +4,8 @@ import unittest
 
 from openpyxl import Workbook, load_workbook
 
-from reform_so_line_prices import build_reform_so_line_prices
+from reform_so_line_prices import build_from_application_config, build_reform_so_line_prices
+from so_pricing_rules import migrate_legacy_workbook, save_config
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
@@ -63,6 +64,40 @@ class ReformSoLinePriceTests(unittest.TestCase):
             non = rows["ACC-1"]
             self.assertAlmostEqual(sheet.cell(non, headers["Final Reform SO Unit Price"]).value, 10.35)
             self.assertEqual(sheet.cell(non, headers["Status"]).value, "COMPLETE")
+
+    def test_application_config_replaces_legacy_workbook_at_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            legacy = base / "legacy.xlsx"
+            bom_input = base / "Reform_BOM_Input.xlsx"
+            config = base / "so_pricing_rules.json"
+            prices = base / "prices.xlsx"
+            output = base / "result.xlsx"
+
+            wb = Workbook()
+            ws = wb.active; ws.title = "bomai"
+            ws.append([]); ws.append([]); ws.append([None, "TOP", "CABINET", "SUB", None, 2, "PART", 3])
+            ws = wb.create_sheet("Kainodaros kategorijos")
+            ws.append(["SKU", "ID", "Name", "Odoo", "Assembly", "Storage", "Packaging", "Pallet", "Other", "Markup"])
+            ws.append(["SUB", "2", "Pack", "", 1, 0, 0, 0, 0, 0])
+            ws.append(["TOP", "1", "Cabinet", "", 10, 0, 0, 0, 0, 0])
+            ws = wb.create_sheet("Ne BOM pozicijos")
+            ws.append(["SKU", "Name", "Group", "Category", "", "", "Preparation", "Storage", "Bag", "Sticker"])
+            wb.save(legacy)
+            save_config(config, migrate_legacy_workbook(legacy))
+            legacy.unlink()
+
+            wb = Workbook(); ws = wb.active; ws.title = "BOM - Input"
+            ws.append(["BOM SKU Code", "Part 1 Code", "Part 1 Qty"])
+            ws.append(["TOP", "SUB", 2]); ws.append(["SUB", "PART", 3]); wb.save(bom_input)
+            wb = Workbook(); ws = wb.active; ws.title = "REFORM PRICE LIST"
+            ws.append(["Internal Reference", "Name", "Adjusted Furnibox Purchase Price", "Reform Markup Factor", "Reform Purchase Price"])
+            ws.append(["PART", "Part", 5, 1, 5]); wb.save(prices)
+
+            self.assertEqual(build_from_application_config(bom_input, prices, config, output), (1, 0, 0))
+            result = load_workbook(output, data_only=True)["SO LINE PRICES"]
+            headers = {cell.value: cell.column for cell in result[1]}
+            self.assertAlmostEqual(result.cell(2, headers["Final Reform SO Unit Price"]).value, 41.16)
 
 
 if __name__ == "__main__":

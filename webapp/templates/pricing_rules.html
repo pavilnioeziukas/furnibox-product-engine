@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}SO kainodaros taisyklės · Furnibox Product Engine{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div><p class="eyebrow">Aplikacijos konfigūracija</p><h1>SO kainodaros taisyklės</h1></div>
+  <span class="state {{ 'ready' if configured else 'waiting' }}">{{ 'Sukonfigūruota' if configured else 'Reikia migracijos' }}</span>
+</section>
+<p class="lead">Šios taisyklės naudojamos generuojant kainas. Senas <code>map 1_MC_v3.xlsx</code> po vienkartinės migracijos nėra vykdymo šaltinis.</p>
+{% if not configured %}
+<section class="panel migration-panel">
+  <h2>Vienkartinis taisyklių perkėlimas</h2>
+  <p class="muted">Įkelkite seną kainodaros modelį. Aplikacija pasiims BOM produktų sąrašą, SKU tarifus ir ne BOM taisykles, patikrins dublikatus ir išsaugos savo konfigūraciją.</p>
+  <form class="upload" method="post" action="{{ url_for('migrate_pricing_rules') }}" enctype="multipart/form-data">
+    <input name="file" type="file" accept=".xlsx" required><button class="primary" type="submit">Perkelti taisykles</button>
+  </form>
+</section>
+{% else %}
+{% if config.migration_warnings %}<section class="panel"><h2>Migracijos perspėjimai</h2><ul>{% for warning in config.migration_warnings %}<li>{{ warning }}</li>{% endfor %}</ul><p class="muted">Patikrinkite ir išsaugokite nurodytas SKU taisykles aplikacijoje.</p></section>{% endif %}
+<section class="grid pricing-summary">
+  <article class="panel"><p class="eyebrow">SKU taisyklės</p><strong class="metric">{{ config.pricing_rules|length }}</strong></article>
+  <article class="panel"><p class="eyebrow">BOM produktai</p><strong class="metric">{{ config.bom_products|length }}</strong></article>
+  <article class="panel"><p class="eyebrow">Ne BOM pozicijos</p><strong class="metric">{{ config.non_bom_rules|length }}</strong></article>
+  <article class="panel"><form method="post" action="{{ url_for('update_pricing_adjustment') }}"><label for="adjustment">Bendra BOM priedų korekcija, %</label><div class="inline-form"><input id="adjustment" name="adjustment_percent" type="number" step="0.01" min="-99.99" max="0" value="{{ config.adjustment_rate * 100 }}" required><button class="secondary" type="submit">Išsaugoti</button></div></form></article>
+</section>
+<section class="section-head"><div><p class="eyebrow">BOM kainodara</p><h2>SKU priedai</h2></div></section>
+<form class="filter" method="get"><input name="q" value="{{ query }}" placeholder="Ieškoti pagal SKU ar kategoriją"><button class="secondary">Ieškoti</button>{% if query %}<a href="{{ url_for('pricing_rules') }}">Išvalyti</a>{% endif %}</form>
+<div class="rules-list">
+{% for rule in rules %}
+  <form class="rule-card" method="post" action="{{ url_for('update_pricing_rule', sku=rule.sku) }}">
+    <input type="hidden" name="return_query" value="{{ query }}">
+    <div class="rule-id"><strong>{{ rule.sku }}</strong><small>{{ rule.category_name or 'Be kategorijos pavadinimo' }}</small></div>
+    <label>ID<input name="category_id" value="{{ rule.category_id }}"></label><label>Kategorija<input name="category_name" value="{{ rule.category_name }}"></label><label>Odoo kategorija<input name="odoo_category" value="{{ rule.odoo_category }}"></label>
+    <label>Surinkimas<input name="assembly" type="number" step="0.0001" value="{{ rule.assembly }}" required></label><label>Sandėliavimas<input name="storage" type="number" step="0.0001" value="{{ rule.storage }}" required></label><label>Pakavimas<input name="packaging" type="number" step="0.0001" value="{{ rule.packaging }}" required></label>
+    <label>Put on pallet<input name="put_on_pallet" type="number" step="0.0001" value="{{ rule.put_on_pallet }}" required></label><label>Kita<input name="other" type="number" step="0.0001" value="{{ rule.other }}" required></label><label>Antkainis<input name="markup" type="number" step="0.0001" value="{{ rule.markup }}" required></label>
+    <button class="primary" type="submit">Išsaugoti</button>
+  </form>
+{% else %}<div class="panel empty">Taisyklių pagal šią paiešką nerasta.</div>{% endfor %}
+</div>
+<section id="non-bom" class="section-head"><div><p class="eyebrow">Ne BOM kainodara</p><h2>Pozicijos</h2></div></section>
+<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Pavadinimas</th><th>Produkto kategorija</th><th>Kainodaros kategorija</th><th>Paruošimas</th><th>Sandėliavimas</th><th>Maišelis</th><th>Lipdukas</th><th></th></tr></thead><tbody>
+{% for rule in non_bom_rules %}<tr><td><strong>{{ rule.sku }}</strong><form id="non-bom-{{ loop.index }}" method="post" action="{{ url_for('update_non_bom_rule', sku=rule.sku) }}"></form></td><td><input form="non-bom-{{ loop.index }}" name="name" value="{{ rule.name }}"></td><td><input form="non-bom-{{ loop.index }}" name="product_category" value="{{ rule.product_category }}"></td><td><input form="non-bom-{{ loop.index }}" name="pricing_category" value="{{ rule.pricing_category }}"></td><td><input form="non-bom-{{ loop.index }}" name="preparation" type="number" step="0.0001" value="{{ rule.preparation }}"></td><td><input form="non-bom-{{ loop.index }}" name="storage" type="number" step="0.0001" value="{{ rule.storage }}"></td><td><input form="non-bom-{{ loop.index }}" name="bag" type="number" step="0.0001" value="{{ rule.bag }}"></td><td><input form="non-bom-{{ loop.index }}" name="sticker" type="number" step="0.0001" value="{{ rule.sticker }}"></td><td><button form="non-bom-{{ loop.index }}" class="secondary" type="submit">Išsaugoti</button></td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endblock %}

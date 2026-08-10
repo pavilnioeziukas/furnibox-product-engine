@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Furnibox Product Engine{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='pricing.css') }}">
 </head>
 <body>
   <header class="topbar">
@@ -12,11 +13,18 @@
       <span class="brand-mark">F</span>
       <span>Furnibox <strong>Product Engine</strong></span>
     </a>
+    <nav class="topnav">
+      <a href="{{ url_for('index') }}">Veiksmai</a>
+      <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
+    </nav>
     {% if session.get('authenticated') %}
       <form method="post" action="{{ url_for('logout') }}"><button class="link-button">Atsijungti</button></form>
     {% endif %}
   </header>
-  <main class="shell">{% block content %}{% endblock %}</main>
+  <main class="shell">
+    {% for message in get_flashed_messages() %}<div class="notice">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
   {% block scripts %}{% endblock %}
 </body>
 </html>

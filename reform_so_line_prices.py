@@ -1,6 +1,7 @@
 """Generate auditable final Reform SO unit prices without changing Odoo."""
 from __future__ import annotations
 
+import argparse
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,7 +9,9 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-MODEL_FILE = "map 1_MC_v3.xlsx"
+from reform_map import find_sheet, read_edges
+from so_pricing_rules import NonBomRule, PricingRule, load_config
+
 PRICE_FILE = "Reform_Final_Prices.xlsx"
 OUTPUT_FILE = "Reform_SO_Line_Prices.xlsx"
 ADJUSTMENT = -0.07
@@ -33,15 +36,6 @@ def number(value, default=0.0):
 
 def headers(sheet):
     return {text(cell.value): cell.column for cell in sheet[1] if cell.value not in (None, "")}
-
-
-@dataclass(frozen=True)
-class Rule:
-    sku: str
-    category_id: str
-    category_name: str
-    odoo_category: str
-    addons: tuple[float, float, float, float, float, float]
 
 
 @dataclass
@@ -93,11 +87,43 @@ def load_rules(path: Path):
         sku = text(row[0])
         if not sku:
             continue
-        rule = Rule(sku, text(row[1]), text(row[2]), text(row[3]), tuple(number(v) for v in row[4:10]))
+        values = tuple(number(v) for v in row[4:10])
+        rule = PricingRule(sku, text(row[1]), text(row[2]), text(row[3]), *values)
         # Legacy VLOOKUP uses the first match. Preserve that result; conflicting
         # duplicates are exposed separately in DIAGNOSTICS.
         result.setdefault(key(sku), rule)
     wb.close()
+    return result
+
+
+def rules_from_config(document):
+    return {key(rule.sku): rule for rule in (PricingRule(**raw) for raw in document["pricing_rules"])}
+
+
+def non_bom_from_config(document):
+    return [
+        (rule.sku, rule.name, rule.product_category, rule.pricing_category,
+         rule.preparation, rule.storage, rule.bag, rule.sticker)
+        for rule in (NonBomRule(**raw) for raw in document["non_bom_rules"])
+    ]
+
+
+def load_reform_boms(path: Path, products):
+    """Build the legacy two-level calculation shape from an actual Reform BOM input."""
+    workbook = load_workbook(path, data_only=True, read_only=True)
+    sheet = find_sheet(workbook)
+    _, graph, diagnostics = read_edges(sheet)
+    workbook.close()
+    invalid = [row for row in diagnostics if row[0] in {"INVALID QUANTITY", "NON-POSITIVE QUANTITY"}]
+    if invalid:
+        raise ValueError(f"Reform BOM turi {len(invalid)} neteisingų kiekių. Pirmiausia pataisykite įvestį.")
+    result = {}
+    for product in products:
+        top = text(product.get("sku"))
+        items = []
+        for child, quantity in graph.get(top, []):
+            items.append(Item(child, float(quantity), [(sku, float(qty)) for sku, qty in graph.get(child, [])]))
+        result[top] = (text(product.get("product_category")), items)
     return result
 
 
@@ -307,14 +333,100 @@ def build_reform_so_line_prices(model_path: Path, price_path: Path, output_path:
     return len(bom_rows), len(non_rows), sum(row["status"] == "BLOCKED" for row in all_rows)
 
 
+def write_price_workbook(bom_rows, non_rows, details, rules, adjustment, output_path):
+    """Write the auditable workbook for application-owned pricing inputs."""
+    all_rows = sorted(bom_rows + non_rows, key=lambda row: (row["type"], row["sku"].casefold()))
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SO LINE PRICES"
+    ws.append(["SKU", "Name", "Position Type", "Product Category", "Component / Purchase Cost",
+               *ADDONS, "Pricing Add-ons Total", "Adjustment Rate", "Adjustment Amount",
+               "Final Reform SO Unit Price", "Status", "Issues"])
+    for row in all_rows:
+        ws.append([row["sku"], row["name"], row["type"], row["category"], row["cost"], *row["addons"],
+                   sum(row["addons"]), adjustment if row["type"] == "BOM" else 0, row["adjustment"],
+                   row["final"], row["status"], row["issues"]])
+    style(ws); widths(ws, [31, 42, 14, 30, 22, 14, 14, 14, 16, 14, 14, 20, 16, 19, 25, 14, 75])
+    for row_number in range(2, ws.max_row + 1):
+        for column in list(range(5, 13)) + [14, 15]:
+            ws.cell(row_number, column).number_format = '0.0000 [$€-x-euro2]'
+        ws.cell(row_number, 13).number_format = "0.0%"
+
+    ws = wb.create_sheet("BOM CATEGORY BREAKDOWN")
+    ws.append(["Top SKU", "Application Level", "Pricing Rule SKU", "Category ID", "Category Name",
+               "Odoo Product Category", "Multiplier", *ADDONS, "Add-ons Total", "Adjustment Rate", "Adjusted Add-ons"])
+    for row in details:
+        rule, total = row["rule"], sum(row["addons"])
+        ws.append([row["top"], row["level"], rule.sku, rule.category_id, rule.category_name,
+                   rule.odoo_category, row["multiplier"], *row["addons"], total, adjustment, total * (1 + adjustment)])
+    style(ws, "5B9BD5"); widths(ws, [31, 19, 31, 13, 24, 31, 12] + [14] * 6 + [18, 16, 18])
+
+    ws = wb.create_sheet("CATEGORY RULES")
+    ws.append(["Category ID", "Category Name", "Odoo Product Category", "Products", *ADDONS, "Total",
+               *[f"{name} Applied" for name in ADDONS]])
+    variants = Counter((r.category_id, r.category_name, r.odoo_category, *r.addons) for r in rules.values())
+    for values, count in sorted(variants.items(), key=lambda item: tuple(str(v) for v in item[0][:3])):
+        cid, name, odoo, *addon_values = values
+        ws.append([cid, name, odoo, count, *addon_values, sum(addon_values),
+                   *["YES" if value else "NO" for value in addon_values]])
+    style(ws, "70AD47"); widths(ws, [13, 25, 32, 12] + [14] * 7 + [18] * 6)
+
+    ws = wb.create_sheet("NON-BOM RULES")
+    ws.append(["SKU", "Name", "Product Category", "Pricing Category", "Purchase Price",
+               "Pack Preparation", "Storage", "Bag", "Sticker", "Final Unit Price", "Status", "Issues"])
+    for row in non_rows:
+        ws.append([row["sku"], row["name"], row["category"], row["pricing_category"], row["cost"],
+                   row["preparation"], row["addons"][1], row["bag"], row["sticker"], row["final"],
+                   row["status"], row["issues"]])
+    style(ws, "8064A2"); widths(ws, [31, 42, 27, 17, 18, 18, 14, 12, 12, 18, 14, 65])
+
+    ws = wb.create_sheet("DIAGNOSTICS")
+    ws.append(["Position Type", "SKU", "Status", "Issues"])
+    for row in all_rows:
+        if row["status"] == "BLOCKED":
+            ws.append([row["type"], row["sku"], row["status"], row["issues"]])
+    style(ws, "C00000"); widths(ws, [18, 34, 14, 100])
+
+    ws = wb.create_sheet("INFO")
+    for row in [("Purpose", "Final Reform SO line unit price"),
+                ("Rules source", "Furnibox Product Engine application configuration"),
+                ("BOM rule", "Components + Assembly + Storage + Packaging + Put on pallet + Other + Markup"),
+                ("Adjustment", adjustment), ("Markup meaning", "Additive monetary amount, not percentage"),
+                ("Non-BOM rule", "Purchase price + pack preparation + storage + bag + sticker"),
+                ("BOM products", len(bom_rows)), ("Non-BOM products", len(non_rows)),
+                ("Blocked", sum(r["status"] == "BLOCKED" for r in all_rows)), ("Odoo changed", "NO")]:
+        ws.append(row)
+    ws.column_dimensions["A"].width = 30; ws.column_dimensions["B"].width = 110; ws.sheet_view.showGridLines = False
+    wb.calculation.fullCalcOnLoad = True; wb.calculation.forceFullCalc = True; wb.calculation.calcMode = "auto"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(output_path)
+    return len(bom_rows), len(non_rows), sum(row["status"] == "BLOCKED" for row in all_rows)
+
+
+def build_from_application_config(bom_path: Path, price_path: Path, config_path: Path, output_path: Path):
+    document = load_config(config_path)
+    if not document["pricing_rules"] or not document["bom_products"]:
+        raise ValueError("SO kainodaros taisyklės dar nesukonfigūruotos aplikacijoje.")
+    adjustment = float(document["adjustment_rate"])
+    prices = load_prices(price_path)
+    rules = rules_from_config(document)
+    bom_rows, details = calculate_boms(load_reform_boms(bom_path, document["bom_products"]), prices, rules, adjustment)
+    non_rows = calculate_non_bom(non_bom_from_config(document), prices)
+    return write_price_workbook(bom_rows, non_rows, details, rules, adjustment, output_path)
+
+
 def main():
-    from config import load_settings
-    settings = load_settings()
-    model_path, price_path = Path(MODEL_FILE), settings.output_dir / PRICE_FILE
-    for path in (model_path, price_path):
-        if not path.exists(): raise FileNotFoundError(f"Nerastas šaltinio failas: {path.resolve()}")
-    output = settings.output_dir / OUTPUT_FILE
-    bom, non_bom, blocked = build_reform_so_line_prices(model_path, price_path, output)
+    parser = argparse.ArgumentParser(description="Generuoti galutines Reform SO kainas.")
+    parser.add_argument("--bom-input", required=True, type=Path, help="Aktualus Reform BOM .xlsx")
+    parser.add_argument("--price-input", type=Path, default=Path("output/production") / PRICE_FILE)
+    parser.add_argument("--rules", type=Path, default=Path("web_state/shared_data/so_pricing_rules.json"))
+    parser.add_argument("--output-dir", type=Path, default=Path("output/production"))
+    args = parser.parse_args()
+    for path in (args.bom_input, args.price_input, args.rules):
+        if not path.exists():
+            raise FileNotFoundError(f"Nerastas šaltinio failas: {path.resolve()}")
+    output = args.output_dir / OUTPUT_FILE
+    bom, non_bom, blocked = build_from_application_config(args.bom_input, args.price_input, args.rules, output)
     print("GALUTINĖS REFORM SO EILUČIŲ KAINOS APSKAIČIUOTOS")
     print("Failas:", output); print("BOM pozicijos:", bom); print("Ne BOM pozicijos:", non_bom)
     print("BLOCKED:", blocked); print("Odoo duomenys nepakeisti.")
