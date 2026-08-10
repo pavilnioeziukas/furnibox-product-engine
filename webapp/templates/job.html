@@ -2,20 +2,233 @@
 {% block title %}{{ job.title }} · Furnibox Product Engine{% endblock %}
 {% block content %}
 <a class="back" href="{{ url_for('index') }}">← Grįžti į pradžią</a>
+
 <section class="job-head">
-  <div><p class="eyebrow">Paleidimas {{ job.id }}</p><h1>{{ job.title }}</h1><p class="muted">{{ job.created_at }}</p></div>
-  <span id="status" class="state {{ job.status|lower }}">{{ job.status }}</span>
+  <div>
+    <p class="eyebrow">Paleidimas {{ job.id }}</p>
+    <h1>{{ job.title }}</h1>
+    <p class="muted">{{ job.created_at }}</p>
+  </div>
+  <span id="status" class="state {{ job.status|lower }}">
+    Vykdymas: {{ job.status }}
+  </span>
 </section>
+
+<section id="supply-report" class="panel" hidden>
+  <p class="eyebrow">Tiekimo parengtis</p>
+  <h2 id="supply-readiness"></h2>
+  <p id="supply-summary" class="muted"></p>
+
+  <div class="supply-metrics">
+    <div><strong id="supply-reserved">–</strong><span>MO rezervuota</span></div>
+    <div><strong id="supply-sorting">–</strong><span>Laukia rūšiavimo</span></div>
+    <div><strong id="supply-receipt">–</strong><span>Laukia priėmimo</span></div>
+    <div><strong id="supply-issues">–</strong><span>Reikia dėmesio</span></div>
+  </div>
+
+  <div id="supply-problems" hidden>
+    <h3>Probleminės detalės</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Reikia</th>
+            <th>PO</th>
+            <th>Priimta</th>
+            <th>Surūšiuota</th>
+            <th>Būsena</th>
+            <th>Pastaba</th>
+          </tr>
+        </thead>
+        <tbody id="supply-problems-body"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 <section class="grid job-grid">
-  <article class="panel"><h2>Vykdymo žurnalas</h2><pre id="log">{{ log }}</pre></article>
-  <aside class="panel"><h2>Rezultatai</h2><div id="files">
-    {% for file in job.files %}<a class="download" href="{{ url_for('download', job_id=job.id, filename=file.name) }}">{{ file.name }} <span>↓</span></a>{% else %}<p class="muted">Rezultatų dar nėra.</p>{% endfor %}
-  </div>{% if job.status in ['QUEUED','RUNNING'] %}<form method="post" action="{{ url_for('stop_job', job_id=job.id) }}"><button class="danger" type="submit">Sustabdyti</button></form>{% endif %}</aside>
+  <article class="panel">
+    <h2>Vykdymo žurnalas</h2>
+    <pre id="log">{{ log }}</pre>
+  </article>
+
+  <aside class="panel">
+    <h2>Rezultatai</h2>
+    <div id="files">
+      {% for file in job.files %}
+      <a
+        class="download"
+        href="{{ url_for('download', job_id=job.id, filename=file.name) }}"
+        {% if file.name.startswith('SO_Tiekimo_Bukle_') and file.name.endswith('.json') %}
+        data-supply-report
+        {% endif %}
+      >
+        {{ file.name }} <span>↓</span>
+      </a>
+      {% else %}
+      <p class="muted">Rezultatų dar nėra.</p>
+      {% endfor %}
+    </div>
+
+    {% if job.status in ['QUEUED','RUNNING'] %}
+    <form method="post" action="{{ url_for('stop_job', job_id=job.id) }}">
+      <button class="danger" type="submit">Sustabdyti</button>
+    </form>
+    {% endif %}
+  </aside>
 </section>
+
+<style>
+  .supply-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .supply-metrics > div {
+    padding: 14px;
+    border: 1px solid var(--line, #d9d9d9);
+    border-radius: 8px;
+  }
+
+  .supply-metrics strong,
+  .supply-metrics span {
+    display: block;
+  }
+
+  .supply-metrics strong {
+    font-size: 1.35rem;
+    margin-bottom: 4px;
+  }
+
+  .supply-metrics span {
+    color: var(--muted, #666);
+    font-size: .9rem;
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .9rem;
+  }
+
+  th, td {
+    padding: 9px 8px;
+    border-bottom: 1px solid var(--line, #d9d9d9);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th { white-space: nowrap; }
+
+  @media (max-width: 760px) {
+    .supply-metrics { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
 {% endblock %}
+
 {% block scripts %}
-{% if job.status in ['QUEUED','RUNNING'] %}<script>
+<script>
+const supplyFile = document.querySelector('[data-supply-report]');
+
+function text(value) {
+  return value === null || value === undefined || value === '' ? '–' : String(value);
+}
+
+function quantity(value) {
+  const number = Number(value || 0);
+  return Number.isInteger(number) ? String(number) : number.toFixed(2);
+}
+
+async function renderSupplyReport() {
+  if (!supplyFile) return;
+
+  try {
+    const response = await fetch(supplyFile.href);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const report = await response.json();
+    const summary = report.summary || {};
+    const rows = report.rows || [];
+    const problems = rows.filter((row) =>
+      row.supply_status &&
+      row.supply_status !== 'AVAILABLE / RESERVED'
+    );
+
+    document.querySelector('#supply-report').hidden = false;
+    document.querySelector('#supply-readiness').textContent =
+      text(report.supply_readiness);
+
+    document.querySelector('#supply-summary').textContent =
+      `SO ${text(report.so_number)} · PO ${text(report.po_number)} · ` +
+      `BOM–PO duomenys: ${text(report.data_quality_status)}`;
+
+    document.querySelector('#supply-reserved').textContent =
+      `${quantity(report.mo_reserved_qty)} / ${quantity(report.mo_demand_qty)}`;
+
+    document.querySelector('#supply-sorting').textContent =
+      quantity(summary.waiting_for_sorting);
+
+    document.querySelector('#supply-receipt').textContent =
+      quantity(summary.waiting_for_receipt);
+
+    document.querySelector('#supply-issues').textContent =
+      quantity(summary.requires_investigation);
+
+    if (!problems.length) return;
+
+    const body = document.querySelector('#supply-problems-body');
+    for (const row of problems) {
+      const tr = document.createElement('tr');
+      const values = [
+        row.sku,
+        quantity(row.required_qty),
+        quantity(row.po_qty),
+        quantity(row.received_qty),
+        quantity(row.sorted_qty),
+        row.supply_status,
+        row.supply_note,
+      ];
+
+      for (const value of values) {
+        const td = document.createElement('td');
+        td.textContent = text(value);
+        tr.appendChild(td);
+      }
+      body.appendChild(tr);
+    }
+
+    document.querySelector('#supply-problems').hidden = false;
+  } catch (error) {
+    console.error('Nepavyko parodyti tiekimo ataskaitos:', error);
+  }
+}
+
+renderSupplyReport();
+
+{% if job.status in ['QUEUED','RUNNING'] %}
 const endpoint = {{ url_for('job_api', job_id=job.id)|tojson }};
-async function refresh(){const r=await fetch(endpoint); const j=await r.json(); document.querySelector('#status').textContent=j.status; document.querySelector('#status').className='state '+j.status.toLowerCase(); document.querySelector('#log').textContent=j.log||''; if(['QUEUED','RUNNING'].includes(j.status)){setTimeout(refresh,1500)}else{location.reload()}} refresh();
-</script>{% endif %}
+
+async function refresh() {
+  const response = await fetch(endpoint);
+  const job = await response.json();
+
+  document.querySelector('#status').textContent = `Vykdymas: ${job.status}`;
+  document.querySelector('#status').className = `state ${job.status.toLowerCase()}`;
+  document.querySelector('#log').textContent = job.log || '';
+
+  if (['QUEUED', 'RUNNING'].includes(job.status)) {
+    setTimeout(refresh, 1500);
+  } else {
+    location.reload();
+  }
+}
+
+refresh();
+{% endif %}
+</script>
 {% endblock %}
