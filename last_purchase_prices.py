@@ -7,6 +7,9 @@ from copy import copy
 from datetime import datetime
 
 from openpyxl import Workbook
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import PatternFill
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from config import load_settings
 from excel_writer import HEADER_FILL, HEADER_FONT
@@ -22,6 +25,17 @@ EXPORT_COLUMNS = [
     "Last Purchase Price",
     "Order Date",
 ]
+
+CALCULATOR_COLUMNS = [
+    "Adjusted Purchase Price",
+    "Markup Factor",
+    "Reform Price",
+]
+
+OUTPUT_COLUMNS = [
+    "Real Purchase Price" if column == "Last Purchase Price" else column
+    for column in EXPORT_COLUMNS
+] + CALCULATOR_COLUMNS
 
 
 def relation_id(value):
@@ -95,7 +109,7 @@ def load_last_purchase_prices(client):
 
 
 def write_purchase_prices(path, purchase_prices, metadata):
-    """Sukuria paskutinių pirkimo kainų Excel failą."""
+    """Sukuria komponentų pirkimo ir Reform kainų skaičiuoklę."""
     workbook = Workbook()
 
     info = workbook.active
@@ -125,9 +139,18 @@ def write_purchase_prices(path, purchase_prices, metadata):
             + ", ".join(sorted(set(invalid_columns)))
         )
 
-    prices.append(EXPORT_COLUMNS)
+    prices.title = "COMPONENT PRICES"
+    prices.append(OUTPUT_COLUMNS)
     for row in purchase_prices:
-        prices.append([row.get(column, "") for column in EXPORT_COLUMNS])
+        prices.append(
+            [row.get(column, "") for column in EXPORT_COLUMNS]
+            + [row.get("Last Purchase Price"), 1.0, None]
+        )
+
+    for row_number in range(2, prices.max_row + 1):
+        prices.cell(row_number, 11).value = (
+            f'=IF(I{row_number}="",G{row_number},I{row_number})*J{row_number}'
+        )
 
     for cell in prices[1]:
         cell.fill = HEADER_FILL
@@ -141,10 +164,62 @@ def write_purchase_prices(path, purchase_prices, metadata):
     prices.freeze_panes = "A2"
     prices.auto_filter.ref = prices.dimensions
 
-    column_widths = [22, 45, 38, 20, 35, 18, 19, 21]
+    column_widths = [22, 45, 38, 20, 35, 18, 19, 21, 25, 16, 18]
     for index, width in enumerate(column_widths, start=1):
         column_letter = prices.cell(row=1, column=index).column_letter
         prices.column_dimensions[column_letter].width = width
+
+    input_fill = PatternFill("solid", fgColor="FFF2CC")
+    formula_fill = PatternFill("solid", fgColor="E2F0D9")
+    for row_number in range(2, prices.max_row + 1):
+        prices.cell(row_number, 7).number_format = '0.0000 [$€-x-euro2]'
+        prices.cell(row_number, 9).number_format = '0.0000 [$€-x-euro2]'
+        prices.cell(row_number, 10).number_format = "0.00"
+        prices.cell(row_number, 11).number_format = '0.0000 [$€-x-euro2]'
+        prices.cell(row_number, 9).fill = input_fill
+        prices.cell(row_number, 10).fill = input_fill
+        prices.cell(row_number, 11).fill = formula_fill
+
+    markup_validation = DataValidation(
+        type="decimal",
+        operator="between",
+        formula1="1",
+        formula2="5",
+        allow_blank=False,
+    )
+    markup_validation.error = "Įrašykite koeficientą nuo 1,00 iki 5,00."
+    markup_validation.errorTitle = "Netinkamas antkainio koeficientas"
+    markup_validation.prompt = "1,00 – be antkainio; 1,05 – 5 % antkainis."
+    markup_validation.promptTitle = "Markup Factor"
+    markup_validation.showErrorMessage = True
+    markup_validation.showInputMessage = True
+    prices.add_data_validation(markup_validation)
+    markup_validation.add(f"J2:J{prices.max_row}")
+
+    prices.conditional_formatting.add(
+        f"J2:J{prices.max_row}",
+        FormulaRule(
+            formula=["J2<>1"],
+            fill=PatternFill("solid", fgColor="FCE4D6"),
+        ),
+    )
+
+    note = workbook.create_sheet("PRICING RULES", 1)
+    note.append(["Field", "Rule"])
+    note.append(["Real Purchase Price", "Last confirmed purchase price from Odoo."])
+    note.append(["Adjusted Purchase Price", "Editable input; initially equals Real Purchase Price."])
+    note.append(["Markup Factor", "Editable input; 1.00 = no markup, 1.05 = 5% markup."])
+    note.append(["Reform Price", "Adjusted Purchase Price × Markup Factor; use as Reform Sales Price."])
+    for cell in note[1]:
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+    note.column_dimensions["A"].width = 28
+    note.column_dimensions["B"].width = 78
+    note.freeze_panes = "A2"
+
+    workbook.calculation.fullCalcOnLoad = True
+    workbook.calculation.forceFullCalc = True
+    workbook.calculation.calcMode = "auto"
 
     workbook.save(path)
 
@@ -186,7 +261,7 @@ def main():
     )
 
     print()
-    print("PASKUTINIŲ PIRKIMO KAINŲ FAILAS SUKURTAS")
+    print("KOMPONENTŲ PIRKIMO IR REFORM KAINŲ FAILAS SUKURTAS")
     print("Failas:", output_path)
     print("Produktai su kaina:", len(purchase_prices))
 
