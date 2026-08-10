@@ -37,6 +37,14 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "module": "run_stock_by_location",
         "requires_upload": False,
     },
+    "so_supply_status": {
+        "title": "Patikrinti SO tiekimo būklę",
+        "description": "Pagal SO parodo, ar faktinis MO poreikis rezervuotas ir kur dabar yra Furnix detalės: PO, gavime, rūšiavime ar WH/Stock.",
+        "script": "run_so_supply_status.py",
+        "requires_upload": False,
+        "requires_so_number": True,
+        "args": ["--so-number", "{so_number}", "--output-dir", "{output_dir}"],
+    },
     "odoo_snapshot": {
         "title": "Nuskaityti Odoo duomenis",
         "description": "Atnaujina tik skaitomą Odoo produktų, BOM ir kainų momentinę kopiją.",
@@ -207,7 +215,12 @@ def collect_outputs(before: dict[str, int], destination: Path) -> list[dict[str,
     return sorted(files, key=lambda item: item["name"])
 
 
-def run_job(job_id: str, action_key: str, upload: Path | None) -> None:
+def run_job(
+    job_id: str,
+    action_key: str,
+    upload: Path | None,
+    so_number: str | None = None,
+) -> None:
     job_dir = RUN_DIR / job_id
     output_dir = job_dir / "files"
     output_dir.mkdir(exist_ok=True)
@@ -219,7 +232,11 @@ def run_job(job_id: str, action_key: str, upload: Path | None) -> None:
     else:
         command = [sys.executable, "-u", str(BASE_DIR / action["script"])]
     for argument in action.get("args", []):
-        command.append(argument.format(upload=str(upload) if upload else ""))
+        command.append(argument.format(
+            upload=str(upload) if upload else "",
+            so_number=so_number or "",
+            output_dir=str(output_dir),
+        ))
     if action.get("needs_dataset_arg"):
         dataset = latest_dataset()
         if dataset is None:
@@ -253,6 +270,10 @@ def run_job(job_id: str, action_key: str, upload: Path | None) -> None:
                 _active_processes[job_id] = process
             return_code = process.wait()
         files = collect_outputs(before, output_dir)
+        known_paths = {item["path"] for item in files}
+        for path in sorted(output_dir.iterdir()):
+            if path.is_file() and str(path) not in known_paths:
+                files.append({"name": path.name, "path": str(path)})
         job.update(
             status="PASS" if return_code == 0 else "FAIL",
             return_code=return_code,
@@ -302,6 +323,9 @@ def start_job(action_key: str):
     upload_path = latest_upload()
     if action["requires_upload"] and upload_path is None:
         abort(409, "Pirmiausia įkelkite Reform BOM .xlsx failą.")
+    so_number = request.form.get("so_number", "").strip().upper()
+    if action.get("requires_so_number") and not so_number:
+        abort(400, "Įveskite SO numerį.")
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
         if _reserved_jobs:
@@ -316,9 +340,14 @@ def start_job(action_key: str):
         "status": "QUEUED",
         "created_at": utc_now(),
         "upload": upload_path.name if upload_path else None,
+        "so_number": so_number or None,
         "files": [],
     })
-    threading.Thread(target=run_job, args=(job_id, action_key, upload_path), daemon=True).start()
+    threading.Thread(
+        target=run_job,
+        args=(job_id, action_key, upload_path, so_number or None),
+        daemon=True,
+    ).start()
     return redirect(url_for("job_detail", job_id=job_id))
 
 
