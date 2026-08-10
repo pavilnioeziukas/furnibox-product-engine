@@ -6,10 +6,9 @@ import logging
 from copy import copy
 from datetime import datetime
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import PatternFill
-from openpyxl.worksheet.datavalidation import DataValidation
 
 from config import load_settings
 from excel_writer import HEADER_FILL, HEADER_FONT
@@ -32,6 +31,9 @@ CALCULATOR_COLUMNS = [
     "Reform Price",
 ]
 
+ADJUSTMENT_SHEET = "TAMARA ADJUSTMENTS"
+REFORM_VENDOR_MARKER = "Reform Supply & Logistics"
+
 OUTPUT_COLUMNS = [
     "Real Purchase Price" if column == "Last Purchase Price" else column
     for column in EXPORT_COLUMNS
@@ -44,6 +46,10 @@ def relation_id(value):
 
 def relation_name(value):
     return value[1] if isinstance(value, list) and len(value) >= 2 else ""
+
+
+def is_reform_vendor(vendor):
+    return REFORM_VENDOR_MARKER.casefold() in (vendor or "").casefold()
 
 
 def build_last_purchase_prices(purchase_lines, products):
@@ -108,8 +114,49 @@ def load_last_purchase_prices(client):
     return build_last_purchase_prices(purchase_lines, products)
 
 
-def write_purchase_prices(path, purchase_prices, metadata):
+def load_tamara_adjustments(path):
+    """Perskaito Tamaros korekcijas iš ankstesnės tos pačios ataskaitos."""
+    if not path.exists():
+        return {}
+
+    workbook = load_workbook(path, data_only=False, read_only=True)
+    if ADJUSTMENT_SHEET not in workbook.sheetnames:
+        workbook.close()
+        return {}
+
+    sheet = workbook[ADJUSTMENT_SHEET]
+    rows = sheet.iter_rows(values_only=True)
+    header_values = list(next(rows, ()))
+    headers = {value: index for index, value in enumerate(header_values)}
+    sku_column = headers.get("Internal Reference")
+    adjusted_column = headers.get("Adjusted Purchase Price")
+    if sku_column is None or adjusted_column is None:
+        workbook.close()
+        raise RuntimeError(
+            f"Lape {ADJUSTMENT_SHEET} trūksta Internal Reference arba "
+            "Adjusted Purchase Price stulpelio."
+        )
+
+    adjustments = {}
+    for values in rows:
+        sku = values[sku_column]
+        adjusted_price = values[adjusted_column]
+        if not sku or adjusted_price in (None, ""):
+            continue
+        if sku in adjustments:
+            workbook.close()
+            raise RuntimeError(f"Tamaros korekcijose kartojasi SKU: {sku}")
+        adjustments[str(sku).strip()] = adjusted_price
+
+    workbook.close()
+    return adjustments
+
+
+def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=None):
     """Sukuria komponentų pirkimo ir Reform kainų skaičiuoklę."""
+    if tamara_adjustments is None:
+        tamara_adjustments = load_tamara_adjustments(path)
+
     workbook = Workbook()
 
     info = workbook.active
@@ -126,7 +173,40 @@ def write_purchase_prices(path, purchase_prices, metadata):
     info.column_dimensions["A"].width = 36
     info.column_dimensions["B"].width = 45
 
-    prices = workbook.create_sheet("LAST PURCHASE PRICES")
+    adjustments = workbook.create_sheet(ADJUSTMENT_SHEET)
+    adjustments.append([
+        "Internal Reference",
+        "Adjusted Purchase Price",
+        "Real Purchase Price (reference)",
+        "Comment",
+    ])
+    for row in purchase_prices:
+        sku = row.get("Internal Reference") or ""
+        real_price = row.get("Last Purchase Price")
+        adjustments.append([
+            sku,
+            tamara_adjustments.get(sku, real_price),
+            real_price,
+            "",
+        ])
+
+    for cell in adjustments[1]:
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+    adjustments.freeze_panes = "A2"
+    adjustments.auto_filter.ref = adjustments.dimensions
+    adjustments.column_dimensions["A"].width = 24
+    adjustments.column_dimensions["B"].width = 25
+    adjustments.column_dimensions["C"].width = 29
+    adjustments.column_dimensions["D"].width = 45
+    input_fill = PatternFill("solid", fgColor="FFF2CC")
+    for row_number in range(2, adjustments.max_row + 1):
+        adjustments.cell(row_number, 2).number_format = '0.0000 [$€-x-euro2]'
+        adjustments.cell(row_number, 3).number_format = '0.0000 [$€-x-euro2]'
+        adjustments.cell(row_number, 2).fill = input_fill
+        adjustments.cell(row_number, 4).fill = input_fill
+
+    prices = workbook.create_sheet("COMPONENT PRICES")
     invalid_columns = [
         key
         for row in purchase_prices
@@ -141,13 +221,15 @@ def write_purchase_prices(path, purchase_prices, metadata):
 
     prices.title = "COMPONENT PRICES"
     prices.append(OUTPUT_COLUMNS)
-    for row in purchase_prices:
+    for row_number, row in enumerate(purchase_prices, start=2):
         prices.append(
             [row.get(column, "") for column in EXPORT_COLUMNS]
-            + [row.get("Last Purchase Price"), 1.0, None]
+            + [None, None, None]
         )
-
-    for row_number in range(2, prices.max_row + 1):
+        prices.cell(row_number, 9).value = f"='{ADJUSTMENT_SHEET}'!B{row_number}"
+        prices.cell(row_number, 10).value = (
+            1.05 if is_reform_vendor(row.get("Vendor")) else 1.0
+        )
         prices.cell(row_number, 11).value = (
             f'=IF(I{row_number}="",G{row_number},I{row_number})*J{row_number}'
         )
@@ -169,32 +251,15 @@ def write_purchase_prices(path, purchase_prices, metadata):
         column_letter = prices.cell(row=1, column=index).column_letter
         prices.column_dimensions[column_letter].width = width
 
-    input_fill = PatternFill("solid", fgColor="FFF2CC")
     formula_fill = PatternFill("solid", fgColor="E2F0D9")
     for row_number in range(2, prices.max_row + 1):
         prices.cell(row_number, 7).number_format = '0.0000 [$€-x-euro2]'
         prices.cell(row_number, 9).number_format = '0.0000 [$€-x-euro2]'
         prices.cell(row_number, 10).number_format = "0.00"
         prices.cell(row_number, 11).number_format = '0.0000 [$€-x-euro2]'
-        prices.cell(row_number, 9).fill = input_fill
-        prices.cell(row_number, 10).fill = input_fill
+        prices.cell(row_number, 9).fill = formula_fill
+        prices.cell(row_number, 10).fill = formula_fill
         prices.cell(row_number, 11).fill = formula_fill
-
-    markup_validation = DataValidation(
-        type="decimal",
-        operator="between",
-        formula1="1",
-        formula2="5",
-        allow_blank=False,
-    )
-    markup_validation.error = "Įrašykite koeficientą nuo 1,00 iki 5,00."
-    markup_validation.errorTitle = "Netinkamas antkainio koeficientas"
-    markup_validation.prompt = "1,00 – be antkainio; 1,05 – 5 % antkainis."
-    markup_validation.promptTitle = "Markup Factor"
-    markup_validation.showErrorMessage = True
-    markup_validation.showInputMessage = True
-    prices.add_data_validation(markup_validation)
-    markup_validation.add(f"J2:J{prices.max_row}")
 
     prices.conditional_formatting.add(
         f"J2:J{prices.max_row}",
@@ -207,8 +272,8 @@ def write_purchase_prices(path, purchase_prices, metadata):
     note = workbook.create_sheet("PRICING RULES", 1)
     note.append(["Field", "Rule"])
     note.append(["Real Purchase Price", "Last confirmed purchase price from Odoo."])
-    note.append(["Adjusted Purchase Price", "Editable input; initially equals Real Purchase Price."])
-    note.append(["Markup Factor", "Editable input; 1.00 = no markup, 1.05 = 5% markup."])
+    note.append(["Adjusted Purchase Price", f"Editable only in {ADJUSTMENT_SHEET}; preserved on the next generation."])
+    note.append(["Markup Factor", f"Automatic: 1.05 when Vendor contains '{REFORM_VENDOR_MARKER}', otherwise 1.00."])
     note.append(["Reform Price", "Adjusted Purchase Price × Markup Factor; use as Reform Sales Price."])
     for cell in note[1]:
         cell.fill = HEADER_FILL

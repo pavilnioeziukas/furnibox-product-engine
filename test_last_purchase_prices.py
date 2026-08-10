@@ -42,7 +42,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
             workbook = load_workbook(output, data_only=False)
             self.assertEqual(
                 workbook.sheetnames,
-                ["INFO", "PRICING RULES", "COMPONENT PRICES"],
+                ["INFO", "PRICING RULES", "TAMARA ADJUSTMENTS", "COMPONENT PRICES"],
             )
             prices = workbook["COMPONENT PRICES"]
             headers = {cell.value: cell.column for cell in prices[1]}
@@ -51,15 +51,46 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
 
             self.assertEqual(
                 prices.cell(2, headers["Adjusted Purchase Price"]).value,
-                2.5,
+                "='TAMARA ADJUSTMENTS'!B2",
             )
             self.assertEqual(prices.cell(2, headers["Markup Factor"]).value, 1.0)
             self.assertEqual(
                 prices.cell(2, headers["Reform Price"]).value,
                 '=IF(I2="",G2,I2)*J2',
             )
-            self.assertEqual(len(prices.data_validations.dataValidation), 1)
+            adjustments = workbook["TAMARA ADJUSTMENTS"]
+            self.assertEqual(adjustments["A2"].value, "ACCS-TEST")
+            self.assertEqual(adjustments["B2"].value, 2.5)
             self.assertEqual(workbook.calculation.calcMode, "auto")
+
+            adjustments["B2"] = 3.25
+            workbook.save(output)
+
+            write_purchase_prices(
+                output,
+                [
+                    {
+                        "Internal Reference": "ACCS-TEST",
+                        "Name": "Test component",
+                        "Product Category/Name": "All / Components / CABINET HARDWARE",
+                        "Purchase Order": "P00002",
+                        "Vendor": "Reform Supply & Logistics, UAB",
+                        "Ordered Quantity": 50,
+                        "Last Purchase Price": 2.75,
+                        "Order Date": "2026-08-11 12:00:00",
+                    }
+                ],
+                {
+                    "url": "https://example.test",
+                    "db": "test",
+                    "login": "test@example.test",
+                    "uid": 1,
+                },
+            )
+            regenerated = load_workbook(output, data_only=False)
+            self.assertEqual(regenerated["TAMARA ADJUSTMENTS"]["B2"].value, 3.25)
+            self.assertEqual(regenerated["TAMARA ADJUSTMENTS"]["C2"].value, 2.75)
+            self.assertEqual(regenerated["COMPONENT PRICES"]["J2"].value, 1.05)
 
 
 if __name__ == "__main__":
