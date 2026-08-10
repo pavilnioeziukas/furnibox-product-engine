@@ -48,7 +48,7 @@ class ReformSoLinePriceTests(unittest.TestCase):
             self.assertEqual(counts, (1, 1, 0))
             result = load_workbook(output, data_only=True)
             self.assertEqual(result.sheetnames, [
-                "SO LINE PRICES", "BOM CATEGORY BREAKDOWN", "CATEGORY RULES",
+                "SO LINE PRICES", "BOM COMPONENT COSTS", "BOM CATEGORY BREAKDOWN", "CATEGORY RULES",
                 "NON-BOM RULES", "DIAGNOSTICS", "INFO",
             ])
             sheet = result["SO LINE PRICES"]
@@ -64,6 +64,20 @@ class ReformSoLinePriceTests(unittest.TestCase):
             non = rows["ACC-1"]
             self.assertAlmostEqual(sheet.cell(non, headers["Final Reform SO Unit Price"]).value, 10.35)
             self.assertEqual(sheet.cell(non, headers["Status"]).value, "COMPLETE")
+
+            components = result["BOM COMPONENT COSTS"]
+            component_headers = {cell.value: cell.column for cell in components[1]}
+            component_rows = {
+                components.cell(row, component_headers["Purchased Component SKU"]).value: row
+                for row in range(2, components.max_row + 1)
+            }
+            part_1 = component_rows["PART-1"]
+            self.assertEqual(components.cell(part_1, component_headers["Level II SKU"]).value, "SUB-1")
+            self.assertAlmostEqual(components.cell(part_1, component_headers["Total Qty in Top BOM"]).value, 6)
+            self.assertAlmostEqual(components.cell(part_1, component_headers["Purchase Unit Price"]).value, 2)
+            self.assertAlmostEqual(components.cell(part_1, component_headers["Component Cost"]).value, 12)
+            direct = component_rows["DIRECT-1"]
+            self.assertAlmostEqual(components.cell(direct, component_headers["Component Cost"]).value, 28)
 
     def test_application_config_replaces_legacy_workbook_at_runtime(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -186,7 +186,7 @@ def breakdown(rule, multiplier, level):
 def calculate_boms(boms, prices, rules, adjustment=ADJUSTMENT):
     results, details = [], []
     for top, (category, items) in boms.items():
-        cost, issues, applied = 0.0, [], []
+        cost, issues, applied, component_details = 0.0, [], [], []
         for item in items:
             if not item.sku:
                 issues.append("Leaf components have no Level II BOM item")
@@ -198,15 +198,41 @@ def calculate_boms(boms, prices, rules, adjustment=ADJUSTMENT):
                 for sku, qty in item.leaves:
                     if key(sku) not in prices:
                         issues.append(f"Missing component price: {sku}")
+                        unit_price = None
                     else:
-                        sub_cost += prices[key(sku)][1] * qty
+                        unit_price = prices[key(sku)][1]
+                        sub_cost += unit_price * qty
+                    component_details.append({
+                        "top": top,
+                        "level_ii": item.sku,
+                        "level_ii_qty": item_qty,
+                        "component": sku,
+                        "component_qty": qty,
+                        "total_qty": item_qty * qty,
+                        "unit_price": unit_price,
+                        "line_cost": None if unit_price is None else item_qty * qty * unit_price,
+                        "status": "MISSING PRICE" if unit_price is None else "OK",
+                    })
                 cost += sub_cost * item_qty
                 multiplier, level = item_qty, "LEVEL II BOM"
             else:
                 if key(item.sku) not in prices:
                     issues.append(f"Missing component price: {item.sku}")
+                    unit_price = None
                 else:
-                    cost += prices[key(item.sku)][1] * item_qty
+                    unit_price = prices[key(item.sku)][1]
+                    cost += unit_price * item_qty
+                component_details.append({
+                    "top": top,
+                    "level_ii": item.sku,
+                    "level_ii_qty": item_qty,
+                    "component": item.sku,
+                    "component_qty": 1.0,
+                    "total_qty": item_qty,
+                    "unit_price": unit_price,
+                    "line_cost": None if unit_price is None else item_qty * unit_price,
+                    "status": "MISSING PRICE" if unit_price is None else "OK",
+                })
                 # Exact legacy rule: direct item pricing add-on is applied once, not by quantity.
                 multiplier, level = 1.0, "DIRECT LEVEL II"
             if not item.sku:
@@ -226,11 +252,37 @@ def calculate_boms(boms, prices, rules, adjustment=ADJUSTMENT):
                         "category": category, "cost": cost, "addons": addon_values,
                         "adjustment": addon_total * adjustment,
                         "final": cost + addon_total * (1 + adjustment) if not issues else None,
-                        "status": "COMPLETE" if not issues else "BLOCKED", "issues": issue_text})
+                        "status": "COMPLETE" if not issues else "BLOCKED", "issues": issue_text,
+                        "component_details": component_details})
         for row in applied:
             row["top"] = top
             details.append(row)
     return results, details
+
+
+def write_component_cost_breakdown(workbook, bom_rows):
+    """Write the auditable purchase-cost calculation behind every BOM total."""
+    ws = workbook.create_sheet("BOM COMPONENT COSTS", 1)
+    ws.append([
+        "Top BOM SKU", "Level II SKU", "Level II Qty", "Purchased Component SKU",
+        "Component Qty in Level II", "Total Qty in Top BOM", "Purchase Unit Price",
+        "Component Cost", "Status",
+    ])
+    for row in bom_rows:
+        for detail in row.get("component_details", []):
+            ws.append([
+                detail["top"], detail["level_ii"], detail["level_ii_qty"],
+                detail["component"], detail["component_qty"], detail["total_qty"],
+                detail["unit_price"], detail["line_cost"], detail["status"],
+            ])
+    style(ws, "4472C4")
+    widths(ws, [31, 31, 14, 31, 22, 20, 20, 18, 16])
+    for row_number in range(2, ws.max_row + 1):
+        ws.cell(row_number, 3).number_format = "0.####"
+        ws.cell(row_number, 5).number_format = "0.####"
+        ws.cell(row_number, 6).number_format = "0.####"
+        ws.cell(row_number, 7).number_format = '0.0000 [$€-x-euro2]'
+        ws.cell(row_number, 8).number_format = '0.0000 [$€-x-euro2]'
 
 
 def calculate_non_bom(items, prices):
@@ -285,6 +337,8 @@ def build_reform_so_line_prices(model_path: Path, price_path: Path, output_path:
     for row in range(2, ws.max_row + 1):
         for col in list(range(5, 13)) + [14, 15]: ws.cell(row, col).number_format = '0.0000 [$€-x-euro2]'
         ws.cell(row, 13).number_format = "0.0%"
+
+    write_component_cost_breakdown(wb, bom_rows)
 
     ws = wb.create_sheet("BOM CATEGORY BREAKDOWN")
     ws.append(["Top SKU", "Application Level", "Pricing Rule SKU", "Category ID", "Category Name",
@@ -354,6 +408,8 @@ def write_price_workbook(bom_rows, non_rows, details, rules, adjustment, output_
         for column in list(range(5, 13)) + [14, 15]:
             ws.cell(row_number, column).number_format = '0.0000 [$€-x-euro2]'
         ws.cell(row_number, 13).number_format = "0.0%"
+
+    write_component_cost_breakdown(wb, bom_rows)
 
     ws = wb.create_sheet("BOM CATEGORY BREAKDOWN")
     ws.append(["Top SKU", "Application Level", "Pricing Rule SKU", "Category ID", "Category Name",
