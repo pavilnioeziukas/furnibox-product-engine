@@ -50,7 +50,12 @@ def row_payload(row: Any) -> dict[str, Any]:
         "sorting_numbers": row.sorting_names,
         "mo_numbers": row.mo_names,
     }
+def count_supply_status(rows: list[Any], status: str) -> int:
+    return sum(row.supply_status == status for row in rows)
 
+
+def total(rows: list[Any], field_name: str) -> float:
+    return sum(float(getattr(row, field_name, 0.0) or 0.0) for row in rows)
 
 def main() -> None:
     args = parser().parse_args()
@@ -72,10 +77,15 @@ def main() -> None:
     rows = [row_payload(row) for row in result.rows]
     report = {
         "so_number": result.so_number,
+"mo_reserved_qty": total(result.rows, "mo_reserved_qty"),
+"mo_demand_qty": total(result.rows, "mo_demand_qty"),
 "supply_readiness": (
     "PARUOŠTA GAMYBAI"
-    if getattr(result, "mo_supply_ready", False)
+    if result.status == "PASS"
+    and bool(result.rows)
+    and all(row.supply_status == "AVAILABLE / RESERVED" for row in result.rows)
     else "DAR NEPARUOŠTA GAMYBAI"
+),
 ),
         "mo_reserved_qty": result.mo_reserved_total,
         "mo_demand_qty": result.mo_demand_total,
@@ -85,11 +95,13 @@ def main() -> None:
         "error": result.error,
         "warnings": result.warnings,
         "summary": {
-            "reserved_for_mo": result.supply_status_count("REZERVUOTA MO"),
-            "waiting_for_receipt": result.supply_status_count("LAUKIAMA GAVIMO"),
-            "waiting_for_sorting": result.supply_status_count("LAUKIAMA RŪŠIAVIMO"),
-            "requires_investigation": result.supply_issue_count,
-            "data_mismatches": sum(row.status != "PASS" for row in result.rows),
+"reserved_for_mo": count_supply_status(result.rows, "AVAILABLE / RESERVED"),
+"waiting_for_receipt": count_supply_status(result.rows, "NOT RECEIVED"),
+"waiting_for_sorting": (
+    count_supply_status(result.rows, "SORTING NOT DONE")
+    + count_supply_status(result.rows, "SORTING PARTIAL")
+),
+"requires_investigation": result.supply_issue_count,
         },
         "rows": rows,
     }
@@ -98,7 +110,10 @@ def main() -> None:
 
     print(f"SO: {result.so_number}")
     print(f"TIEKIMO BŪKLĖ: {report['supply_readiness']}")
-    print(f"MO rezervuota: {result.mo_reserved_total:g} / {result.mo_demand_total:g}")
+   print(
+    f"MO rezervuota: {report['mo_reserved_qty']:g} / "
+    f"{report['mo_demand_qty']:g}"
+)
     print(f"PO: {result.po_number or '-'} ({result.po_state or '-'})")
     print(f"Duomenų kokybė: {result.status}")
     if result.error:
