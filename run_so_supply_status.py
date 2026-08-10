@@ -72,7 +72,11 @@ def main() -> None:
     rows = [row_payload(row) for row in result.rows]
     report = {
         "so_number": result.so_number,
-        "supply_readiness": "PARUOŠTA GAMYBAI" if result.mo_supply_ready else "DAR NEPARUOŠTA GAMYBAI",
+"supply_readiness": (
+    "PARUOŠTA GAMYBAI"
+    if getattr(result, "mo_supply_ready", False)
+    else "DAR NEPARUOŠTA GAMYBAI"
+),
         "mo_reserved_qty": result.mo_reserved_total,
         "mo_demand_qty": result.mo_demand_total,
         "po_number": result.po_number,
