@@ -62,13 +62,47 @@ class CabinetPartPriceWorkbookTests(unittest.TestCase):
             result = load_workbook(output, data_only=True)
             self.assertEqual(
                 result.sheetnames,
-                ["CABINET PART PRICES", "CALCULATION DETAILS", "DIAGNOSTICS", "INFO", "PARAMETERS"],
+                [
+                    "CABINET PART PRICES",
+                    "FPACK PRICE BREAKDOWN",
+                    "CALCULATION DETAILS",
+                    "DIAGNOSTICS",
+                    "INFO",
+                    "PARAMETERS",
+                ],
             )
             prices = result["CABINET PART PRICES"]
             self.assertEqual(prices.max_row, 3)
-            self.assertEqual(prices["C2"].value, "CALCULATED")
-            details = result["CALCULATION DETAILS"]
-            self.assertEqual(details["P2"].value, prices["B3"].value if prices["A3"].value == details["C2"].value else prices["B2"].value)
+
+            price_headers = {
+                cell.value: cell.column
+                for cell in prices[1]
+            }
+            self.assertIn("Internal Reference", price_headers)
+            self.assertIn("Calculated Unit Cost", price_headers)
+            self.assertIn("Product Status", price_headers)
+
+            price_rows = {
+                prices.cell(row=row, column=price_headers["Internal Reference"]).value: row
+                for row in range(2, prices.max_row + 1)
+            }
+            self.assertEqual(
+                set(price_rows),
+                {
+                    "EU-SIDE-SREW-800x590-WW",
+                    "EU-BACK-SREW-787x179-WW",
+                },
+            )
+
+            for row in price_rows.values():
+                self.assertIsNotNone(
+                    prices.cell(row=row, column=price_headers["Calculated Unit Cost"]).value
+                )
+                self.assertEqual(
+                    prices.cell(row=row, column=price_headers["Product Status"]).value,
+                    "ODOO NOT CHECKED",
+                )
+
             errors = result["DIAGNOSTICS"]
             self.assertEqual(errors["A2"].value, "PRICE CALCULATION ERROR")
 
