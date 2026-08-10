@@ -27,7 +27,7 @@ from odoo_client import OdooClient
 
 
 BASE_DIR = Path(__file__).resolve().parent
-SCRIPT_VERSION = "7A-EXISTING-AND-NEW-FPACK-AUDIT-20260807-04"
+SCRIPT_VERSION = "7A-FURNIX-TRANSFER-PRICE-20260810-05"
 SOURCE_NAME = "MAP_Comparison.xlsx"
 OUTPUT_NAME = "Existing_and_New_Cabinet_Parts_Prices.xlsx"
 PARAMETERS_NAME = "Cabinet_Parts_Price_Parameters_v03.xlsx"
@@ -45,6 +45,7 @@ class PriceParameters:
     no_material_rate_per_m2: float = 49.706 / 5.7
     small_part_threshold_m2: float = 0.5
     small_part_surcharge: float = 1.0
+    furnix_markup_percent: float = 0.0
     output_decimals: int = 4
 
     def material_rate(self, color: str) -> float | None:
@@ -100,8 +101,18 @@ PARAMETER_FIELDS = {
     "NO material rate, EUR/m²": "no_material_rate_per_m2",
     "Small part threshold, m²": "small_part_threshold_m2",
     "Small part surcharge, EUR/unit": "small_part_surcharge",
+    "Furnix markup, %": "furnix_markup_percent",
     "Output decimals": "output_decimals",
 }
+
+
+def furnix_transfer_price(
+    unit_cost: float,
+    parameters: PriceParameters = DEFAULT_PARAMETERS,
+) -> tuple[float, float]:
+    """Grąžina Furnix antkainį EUR ir pardavimo kainą Furnibox."""
+    markup_eur = unit_cost * parameters.furnix_markup_percent / 100
+    return markup_eur, unit_cost + markup_eur
 
 
 def load_parameters(path: Path) -> PriceParameters:
@@ -592,6 +603,7 @@ def add_parameters_sheet(wb: Workbook, parameters: PriceParameters) -> None:
         ("NO material rate", parameters.no_material_rate_per_m2, "EUR/m²"),
         ("Small part threshold", parameters.small_part_threshold_m2, "m²; surcharge when area < threshold"),
         ("Small part surcharge", parameters.small_part_surcharge, "EUR/unit"),
+        ("Furnix markup", parameters.furnix_markup_percent, "% of Furnix unit cost"),
         ("Output decimals", parameters.output_decimals, "digits after decimal point"),
     ]
     for row in rows:
@@ -608,7 +620,8 @@ def add_parameters_sheet(wb: Workbook, parameters: PriceParameters) -> None:
     ws["B6"].number_format = '0.0000 [$€-x-euro2]'
     ws["B7"].number_format = "0.000000"
     ws["B8"].number_format = '0.0000 [$€-x-euro2]'
-    ws["B9"].number_format = "0"
+    ws["B9"].number_format = '0.00"%"'
+    ws["B10"].number_format = "0"
     ws.column_dimensions["A"].width = 28
     ws.column_dimensions["B"].width = 18
     ws.column_dimensions["C"].width = 42
@@ -628,7 +641,9 @@ def add_fpack_breakdown_sheet(
         "Dimension 1, mm", "Dimension 2, mm", "Unit Area, m²", "Total Area, m²",
         "Material Cost, EUR", "BACK Cost, EUR", "Processing Cost, EUR",
         "Small Part Surcharge, EUR", "Calculated Unit Cost, EUR",
-        "Component Total Cost, EUR", "FPACK Total Cost, EUR",
+        "Furnix Markup, %", "Furnix Markup, EUR/unit",
+        "Furnix Sales Price to Furnibox, EUR/unit",
+        "Component Total Purchase Price, EUR", "FPACK Cabinet Parts Purchase Price, EUR",
     ])
     parent_totals: dict[str, float] = defaultdict(float)
     prepared: list[tuple[CombinedBomLine, PriceCalculation]] = []
@@ -637,12 +652,16 @@ def add_fpack_breakdown_sheet(
         if calculation is None:
             continue
         prepared.append((line, calculation))
+        rounded_unit_cost = round(calculation.unit_price, parameters.output_decimals)
+        _, transfer_price = furnix_transfer_price(rounded_unit_cost, parameters)
         parent_totals[canon(line.parent)] += (
-            round(calculation.unit_price, parameters.output_decimals) * line.effective_quantity
+            round(transfer_price, parameters.output_decimals) * line.effective_quantity
         )
     for line, item in prepared:
         total_area = item.area_m2 * line.effective_quantity
         rounded_unit_cost = round(item.unit_price, parameters.output_decimals)
+        markup_eur, transfer_price = furnix_transfer_price(rounded_unit_cost, parameters)
+        rounded_transfer_price = round(transfer_price, parameters.output_decimals)
         ws.append([
             line.parent, line.fpack_source, line.component, line.component_source, line.change_status,
             line.existing_quantity, line.new_quantity, line.effective_quantity, item.part_type, item.color,
@@ -652,7 +671,10 @@ def add_fpack_breakdown_sheet(
             total_area * item.processing_rate_per_m2,
             item.small_part_surcharge * line.effective_quantity,
             rounded_unit_cost,
-            rounded_unit_cost * line.effective_quantity,
+            parameters.furnix_markup_percent / 100,
+            round(markup_eur, parameters.output_decimals),
+            rounded_transfer_price,
+            rounded_transfer_price * line.effective_quantity,
             parent_totals[canon(line.parent)],
         ])
     for cell in ws[1]:
@@ -660,9 +682,9 @@ def add_fpack_breakdown_sheet(
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:U{max(ws.max_row, 1)}"
+    ws.auto_filter.ref = f"A1:X{max(ws.max_row, 1)}"
     ws.sheet_view.showGridLines = False
-    widths = [30, 18, 44, 20, 20, 16, 14, 17, 14, 10, 17, 17, 15, 16, 19, 17, 21, 25, 23, 25, 22]
+    widths = [30, 18, 44, 20, 20, 16, 14, 17, 14, 10, 17, 17, 15, 16, 19, 17, 21, 25, 23, 17, 25, 32, 32, 34]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(index)].width = width
     for row in range(2, ws.max_row + 1):
@@ -670,7 +692,8 @@ def add_fpack_breakdown_sheet(
             ws.cell(row, column).number_format = "0.####"
         for column in (13, 14):
             ws.cell(row, column).number_format = "0.000000"
-        for column in range(15, 22):
+        ws.cell(row, 20).number_format = "0.00%"
+        for column in list(range(15, 20)) + list(range(21, 25)):
             decimals = "0" * parameters.output_decimals
             ws.cell(row, column).number_format = (
                 f'0.{decimals} [$€-x-euro2]' if decimals else '0 [$€-x-euro2]'
@@ -690,13 +713,18 @@ def add_unique_prices_sheet(
     ws = wb.create_sheet("CABINET PART PRICES", 0)
     headers = [
         "Internal Reference", "Odoo Product ID", "Odoo Active",
-        "Current Odoo Cost", "Calculated Unit Cost", "Change EUR", "Change %",
+        "Current Furnibox Purchase Cost", "Furnix Unit Cost",
+        "Furnix Markup, %", "Furnix Markup, EUR",
+        "Furnix Sales Price to Furnibox", "Change EUR", "Change %",
         "Product Status", "BOM Source", "Proposed Action", "Part Type", "Color",
         "Dimension 1, mm", "Dimension 2, mm", "Area, m²",
     ]
     ws.append(headers)
     for key in sorted(calculations):
         item = calculations[key]
+        furnix_cost = round(item.unit_price, parameters.output_decimals)
+        markup_eur, transfer_price = furnix_transfer_price(furnix_cost, parameters)
+        transfer_price = round(transfer_price, parameters.output_decimals)
         current = odoo_prices.get(key)
         duplicate_ids = duplicate_odoo_skus.get(key)
         if duplicate_ids:
@@ -707,9 +735,8 @@ def add_unique_prices_sheet(
             active = None
         elif current:
             status = "EXISTING" if current.active else "ARCHIVED"
-            calculated_price = round(item.unit_price, parameters.output_decimals)
             current_price = current.standard_price
-            change = calculated_price - current_price
+            change = transfer_price - current_price
             change_percent = change / current_price if current_price else None
             if not current.active:
                 action = "REVIEW ARCHIVED"
@@ -739,7 +766,8 @@ def add_unique_prices_sheet(
             bom_source = "NOT IN ACTIVE FPACK BOM"
         ws.append([
             item.sku, product_id, active, current_price,
-            round(item.unit_price, parameters.output_decimals),
+            furnix_cost, parameters.furnix_markup_percent / 100,
+            round(markup_eur, parameters.output_decimals), transfer_price,
             change, change_percent, status, bom_source, action, item.part_type, item.color,
             item.dimension_1_mm, item.dimension_2_mm, item.area_m2,
         ])
@@ -748,18 +776,19 @@ def add_unique_prices_sheet(
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:O{max(ws.max_row, 1)}"
+    ws.auto_filter.ref = f"A1:R{max(ws.max_row, 1)}"
     for column, width in {
-        "A": 44, "B": 18, "C": 13, "D": 20, "E": 22, "F": 16,
-        "G": 14, "H": 20, "I": 22, "J": 28, "K": 15, "L": 10,
-        "M": 17, "N": 17, "O": 14,
+        "A": 44, "B": 18, "C": 13, "D": 28, "E": 20, "F": 17,
+        "G": 20, "H": 30, "I": 16, "J": 14, "K": 20, "L": 22,
+        "M": 28, "N": 15, "O": 10, "P": 17, "Q": 17, "R": 14,
     }.items():
         ws.column_dimensions[column].width = width
     for row in range(2, ws.max_row + 1):
-        for column in (4, 5, 6):
+        for column in (4, 5, 7, 8, 9):
             ws.cell(row, column).number_format = '0.0000 [$€-x-euro2]'
-        ws.cell(row, 7).number_format = "0.00%"
-        ws.cell(row, 15).number_format = "0.000000"
+        ws.cell(row, 6).number_format = "0.00%"
+        ws.cell(row, 10).number_format = "0.00%"
+        ws.cell(row, 18).number_format = "0.000000"
     ws.sheet_view.showGridLines = False
 
 
