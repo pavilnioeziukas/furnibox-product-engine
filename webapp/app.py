@@ -15,10 +15,13 @@ from typing import Any
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 from so_pricing_rules import load_config, migrate_legacy_workbook, save_config
 
 
-BASE_DIR = Path(__file__).resolve().parents[1]
 STATE_DIR = Path(os.getenv("FURNIBOX_WEB_STATE_DIR", BASE_DIR / "web_state")).resolve()
 UPLOAD_DIR = STATE_DIR / "uploads"
 RUN_DIR = STATE_DIR / "runs"
