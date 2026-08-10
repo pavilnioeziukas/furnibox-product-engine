@@ -36,8 +36,16 @@ def row_payload(row: Any) -> dict[str, Any]:
         "mo_reserved_qty": row.mo_reserved_qty,
         "supply_status": row.supply_status,
         "supply_note": row.supply_error,
-        "data_status": row.data_status,
-        "data_note": row.data_error,
+        "data_status": getattr(
+            row,
+            "data_status",
+            "BOM–PO NEATITIKIMAS" if row.status != "PASS" else "",
+        ),
+        "data_note": getattr(
+            row,
+            "data_error",
+            "BOM ir PO SKU arba kiekis nesutampa." if row.status != "PASS" else "",
+        ),
         "receipt_numbers": row.receipt_names,
         "sorting_numbers": row.sorting_names,
         "mo_numbers": row.mo_names,
@@ -77,7 +85,7 @@ def main() -> None:
             "waiting_for_receipt": result.supply_status_count("LAUKIAMA GAVIMO"),
             "waiting_for_sorting": result.supply_status_count("LAUKIAMA RŪŠIAVIMO"),
             "requires_investigation": result.supply_issue_count,
-            "data_mismatches": sum(bool(row.data_status) for row in result.rows),
+            "data_mismatches": sum(row.status != "PASS" for row in result.rows),
         },
         "rows": rows,
     }
