@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import logging
+import os
 from copy import copy
 from datetime import datetime
+from pathlib import Path
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.formatting.rule import FormulaRule
+from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 
 from config import load_settings
 from excel_writer import HEADER_FILL, HEADER_FONT
 from odoo_client import OdooClient
+from tamara_adjustments import load_adjustments
+
+
+BASE_DIR = Path(__file__).resolve().parent
+SHARED_DATA_DIR = Path(
+    os.getenv(
+        "FURNIBOX_SHARED_DATA",
+        BASE_DIR / "web_state" / "shared_data",
+    )
+).resolve()
+TAMARA_ADJUSTMENTS_PATH = SHARED_DATA_DIR / "tamara_adjustments.json"
 
 EXPORT_COLUMNS = [
     "Internal Reference",
@@ -32,7 +44,6 @@ CALCULATOR_COLUMNS = [
 ]
 
 ADJUSTMENT_SHEET = "TAMARA ADJUSTMENTS"
-REFORM_VENDOR_MARKER = "Reform Supply & Logistics"
 
 OUTPUT_COLUMNS = [
     "Real Purchase Price" if column == "Last Purchase Price" else column
@@ -46,10 +57,6 @@ def relation_id(value):
 
 def relation_name(value):
     return value[1] if isinstance(value, list) and len(value) >= 2 else ""
-
-
-def is_reform_vendor(vendor):
-    return REFORM_VENDOR_MARKER.casefold() in (vendor or "").casefold()
 
 
 def build_last_purchase_prices(purchase_lines, products):
@@ -114,48 +121,15 @@ def load_last_purchase_prices(client):
     return build_last_purchase_prices(purchase_lines, products)
 
 
-def load_tamara_adjustments(path):
-    """Perskaito Tamaros korekcijas iš ankstesnės tos pačios ataskaitos."""
-    if not path.exists():
-        return {}
-
-    workbook = load_workbook(path, data_only=False, read_only=True)
-    if ADJUSTMENT_SHEET not in workbook.sheetnames:
-        workbook.close()
-        return {}
-
-    sheet = workbook[ADJUSTMENT_SHEET]
-    rows = sheet.iter_rows(values_only=True)
-    header_values = list(next(rows, ()))
-    headers = {value: index for index, value in enumerate(header_values)}
-    sku_column = headers.get("Internal Reference")
-    adjusted_column = headers.get("Adjusted Purchase Price")
-    if sku_column is None or adjusted_column is None:
-        workbook.close()
-        raise RuntimeError(
-            f"Lape {ADJUSTMENT_SHEET} trūksta Internal Reference arba "
-            "Adjusted Purchase Price stulpelio."
-        )
-
-    adjustments = {}
-    for values in rows:
-        sku = values[sku_column]
-        adjusted_price = values[adjusted_column]
-        if not sku or adjusted_price in (None, ""):
-            continue
-        if sku in adjustments:
-            workbook.close()
-            raise RuntimeError(f"Tamaros korekcijose kartojasi SKU: {sku}")
-        adjustments[str(sku).strip()] = adjusted_price
-
-    workbook.close()
-    return adjustments
-
-
-def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=None):
-    """Sukuria komponentų pirkimo ir Reform kainų skaičiuoklę."""
+def write_purchase_prices(
+    path,
+    purchase_prices,
+    metadata,
+    tamara_adjustments=None,
+):
+    """Sukuria komponentų pirkimo ir Reform kainų kontrolinį failą."""
     if tamara_adjustments is None:
-        tamara_adjustments = load_tamara_adjustments(path)
+        tamara_adjustments = load_adjustments(TAMARA_ADJUSTMENTS_PATH)
 
     workbook = Workbook()
 
@@ -168,10 +142,12 @@ def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=No
         ("User", metadata["login"]),
         ("Odoo UID", metadata["uid"]),
         ("Products with Last Purchase Price", len(purchase_prices)),
+        ("Tamara adjustments source", str(TAMARA_ADJUSTMENTS_PATH)),
+        ("Tamara adjustments loaded", len(tamara_adjustments)),
     ]:
         info.append(row)
     info.column_dimensions["A"].width = 36
-    info.column_dimensions["B"].width = 45
+    info.column_dimensions["B"].width = 80
 
     adjustments = workbook.create_sheet(ADJUSTMENT_SHEET)
     adjustments.append([
@@ -180,14 +156,27 @@ def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=No
         "Real Purchase Price (reference)",
         "Comment",
     ])
+
+    applied_adjustments = 0
+
     for row in purchase_prices:
-        sku = row.get("Internal Reference") or ""
+        sku = str(row.get("Internal Reference") or "").strip()
         real_price = row.get("Last Purchase Price")
+        adjustment = tamara_adjustments.get(sku)
+
+        if adjustment:
+            adjusted_price = adjustment["adjusted_purchase_price"]
+            comment = adjustment.get("comment", "")
+            applied_adjustments += 1
+        else:
+            adjusted_price = real_price
+            comment = ""
+
         adjustments.append([
             sku,
-            tamara_adjustments.get(sku, real_price),
+            adjusted_price,
             real_price,
-            "",
+            comment,
         ])
 
     for cell in adjustments[1]:
@@ -198,13 +187,13 @@ def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=No
     adjustments.column_dimensions["A"].width = 24
     adjustments.column_dimensions["B"].width = 25
     adjustments.column_dimensions["C"].width = 29
-    adjustments.column_dimensions["D"].width = 45
-    input_fill = PatternFill("solid", fgColor="FFF2CC")
+    adjustments.column_dimensions["D"].width = 55
+
+    review_fill = PatternFill("solid", fgColor="E2F0D9")
     for row_number in range(2, adjustments.max_row + 1):
         adjustments.cell(row_number, 2).number_format = '0.0000 [$€-x-euro2]'
         adjustments.cell(row_number, 3).number_format = '0.0000 [$€-x-euro2]'
-        adjustments.cell(row_number, 2).fill = input_fill
-        adjustments.cell(row_number, 4).fill = input_fill
+        adjustments.cell(row_number, 2).fill = review_fill
 
     prices = workbook.create_sheet("COMPONENT PRICES")
     invalid_columns = [
@@ -219,7 +208,6 @@ def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=No
             + ", ".join(sorted(set(invalid_columns)))
         )
 
-    prices.title = "COMPONENT PRICES"
     prices.append(OUTPUT_COLUMNS)
     for row_number, row in enumerate(purchase_prices, start=2):
         prices.append(
@@ -227,11 +215,9 @@ def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=No
             + [None, None, None]
         )
         prices.cell(row_number, 9).value = f"='{ADJUSTMENT_SHEET}'!B{row_number}"
-        prices.cell(row_number, 10).value = (
-            1.05 if is_reform_vendor(row.get("Vendor")) else 1.0
-        )
+        prices.cell(row_number, 10).value = 1.0
         prices.cell(row_number, 11).value = (
-            f'=IF(I{row_number}="",G{row_number},I{row_number})*J{row_number}'
+            f'=IF(I{row_number}="",G{row_number},I{row_number})'
         )
 
     for cell in prices[1]:
@@ -261,26 +247,41 @@ def write_purchase_prices(path, purchase_prices, metadata, tamara_adjustments=No
         prices.cell(row_number, 10).fill = formula_fill
         prices.cell(row_number, 11).fill = formula_fill
 
-    prices.conditional_formatting.add(
-        f"J2:J{prices.max_row}",
-        FormulaRule(
-            formula=["J2<>1"],
-            fill=PatternFill("solid", fgColor="FCE4D6"),
-        ),
-    )
-
     note = workbook.create_sheet("PRICING RULES", 1)
     note.append(["Field", "Rule"])
-    note.append(["Real Purchase Price", "Last confirmed purchase price from Odoo."])
-    note.append(["Adjusted Purchase Price", f"Editable only in {ADJUSTMENT_SHEET}; preserved on the next generation."])
-    note.append(["Markup Factor", f"Automatic: 1.05 when Vendor contains '{REFORM_VENDOR_MARKER}', otherwise 1.00."])
-    note.append(["Reform Price", "Adjusted Purchase Price × Markup Factor; use as Reform Sales Price."])
+    note.append([
+        "Real Purchase Price",
+        "Last confirmed purchase price from Odoo.",
+    ])
+    note.append([
+        "Adjusted Purchase Price",
+        "Product Engine Tamara adjustment when configured; otherwise Real Purchase Price.",
+    ])
+    note.append([
+        "Tamara adjustment source",
+        str(TAMARA_ADJUSTMENTS_PATH),
+    ])
+    note.append([
+        "Markup Factor",
+        "Legacy compatibility field; always 1.00.",
+    ])
+    note.append([
+        "Reform Price",
+        "Equals Adjusted Purchase Price (New Purchase Price).",
+    ])
+    note.append([
+        "Non-BOM pricing",
+        "Preparation, storage, bag and sticker are applied later by SO pricing rules.",
+    ])
+
     for cell in note[1]:
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
     note.column_dimensions["A"].width = 28
-    note.column_dimensions["B"].width = 78
+    note.column_dimensions["B"].width = 100
     note.freeze_panes = "A2"
+
+    info.append(("Tamara adjustments applied", applied_adjustments))
 
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True
@@ -313,6 +314,12 @@ def main():
     purchase_prices = load_last_purchase_prices(client)
     logging.info("Produktų su paskutine pirkimo kaina: %s", len(purchase_prices))
 
+    tamara_adjustments = load_adjustments(TAMARA_ADJUSTMENTS_PATH)
+    logging.info(
+        "Tamaros korekcijų saugykloje: %s",
+        len(tamara_adjustments),
+    )
+
     output_path = settings.output_dir / "Last_Purchase_Prices.xlsx"
     write_purchase_prices(
         output_path,
@@ -323,12 +330,14 @@ def main():
             "login": settings.login,
             "uid": uid,
         },
+        tamara_adjustments=tamara_adjustments,
     )
 
     print()
     print("KOMPONENTŲ PIRKIMO IR REFORM KAINŲ FAILAS SUKURTAS")
     print("Failas:", output_path)
     print("Produktai su kaina:", len(purchase_prices))
+    print("Tamaros korekcijų saugykloje:", len(tamara_adjustments))
 
 
 if __name__ == "__main__":
