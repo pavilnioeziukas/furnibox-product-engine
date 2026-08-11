@@ -21,6 +21,7 @@
 
   <div class="supply-metrics">
     <div><strong id="supply-reserved">–</strong><span>MO rezervuota</span></div>
+    <div><strong id="supply-mo-missing">–</strong><span>MO trūksta rezervuoti</span></div>
     <div><strong id="supply-sorting">–</strong><span>Laukia rūšiavimo</span></div>
     <div><strong id="supply-receipt">–</strong><span>Laukia priėmimo</span></div>
     <div><strong id="supply-issues">–</strong><span>Reikia dėmesio</span></div>
@@ -169,6 +170,10 @@ async function renderSupplyReport() {
 
     document.querySelector('#supply-reserved').textContent =
       `${quantity(report.mo_reserved_qty)} / ${quantity(report.mo_demand_qty)}`;
+
+    document.querySelector('#supply-mo-missing').textContent =
+      `${quantity(summary.mo_missing_qty_total)} vnt. / ` +
+      `${quantity(summary.mo_missing_sku_count)} SKU`;
 
     document.querySelector('#supply-sorting').textContent =
       quantity(summary.waiting_for_sorting);

@@ -56,6 +56,12 @@ def count_supply_status(rows: list[Any], status: str) -> int:
 def total(rows: list[Any], field_name: str) -> float:
     return sum(float(getattr(row, field_name, 0.0) or 0.0) for row in rows)
 
+def mo_missing_qty(row: Any) -> float:
+    return max(
+        float(row.mo_demand_qty or 0.0)
+        - float(row.mo_reserved_qty or 0.0),
+        0.0,
+    )
 
 def main() -> None:
     args = parser().parse_args()
@@ -103,6 +109,14 @@ def main() -> None:
         "summary": {
             "total_rows": len(result.rows),
             "bom_po_mismatches": sum(row.status != "PASS" for row in result.rows),
+            "mo_missing_sku_count": sum(
+                mo_missing_qty(row) > 0.0
+                for row in result.rows
+            ),
+            "mo_missing_qty_total": sum(
+                mo_missing_qty(row)
+                for row in result.rows
+            ),
             "sticker_issues": result.sticker_error_count,
             "reserved_for_mo": count_supply_status(
                 result.rows, "AVAILABLE / RESERVED"
