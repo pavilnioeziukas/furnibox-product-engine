@@ -16,7 +16,6 @@ from openpyxl.styles import Alignment, Font, PatternFill
 COMPONENT_FILE = "Last_Purchase_Prices.xlsx"
 CABINET_PART_FILE = "Existing_and_New_Cabinet_Parts_Prices.xlsx"
 OUTPUT_FILE = "Reform_Final_Prices.xlsx"
-REFORM_MARKUP_FACTOR = 1.05
 
 
 def _headers(sheet) -> dict[str, int]:
@@ -118,15 +117,11 @@ def load_cabinet_part_prices(path: Path) -> list[dict]:
     workbook.close()
     return rows
 
-
 def build_reform_price_list(
     component_path: Path,
     cabinet_part_path: Path,
     output_path: Path,
-    reform_markup_factor: float = REFORM_MARKUP_FACTOR,
 ) -> tuple[int, int]:
-    if reform_markup_factor < 1:
-        raise ValueError("Reform antkainio koeficientas negali būti mažesnis už 1.")
 
     components = load_component_prices(component_path)
     cabinet_parts = load_cabinet_part_prices(cabinet_part_path)
@@ -210,9 +205,7 @@ def build_reform_price_list(
         ("Generated", datetime.now().isoformat(sep=" ", timespec="seconds")),
         ("Component source", str(component_path)),
         ("Cabinet Part source", str(cabinet_part_path)),
-        ("Cabinet Part rule", "Furnix Sales Price to Furnibox × Reform markup factor"),
-        ("Other component rule", "Tamara Adjusted Purchase Price × source markup factor"),
-        ("Default Reform markup factor for Cabinet Parts", reform_markup_factor),
+        ("Cabinet Part rule", "Furnix Sales Price to Furnibox; no additional markup applied"),
         ("Final unique products", prices.max_row - 1),
         ("Overlapping SKU", len(overlaps)),
         ("Odoo changed", "NO"),
