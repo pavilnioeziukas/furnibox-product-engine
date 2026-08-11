@@ -41,6 +41,8 @@ def row_payload(row: Any) -> dict[str, Any]:
         "sorting_pending_qty": row.sorting_pending_qty,
         "mo_demand_qty": row.mo_demand_qty,
         "mo_reserved_qty": row.mo_reserved_qty,
+        "cross_so_reserved_qty": row.cross_so_reserved_qty,
+        "cross_so_reservations": row.cross_so_reservations,
         "supply_status": row.supply_status,
         "supply_note": row.supply_error,
         "receipt_numbers": row.receipt_names,

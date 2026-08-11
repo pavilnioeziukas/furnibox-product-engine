@@ -37,6 +37,7 @@
             <th>PO</th>
             <th>Priimta</th>
             <th>Surūšiuota</th>
+            <th>Cross-SO</th>
             <th>Būsena</th>
             <th>Pastaba</th>
           </tr>
@@ -185,12 +186,18 @@ async function renderSupplyReport() {
     const body = document.querySelector('#supply-problems-body');
     for (const row of problems) {
       const tr = document.createElement('tr');
+      const crossSo = row.cross_so_reserved_qty > 0
+        ? `${quantity(row.cross_so_reserved_qty)} vnt. · ` +
+          `${text(row.cross_so_reservations?.[0]?.sale_order)} / ` +
+          `${text(row.cross_so_reservations?.[0]?.mo_number)}`
+        : '–';
       const values = [
         row.sku,
         quantity(row.required_qty),
         quantity(row.po_qty),
         quantity(row.received_qty),
         quantity(row.sorted_qty),
+        crossSo,
         row.supply_status,
         row.supply_note,
       ];
