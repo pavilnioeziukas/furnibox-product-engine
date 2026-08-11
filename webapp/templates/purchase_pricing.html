@@ -190,6 +190,51 @@
     kaip New Purchase Price.
   </p>
 
+  <div
+  style="
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 18px 0;
+  "
+>
+  <a
+    class="secondary"
+    href="{{ url_for('export_tamara_adjustments') }}"
+  >
+    Eksportuoti korekcijų backup
+  </a>
+
+  <form
+    method="post"
+    action="{{ url_for('import_tamara_adjustments') }}"
+    enctype="multipart/form-data"
+    style="
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    "
+  >
+    <input
+      name="file"
+      type="file"
+      accept=".json,application/json"
+      required
+    >
+
+    <button class="secondary" type="submit">
+      Importuoti korekcijas
+    </button>
+  </form>
+</div>
+
+<p>
+  Importas pakeičia visą dabartinę Tamaros korekcijų saugyklą.
+  Prieš pakeitimą Product Engine automatiškai išsaugo ankstesnį backup.
+</p>
+
   <form method="get" action="{{ url_for('purchase_pricing') }}">
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
       <input
