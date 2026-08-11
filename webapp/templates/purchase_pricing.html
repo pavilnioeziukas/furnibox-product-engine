@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Pirkimo kainodara · Furnibox Product Engine{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Aplikacijos konfigūracija</p>
+    <h1>Pirkimo kainodara</h1>
+  </div>
+</section>
+
+<p class="lead">
+  Cabinet Parts savikainos ir Furnix → Furnibox perdavimo kainos parametrai.
+  Šios reikšmės naudojamos kainų skaičiavime; Excel nebėra vykdymo šaltinis.
+</p>
+
+<section class="panel">
+  <h2>Cabinet Parts parametrai</h2>
+
+  <form method="post" action="{{ url_for('update_purchase_pricing') }}">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Parametras</th>
+            <th>Reikšmė</th>
+            <th>Vienetas / paskirtis</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr>
+            <td>BACK tarifas</td>
+            <td>
+              <input
+                name="back_rate_per_m2"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.back_rate_per_m2 }}"
+                required
+              >
+            </td>
+            <td>EUR/m²</td>
+          </tr>
+
+          <tr>
+            <td>Apdirbimo tarifas</td>
+            <td>
+              <input
+                name="processing_rate_per_m2"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.processing_rate_per_m2 }}"
+                required
+              >
+            </td>
+            <td>EUR/m²</td>
+          </tr>
+
+          <tr>
+            <td>WW medžiagos tarifas</td>
+            <td>
+              <input
+                name="ww_material_rate_per_m2"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.ww_material_rate_per_m2 }}"
+                required
+              >
+            </td>
+            <td>EUR/m²</td>
+          </tr>
+
+          <tr>
+            <td>BB medžiagos tarifas</td>
+            <td>
+              <input
+                name="bb_material_rate_per_m2"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.bb_material_rate_per_m2 }}"
+                required
+              >
+            </td>
+            <td>EUR/m²</td>
+          </tr>
+
+          <tr>
+            <td>NO medžiagos tarifas</td>
+            <td>
+              <input
+                name="no_material_rate_per_m2"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.no_material_rate_per_m2 }}"
+                required
+              >
+            </td>
+            <td>EUR/m²</td>
+          </tr>
+
+          <tr>
+            <td>Mažos detalės riba</td>
+            <td>
+              <input
+                name="small_part_threshold_m2"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.small_part_threshold_m2 }}"
+                required
+              >
+            </td>
+            <td>m²</td>
+          </tr>
+
+          <tr>
+            <td>Mažos detalės priedas</td>
+            <td>
+              <input
+                name="small_part_surcharge"
+                type="number"
+                step="any"
+                min="0"
+                value="{{ parameters.small_part_surcharge }}"
+                required
+              >
+            </td>
+            <td>EUR/vnt.</td>
+          </tr>
+
+          <tr>
+            <td><strong>Furnix → Furnibox antkainis</strong></td>
+            <td>
+              <input
+                name="furnix_markup_percent"
+                type="number"
+                step="0.01"
+                min="0"
+                value="{{ parameters.furnix_markup_percent }}"
+                required
+              >
+            </td>
+            <td>% nuo Furnix savikainos</td>
+          </tr>
+
+          <tr>
+            <td>Apvalinimas</td>
+            <td>
+              <input
+                name="output_decimals"
+                type="number"
+                step="1"
+                min="0"
+                max="8"
+                value="{{ parameters.output_decimals }}"
+                required
+              >
+            </td>
+            <td>Skaitmenys po kablelio</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 18px;">
+      <button class="primary" type="submit">Išsaugoti parametrus</button>
+    </p>
+  </form>
+</section>
+{% endblock %}

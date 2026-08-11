@@ -20,6 +20,11 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from so_pricing_rules import load_config, migrate_legacy_workbook, save_config
+from cabinet_parts_price_parameters import (
+    load_parameters as load_cabinet_parts_parameters,
+    save_parameters as save_cabinet_parts_parameters,
+    validate_parameters as validate_cabinet_parts_parameters,
+)
 
 
 STATE_DIR = Path(os.getenv("FURNIBOX_WEB_STATE_DIR", BASE_DIR / "web_state")).resolve()
@@ -28,6 +33,9 @@ RUN_DIR = STATE_DIR / "runs"
 PRODUCTION_DATASET_DIR = STATE_DIR / "shared_data" / "validated_datasets" / "production"
 PRODUCTION_DATASET_PATH = PRODUCTION_DATASET_DIR / "latest.json"
 SO_PRICING_CONFIG_PATH = STATE_DIR / "shared_data" / "so_pricing_rules.json"
+CABINET_PARTS_PARAMETERS_PATH = (
+    STATE_DIR / "shared_data" / "cabinet_parts_price_parameters.json"
+)
 DEFAULT_SO_PRICING_CONFIG_PATH = BASE_DIR / "manifest" / "so_pricing_rules.json"
 MAX_UPLOAD_BYTES = int(os.getenv("FURNIBOX_MAX_UPLOAD_MB", "100")) * 1024 * 1024
 
@@ -324,6 +332,44 @@ def index():
         dataset=latest_dataset(),
         auth_enabled=auth_enabled(),
     )
+
+
+@app.get("/purchase-pricing")
+def purchase_pricing():
+    parameters = load_cabinet_parts_parameters(
+        CABINET_PARTS_PARAMETERS_PATH
+    )
+    return render_template(
+        "purchase_pricing.html",
+        parameters=parameters,
+    )
+
+
+@app.post("/purchase-pricing")
+def update_purchase_pricing():
+    document = {
+        "back_rate_per_m2": form_number("back_rate_per_m2"),
+        "processing_rate_per_m2": form_number("processing_rate_per_m2"),
+        "ww_material_rate_per_m2": form_number("ww_material_rate_per_m2"),
+        "bb_material_rate_per_m2": form_number("bb_material_rate_per_m2"),
+        "no_material_rate_per_m2": form_number("no_material_rate_per_m2"),
+        "small_part_threshold_m2": form_number("small_part_threshold_m2"),
+        "small_part_surcharge": form_number("small_part_surcharge"),
+        "furnix_markup_percent": form_number("furnix_markup_percent"),
+        "output_decimals": request.form.get("output_decimals", "").strip(),
+    }
+
+    try:
+        parameters = validate_cabinet_parts_parameters(document)
+        save_cabinet_parts_parameters(
+            CABINET_PARTS_PARAMETERS_PATH,
+            parameters,
+        )
+    except ValueError as exc:
+        abort(400, str(exc))
+
+    flash("Pirkimo kainodaros parametrai išsaugoti.")
+    return redirect(url_for("purchase_pricing"))
 
 
 @app.get("/pricing-rules")

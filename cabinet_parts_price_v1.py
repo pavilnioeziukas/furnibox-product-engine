@@ -24,36 +24,30 @@ from openpyxl.utils import get_column_letter
 
 from output_paths import environment_output_dir
 from odoo_client import OdooClient
-
-
-BASE_DIR = Path(__file__).resolve().parent
-SCRIPT_VERSION = "7A-FURNIX-TRANSFER-PRICE-20260810-05"
-SOURCE_NAME = "MAP_Comparison.xlsx"
-OUTPUT_NAME = "Existing_and_New_Cabinet_Parts_Prices.xlsx"
-PARAMETERS_NAME = "Cabinet_Parts_Price_Parameters_v03.xlsx"
-DIMENSION_RE = re.compile(
-    r"(?<!\d)(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+(?:[.,]\d+)?)(?!\d)"
+from cabinet_parts_price_parameters import (
+    CabinetPartsPriceParameters as PriceParameters,
+    DEFAULT_PARAMETERS,
+    load_parameters,
 )
 
 
-@dataclass(frozen=True)
-class PriceParameters:
-    back_rate_per_m2: float = 11.0
-    processing_rate_per_m2: float = 17.04
-    ww_material_rate_per_m2: float = 49.706 / 5.7
-    bb_material_rate_per_m2: float = 40.774 / 5.7
-    no_material_rate_per_m2: float = 49.706 / 5.7
-    small_part_threshold_m2: float = 0.5
-    small_part_surcharge: float = 1.0
-    furnix_markup_percent: float = 0.0
-    output_decimals: int = 4
+BASE_DIR = Path(__file__).resolve().parent
+SHARED_DATA_DIR = Path(
+    os.getenv(
+        "FURNIBOX_SHARED_DATA",
+        BASE_DIR / "web_state" / "shared_data",
+    )
+).resolve()
 
-    def material_rate(self, color: str) -> float | None:
-        return {
-            "WW": self.ww_material_rate_per_m2,
-            "BB": self.bb_material_rate_per_m2,
-            "NO": self.no_material_rate_per_m2,
-        }.get(color)
+CABINET_PARTS_PARAMETERS_PATH = (
+    SHARED_DATA_DIR / "cabinet_parts_price_parameters.json"
+)
+SCRIPT_VERSION = "7A-FURNIX-TRANSFER-PRICE-20260810-05"
+SOURCE_NAME = "MAP_Comparison.xlsx"
+OUTPUT_NAME = "Existing_and_New_Cabinet_Parts_Prices.xlsx"
+DIMENSION_RE = re.compile(
+    r"(?<!\d)(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+(?:[.,]\d+)?)(?!\d)"
+)
 
 
 @dataclass(frozen=True)
@@ -91,21 +85,6 @@ class CombinedBomLine:
     change_status: str
 
 
-DEFAULT_PARAMETERS = PriceParameters()
-
-PARAMETER_FIELDS = {
-    "BACK rate, EUR/m²": "back_rate_per_m2",
-    "Processing rate, EUR/m²": "processing_rate_per_m2",
-    "WW material rate, EUR/m²": "ww_material_rate_per_m2",
-    "BB material rate, EUR/m²": "bb_material_rate_per_m2",
-    "NO material rate, EUR/m²": "no_material_rate_per_m2",
-    "Small part threshold, m²": "small_part_threshold_m2",
-    "Small part surcharge, EUR/unit": "small_part_surcharge",
-    "Furnix markup, %": "furnix_markup_percent",
-    "Output decimals": "output_decimals",
-}
-
-
 def furnix_transfer_price(
     unit_cost: float,
     parameters: PriceParameters = DEFAULT_PARAMETERS,
@@ -113,48 +92,6 @@ def furnix_transfer_price(
     """Grąžina Furnix antkainį EUR ir pardavimo kainą Furnibox."""
     markup_eur = unit_cost * parameters.furnix_markup_percent / 100
     return markup_eur, unit_cost + markup_eur
-
-
-def load_parameters(path: Path) -> PriceParameters:
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Nerastas kainodaros parametrų failas:\n{path}\n"
-            "Įkelkite Cabinet_Parts_Price_Parameters_v03.xlsx į projekto katalogą."
-        )
-    workbook = load_workbook(path, data_only=True, read_only=False)
-    if "PARAMETERS" not in workbook.sheetnames:
-        raise ValueError(f"Parametrų faile '{path.name}' nerastas lapas PARAMETERS.")
-    ws = workbook["PARAMETERS"]
-    values: dict[str, float | int] = {}
-    seen: set[str] = set()
-    for row in range(2, ws.max_row + 1):
-        name = str(ws.cell(row, 1).value or "").strip()
-        if not name:
-            continue
-        if name not in PARAMETER_FIELDS:
-            raise ValueError(f"Nežinomas parametras lape PARAMETERS: '{name}'.")
-        if name in seen:
-            raise ValueError(f"Parametras įrašytas kelis kartus: '{name}'.")
-        seen.add(name)
-        raw_value = ws.cell(row, 2).value
-        try:
-            number = float(str(raw_value).replace(",", "."))
-        except (TypeError, ValueError):
-            raise ValueError(f"Parametro '{name}' reikšmė nėra skaičius: '{raw_value}'.")
-        field = PARAMETER_FIELDS[name]
-        if field == "output_decimals":
-            if not number.is_integer() or not 0 <= number <= 8:
-                raise ValueError("Output decimals turi būti sveikas skaičius nuo 0 iki 8.")
-            values[field] = int(number)
-        else:
-            if number < 0:
-                raise ValueError(f"Parametro '{name}' reikšmė negali būti neigiama.")
-            values[field] = number
-    missing = sorted(set(PARAMETER_FIELDS) - seen)
-    if missing:
-        raise ValueError("Parametrų faile trūksta: " + ", ".join(missing))
-    return PriceParameters(**values)
-
 
 def canon(value: object) -> str:
     return str(value or "").strip().upper()
@@ -986,9 +923,8 @@ def main() -> None:
             "Pirmiausia paleiskite 6 veiksmą „Palyginti MAP“."
         )
 
-    parameters_path = BASE_DIR / PARAMETERS_NAME
-    parameters = load_parameters(parameters_path)
-    print(f"Parametrai: {parameters_path}")
+    parameters = load_parameters(CABINET_PARTS_PARAMETERS_PATH)
+    print(f"Parametrai: {CABINET_PARTS_PARAMETERS_PATH}")
     print(f"Apvalinimas: {parameters.output_decimals} skaitmenys po kablelio")
     output_path = output_dir / OUTPUT_NAME
     client = OdooClient(settings)

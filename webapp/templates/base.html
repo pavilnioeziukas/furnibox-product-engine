@@ -16,6 +16,7 @@
     <nav class="topnav">
       <a href="{{ url_for('index') }}">Veiksmai</a>
       <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
+      <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
     </nav>
     {% if session.get('authenticated') %}
       <form method="post" action="{{ url_for('logout') }}"><button class="link-button">Atsijungti</button></form>
