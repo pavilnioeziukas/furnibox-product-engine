@@ -24,7 +24,7 @@ class ReformPriceListTests(unittest.TestCase):
             ])
             ws.append(["ACCS-1", "Accessory", "Reform Supply", 2, 2.5, 1.05, 2.625])
             ws.append(["PART-1", "Old cabinet row", "Furnix", 9, 9, 1, 9])
-            adjustments = wb.create_sheet("TAMARA ADJUSTMENTS")
+            adjustments = wb.create_sheet("PURCHASE PRICE ADJUSTMENTS")
             adjustments.append(["Internal Reference", "Adjusted Purchase Price"])
             adjustments.append(["ACCS-1", 2.75])
             adjustments.append(["PART-1", 9])

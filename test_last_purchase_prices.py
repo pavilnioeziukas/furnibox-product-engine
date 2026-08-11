@@ -48,7 +48,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
                 [
                     "INFO",
                     "PRICING RULES",
-                    "TAMARA ADJUSTMENTS",
+                    "PURCHASE PRICE ADJUSTMENTS",
                     "COMPONENT PRICES",
                 ],
             )
@@ -64,7 +64,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
                     2,
                     headers["Adjusted Purchase Price"],
                 ).value,
-                "='TAMARA ADJUSTMENTS'!B2",
+                "='PURCHASE PRICE ADJUSTMENTS'!B2",
             )
 
             self.assertEqual(
@@ -83,7 +83,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
                 '=IF(I2="",G2,I2)',
             )
 
-            adjustments = workbook["TAMARA ADJUSTMENTS"]
+            adjustments = workbook["PURCHASE PRICE ADJUSTMENTS"]
 
             self.assertEqual(
                 adjustments["A2"].value,
@@ -118,7 +118,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
                     "login": "test@example.test",
                     "uid": 1,
                 },
-                tamara_adjustments={
+                purchase_price_adjustments={
                     "ACCS-TEST": {
                         "adjusted_purchase_price": 3.25,
                         "comment": "Test adjustment",
@@ -132,15 +132,15 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                regenerated["TAMARA ADJUSTMENTS"]["B2"].value,
+                regenerated["PURCHASE PRICE ADJUSTMENTS"]["B2"].value,
                 3.25,
             )
             self.assertEqual(
-                regenerated["TAMARA ADJUSTMENTS"]["C2"].value,
+                regenerated["PURCHASE PRICE ADJUSTMENTS"]["C2"].value,
                 2.75,
             )
             self.assertEqual(
-                regenerated["TAMARA ADJUSTMENTS"]["D2"].value,
+                regenerated["PURCHASE PRICE ADJUSTMENTS"]["D2"].value,
                 "Test adjustment",
             )
             self.assertEqual(

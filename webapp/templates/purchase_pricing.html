@@ -170,92 +170,170 @@
     </div>
 
     <p style="margin-top: 18px;">
-      <button class="primary" type="submit">Išsaugoti parametrus</button>
+      <button class="primary" type="submit">
+        Išsaugoti parametrus
+      </button>
     </p>
   </form>
 </section>
 
-<section id="tamara-adjustments" class="panel" style="margin-top: 24px;">
+<section
+  id="purchase-price-adjustments"
+  class="panel"
+  style="margin-top: 24px;"
+>
   <div class="section-head">
     <div>
       <p class="eyebrow">Pirkti komponentai</p>
-      <h2>Tamaros pirkimo kainų korekcijos</h2>
+      <h2>Pirkimo kainų korekcijos</h2>
     </div>
-    <p>{{ tamara_total }} išsaugotų korekcijų</p>
+
+    <p>
+      {{ adjustment_total }} išsaugotų korekcijų
+    </p>
   </div>
 
   <p>
-    Realios pirkimo kainos gaunamos iš Odoo. Čia saugoma Tamaros
-    pakoreguota pirkimo kaina ir komentaras. Pakoreguota kaina naudojama
-    kaip New Purchase Price.
+    Faktinė pirkimo kaina gaunama iš Odoo. Jei jai reikalinga korekcija,
+    čia saugoma pakoreguota pirkimo kaina. Ji naudojama kaip
+    <strong>New Purchase Price</strong>.
   </p>
 
-  <div
-  style="
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin: 18px 0;
-  "
->
-  <a
-    class="secondary"
-    href="{{ url_for('export_tamara_adjustments') }}"
-  >
-    Eksportuoti korekcijų backup
-  </a>
+  <h3 style="margin-top: 24px;">
+    Atnaujinti korekcijas iš Excel
+  </h3>
+
+  <p>
+    Įkelkite pirkimo kainų Excel. Product Engine pirmiausia palygins
+    Excel reikšmes su dabar saugomomis korekcijomis ir parodys
+    naujas bei pasikeitusias kainas. Duomenys bus pakeisti tik po
+    atskiro patvirtinimo.
+  </p>
 
   <form
     method="post"
-    action="{{ url_for('import_tamara_adjustments') }}"
+    action="{{ url_for('preview_purchase_price_excel') }}"
     enctype="multipart/form-data"
     style="
       display: flex;
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
+      margin-top: 18px;
     "
   >
     <input
       name="file"
       type="file"
-      accept=".json,application/json"
+      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       required
     >
 
-    <button class="secondary" type="submit">
-      Importuoti korekcijas
+    <button class="primary" type="submit">
+      Įkelti ir patikrinti Excel
     </button>
   </form>
-</div>
 
-<p>
-  Importas pakeičia visą dabartinę Tamaros korekcijų saugyklą.
-  Prieš pakeitimą Product Engine automatiškai išsaugo ankstesnį backup.
-</p>
+  <details style="margin-top: 28px;">
+    <summary>
+      Techninis backup ir atkūrimas
+    </summary>
 
-  <form method="get" action="{{ url_for('purchase_pricing') }}">
-    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+    <p style="margin-top: 14px;">
+      JSON eksportas ir importas skirtas korekcijų saugyklos backup bei
+      atkūrimui. Kasdieniam kainų atnaujinimui naudokite Excel importą.
+    </p>
+
+    <div
+      style="
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 18px 0;
+      "
+    >
+      <a
+        class="secondary"
+        href="{{ url_for('export_purchase_price_adjustments') }}"
+      >
+        Eksportuoti backup
+      </a>
+
+      <form
+        method="post"
+        action="{{ url_for('import_purchase_price_adjustments') }}"
+        enctype="multipart/form-data"
+        style="
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        "
+      >
+        <input
+          name="file"
+          type="file"
+          accept=".json,application/json"
+          required
+        >
+
+        <button class="secondary" type="submit">
+          Atkurti iš JSON
+        </button>
+      </form>
+    </div>
+
+    <p>
+      JSON importas pakeičia visą dabartinę pirkimo kainų korekcijų
+      saugyklą. Prieš pakeitimą Product Engine automatiškai išsaugo
+      ankstesnę versiją.
+    </p>
+  </details>
+
+  <h3 style="margin-top: 30px;">
+    Išsaugotos korekcijos
+  </h3>
+
+  <form
+    method="get"
+    action="{{ url_for('purchase_pricing') }}"
+  >
+    <div
+      style="
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      "
+    >
       <input
-        name="tamara_q"
+        name="adjustment_q"
         type="text"
-        value="{{ tamara_query }}"
+        value="{{ adjustment_query }}"
         placeholder="Ieškoti pagal SKU arba komentarą"
         style="min-width: 320px;"
       >
-      <button class="secondary" type="submit">Ieškoti</button>
 
-      {% if tamara_query %}
-        <a href="{{ url_for('purchase_pricing') }}#tamara-adjustments">
+      <button class="secondary" type="submit">
+        Ieškoti
+      </button>
+
+      {% if adjustment_query %}
+        <a
+          href="{{ url_for('purchase_pricing') }}#purchase-price-adjustments"
+        >
           Išvalyti
         </a>
       {% endif %}
     </div>
   </form>
 
-  {% if tamara_rows %}
-    <div class="table-wrap" style="margin-top: 18px;">
+  {% if adjustment_rows %}
+    <div
+      class="table-wrap"
+      style="margin-top: 18px;"
+    >
       <table>
         <thead>
           <tr>
@@ -267,27 +345,30 @@
         </thead>
 
         <tbody>
-          {% for row in tamara_rows %}
+          {% for row in adjustment_rows %}
             <tr>
               <td>
                 <strong>{{ row.sku }}</strong>
 
                 <form
-                  id="tamara-{{ loop.index }}"
+                  id="adjustment-{{ loop.index }}"
                   method="post"
-                  action="{{ url_for('update_tamara_adjustment', sku=row.sku) }}"
+                  action="{{ url_for(
+                    'update_purchase_price_adjustment',
+                    sku=row.sku
+                  ) }}"
                 >
                   <input
                     type="hidden"
                     name="return_query"
-                    value="{{ tamara_query }}"
+                    value="{{ adjustment_query }}"
                   >
                 </form>
               </td>
 
               <td>
                 <input
-                  form="tamara-{{ loop.index }}"
+                  form="adjustment-{{ loop.index }}"
                   name="adjusted_purchase_price"
                   type="number"
                   step="any"
@@ -299,7 +380,7 @@
 
               <td>
                 <input
-                  form="tamara-{{ loop.index }}"
+                  form="adjustment-{{ loop.index }}"
                   name="comment"
                   type="text"
                   value="{{ row.comment }}"
@@ -309,7 +390,7 @@
 
               <td>
                 <button
-                  form="tamara-{{ loop.index }}"
+                  form="adjustment-{{ loop.index }}"
                   class="secondary"
                   type="submit"
                 >
@@ -322,12 +403,16 @@
       </table>
     </div>
 
-    {% if not tamara_query and tamara_total > tamara_rows|length %}
+    {% if
+      not adjustment_query
+      and adjustment_total > adjustment_rows|length
+    %}
       <p style="margin-top: 12px;">
-        Rodomos pirmos {{ tamara_rows|length }} korekcijų iš
-        {{ tamara_total }}. Konkrečiam SKU rasti naudok paiešką.
+        Rodomos pirmos {{ adjustment_rows|length }} korekcijų iš
+        {{ adjustment_total }}. Konkrečiam SKU rasti naudokite paiešką.
       </p>
     {% endif %}
+
   {% else %}
     <p style="margin-top: 18px;">
       Korekcijų pagal pasirinktą paiešką nerasta.

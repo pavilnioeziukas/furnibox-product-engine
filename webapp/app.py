@@ -37,10 +37,15 @@ from cabinet_parts_price_parameters import (
     save_parameters as save_cabinet_parts_parameters,
     validate_parameters as validate_cabinet_parts_parameters,
 )
-from tamara_adjustments import (
-    load_adjustments as load_tamara_adjustments,
-    save_adjustments as save_tamara_adjustments,
-    validate_adjustment as validate_tamara_adjustment,
+from purchase_price_adjustments import (
+    load_adjustments as load_purchase_price_adjustments,
+    save_adjustments as save_purchase_price_adjustments,
+    validate_adjustment as validate_purchase_price_adjustment,
+)
+from purchase_price_adjustments_import import (
+    build_adjustment_preview,
+    load_purchase_price_excel_adjustments,
+    summarize_preview,
 )
 
 
@@ -77,10 +82,19 @@ CABINET_PARTS_PARAMETERS_PATH = (
     / "cabinet_parts_price_parameters.json"
 )
 
-TAMARA_ADJUSTMENTS_PATH = (
+PURCHASE_PRICE_ADJUSTMENTS_PATH = (
+    STATE_DIR
+    / "shared_data"
+    / "purchase_price_adjustments.json"
+)
+LEGACY_PURCHASE_PRICE_ADJUSTMENTS_PATH = (
     STATE_DIR
     / "shared_data"
     / "tamara_adjustments.json"
+)
+PURCHASE_PRICE_IMPORT_DIR = (
+    STATE_DIR
+    / "purchase_price_imports"
 )
 
 DEFAULT_SO_PRICING_CONFIG_PATH = (
@@ -115,10 +129,25 @@ for directory in (
     UPLOAD_DIR,
     RUN_DIR,
     PRODUCTION_DATASET_DIR,
+    PURCHASE_PRICE_IMPORT_DIR,
 ):
     directory.mkdir(
         parents=True,
         exist_ok=True,
+    )
+
+
+if (
+    not PURCHASE_PRICE_ADJUSTMENTS_PATH.exists()
+    and LEGACY_PURCHASE_PRICE_ADJUSTMENTS_PATH.exists()
+):
+    PURCHASE_PRICE_ADJUSTMENTS_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    shutil.copy2(
+        LEGACY_PURCHASE_PRICE_ADJUSTMENTS_PATH,
+        PURCHASE_PRICE_ADJUSTMENTS_PATH,
     )
 
 
@@ -838,32 +867,32 @@ def purchase_pricing():
         )
     )
 
-    tamara_adjustments = (
-        load_tamara_adjustments(
-            TAMARA_ADJUSTMENTS_PATH
+    purchase_price_adjustments = (
+        load_purchase_price_adjustments(
+            PURCHASE_PRICE_ADJUSTMENTS_PATH
         )
     )
 
-    tamara_query = request.args.get(
-        "tamara_q",
+    adjustment_query = request.args.get(
+        "adjustment_q",
         "",
     ).strip()
 
-    tamara_rows = [
+    adjustment_rows = [
         {
             "sku": sku,
             **document,
         }
         for sku, document
-        in tamara_adjustments.items()
+        in purchase_price_adjustments.items()
     ]
 
-    if tamara_query:
-        query = tamara_query.casefold()
+    if adjustment_query:
+        query = adjustment_query.casefold()
 
-        tamara_rows = [
+        adjustment_rows = [
             row
-            for row in tamara_rows
+            for row in adjustment_rows
             if (
                 query
                 in row["sku"].casefold()
@@ -875,11 +904,11 @@ def purchase_pricing():
     return render_template(
         "purchase_pricing.html",
         parameters=parameters,
-        tamara_rows=tamara_rows[:200],
-        tamara_total=len(
-            tamara_adjustments
+        adjustment_rows=adjustment_rows[:200],
+        adjustment_total=len(
+            purchase_price_adjustments
         ),
-        tamara_query=tamara_query,
+        adjustment_query=adjustment_query,
     )
 
 
@@ -945,28 +974,325 @@ def update_purchase_pricing():
     )
 
 
-@app.get(
-    "/purchase-pricing/tamara/export"
+@app.post(
+    "/purchase-pricing/adjustments/excel-preview"
 )
-def export_tamara_adjustments():
-    if not TAMARA_ADJUSTMENTS_PATH.exists():
+def preview_purchase_price_excel():
+    file = request.files.get("file")
+
+    if file is None or not file.filename:
+        abort(
+            400,
+            "Pasirinkite pirkimo kainų Excel failą.",
+        )
+
+    filename = secure_filename(file.filename)
+
+    if Path(filename).suffix.lower() != ".xlsx":
+        abort(
+            400,
+            "Leidžiamas tik .xlsx failas.",
+        )
+
+    import_id = uuid.uuid4().hex
+
+    excel_path = (
+        PURCHASE_PRICE_IMPORT_DIR
+        / f"{import_id}.xlsx"
+    )
+
+    metadata_path = (
+        PURCHASE_PRICE_IMPORT_DIR
+        / f"{import_id}.json"
+    )
+
+    file.save(excel_path)
+
+    try:
+        excel_adjustments = (
+            load_purchase_price_excel_adjustments(
+                excel_path
+            )
+        )
+
+        current_adjustments = (
+            load_purchase_price_adjustments(
+                PURCHASE_PRICE_ADJUSTMENTS_PATH
+            )
+        )
+
+        preview_rows = build_adjustment_preview(
+            excel_adjustments,
+            current_adjustments,
+        )
+
+        summary = summarize_preview(
+            preview_rows
+        )
+
+        changed_rows = [
+            row
+            for row in preview_rows
+            if row.status != "SAME"
+        ]
+
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "source_filename": filename,
+                    "created_at": utc_now(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        return render_template(
+            "purchase_price_adjustments_preview.html",
+            import_id=import_id,
+            source_filename=filename,
+            summary=summary,
+            rows=changed_rows[:500],
+            changed_total=len(changed_rows),
+        )
+
+    except (ValueError, OSError) as exc:
+        excel_path.unlink(missing_ok=True)
+        metadata_path.unlink(missing_ok=True)
+        abort(400, str(exc))
+
+
+@app.post(
+    "/purchase-pricing/adjustments/excel-apply/<import_id>"
+)
+def apply_purchase_price_excel(import_id: str):
+    safe_import_id = secure_filename(import_id)
+
+    if (
+        not safe_import_id
+        or safe_import_id != import_id
+    ):
+        abort(404)
+
+    excel_path = (
+        PURCHASE_PRICE_IMPORT_DIR
+        / f"{import_id}.xlsx"
+    )
+
+    metadata_path = (
+        PURCHASE_PRICE_IMPORT_DIR
+        / f"{import_id}.json"
+    )
+
+    if (
+        not excel_path.exists()
+        or not metadata_path.exists()
+    ):
+        abort(
+            404,
+            "Excel peržiūra neberasta. Įkelkite failą iš naujo.",
+        )
+
+    try:
+        metadata = json.loads(
+            metadata_path.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        excel_adjustments = (
+            load_purchase_price_excel_adjustments(
+                excel_path
+            )
+        )
+
+        current_adjustments = (
+            load_purchase_price_adjustments(
+                PURCHASE_PRICE_ADJUSTMENTS_PATH
+            )
+        )
+
+        preview_rows = build_adjustment_preview(
+            excel_adjustments,
+            current_adjustments,
+        )
+
+        rows_to_apply = [
+            row
+            for row in preview_rows
+            if row.status in {
+                "NEW",
+                "CHANGED",
+            }
+        ]
+
+        if not rows_to_apply:
+            flash(
+                "Pirkimo kainų Excel neturi naujų ar pakeistų kainų."
+            )
+            return redirect(
+                url_for("purchase_pricing")
+                + "#purchase-price-adjustments"
+            )
+
+        if PURCHASE_PRICE_ADJUSTMENTS_PATH.exists():
+            backup_dir = (
+                STATE_DIR
+                / "shared_data"
+                / "backups"
+            )
+            backup_dir.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            timestamp = datetime.now().strftime(
+                "%Y%m%d_%H%M%S_%f"
+            )
+
+            backup_path = (
+                backup_dir
+                / f"purchase_price_adjustments_{timestamp}.json"
+            )
+
+            shutil.copy2(
+                PURCHASE_PRICE_ADJUSTMENTS_PATH,
+                backup_path,
+            )
+
+        source_filename = str(
+            metadata.get(
+                "source_filename",
+                "Pirkimo kainų Excel",
+            )
+        )
+
+        for row in rows_to_apply:
+            current_adjustments[row.sku] = {
+                "adjusted_purchase_price":
+                    row.new_adjustment,
+                "comment": (
+                    "Imported from "
+                    f"{source_filename}"
+                ),
+            }
+
+        save_purchase_price_adjustments(
+            PURCHASE_PRICE_ADJUSTMENTS_PATH,
+            current_adjustments,
+        )
+
+        flash(
+            f"Pritaikyta {len(rows_to_apply)} "
+            "Pirkimo kainų pakeitimų."
+        )
+
+    except (
+        ValueError,
+        OSError,
+        json.JSONDecodeError,
+    ) as exc:
+        abort(400, str(exc))
+
+    finally:
+        excel_path.unlink(missing_ok=True)
+        metadata_path.unlink(missing_ok=True)
+
+    return redirect(
+        url_for("purchase_pricing")
+        + "#purchase-price-adjustments"
+    )
+
+
+@app.post(
+    "/purchase-pricing/adjustments/<path:sku>"
+)
+def update_purchase_price_adjustment(
+    sku: str,
+):
+    adjustments = (
+        load_purchase_price_adjustments(
+            PURCHASE_PRICE_ADJUSTMENTS_PATH
+        )
+    )
+
+    if sku not in adjustments:
+        abort(404)
+
+    try:
+        adjustments[sku] = (
+            validate_purchase_price_adjustment(
+                sku,
+                {
+                    "adjusted_purchase_price":
+                        request.form.get(
+                            "adjusted_purchase_price",
+                            "",
+                        ),
+                    "comment":
+                        request.form.get(
+                            "comment",
+                            "",
+                        ),
+                },
+            )
+        )
+
+        save_purchase_price_adjustments(
+            PURCHASE_PRICE_ADJUSTMENTS_PATH,
+            adjustments,
+        )
+
+    except ValueError as exc:
+        abort(
+            400,
+            str(exc),
+        )
+
+    flash(
+        f"Pirkimo kainos korekcija "
+        f"{sku} išsaugota."
+    )
+
+    query = request.form.get(
+        "return_query",
+        "",
+    ).strip()
+
+    return redirect(
+        url_for(
+            "purchase_pricing",
+            adjustment_q=query,
+        )
+        + "#purchase-price-adjustments"
+    )
+
+
+@app.get(
+    "/purchase-pricing/adjustments/export"
+)
+def export_purchase_price_adjustments():
+    if not PURCHASE_PRICE_ADJUSTMENTS_PATH.exists():
         abort(
             404,
             "Tamaros korekcijų saugykla dar nesukurta.",
         )
 
     return send_file(
-        TAMARA_ADJUSTMENTS_PATH,
+        PURCHASE_PRICE_ADJUSTMENTS_PATH,
         as_attachment=True,
         download_name=(
-            "tamara_adjustments.json"
+            "purchase_price_adjustments.json"
         ),
     )
 
+
 @app.post(
-    "/purchase-pricing/tamara/import"
+    "/purchase-pricing/adjustments/import"
 )
-def import_tamara_adjustments():
+def import_purchase_price_adjustments():
     file = request.files.get(
         "file"
     )
@@ -996,7 +1322,7 @@ def import_tamara_adjustments():
     temporary_path = (
         UPLOAD_DIR
         / (
-            "tamara_adjustments_import_"
+            "purchase_price_adjustments_import_"
             f"{uuid.uuid4().hex}.json"
         )
     )
@@ -1007,7 +1333,7 @@ def import_tamara_adjustments():
 
     try:
         adjustments = (
-            load_tamara_adjustments(
+            load_purchase_price_adjustments(
                 temporary_path
             )
         )
@@ -1021,7 +1347,7 @@ def import_tamara_adjustments():
                 ),
             )
 
-        if TAMARA_ADJUSTMENTS_PATH.exists():
+        if PURCHASE_PRICE_ADJUSTMENTS_PATH.exists():
             backup_dir = (
                 STATE_DIR
                 / "shared_data"
@@ -1035,25 +1361,25 @@ def import_tamara_adjustments():
 
             timestamp = (
                 datetime.now().strftime(
-                    "%Y%m%d_%H%M%S_%f"
+                    "%Y%m%d_%H%M%S"
                 )
             )
 
             backup_path = (
                 backup_dir
                 / (
-                    "tamara_adjustments_"
+                    "purchase_price_adjustments_"
                     f"{timestamp}.json"
                 )
             )
 
             shutil.copy2(
-                TAMARA_ADJUSTMENTS_PATH,
+                PURCHASE_PRICE_ADJUSTMENTS_PATH,
                 backup_path,
             )
 
-        save_tamara_adjustments(
-            TAMARA_ADJUSTMENTS_PATH,
+        save_purchase_price_adjustments(
+            PURCHASE_PRICE_ADJUSTMENTS_PATH,
             adjustments,
         )
 
@@ -1077,71 +1403,9 @@ def import_tamara_adjustments():
         url_for(
             "purchase_pricing"
         )
-        + "#tamara-adjustments"
+        + "#purchase-price-adjustments"
     )
 
-@app.post(
-    "/purchase-pricing/tamara/<path:sku>"
-)
-def update_tamara_adjustment(
-    sku: str,
-):
-    adjustments = (
-        load_tamara_adjustments(
-            TAMARA_ADJUSTMENTS_PATH
-        )
-    )
-
-    if sku not in adjustments:
-        abort(404)
-
-    try:
-        adjustments[sku] = (
-            validate_tamara_adjustment(
-                sku,
-                {
-                    "adjusted_purchase_price":
-                        request.form.get(
-                            "adjusted_purchase_price",
-                            "",
-                        ),
-                    "comment":
-                        request.form.get(
-                            "comment",
-                            "",
-                        ),
-                },
-            )
-        )
-
-        save_tamara_adjustments(
-            TAMARA_ADJUSTMENTS_PATH,
-            adjustments,
-        )
-
-    except ValueError as exc:
-        abort(
-            400,
-            str(exc),
-        )
-
-    flash(
-        f"Tamaros korekcija "
-        f"{sku} išsaugota."
-    )
-
-    query = request.form.get(
-        "return_query",
-        "",
-    ).strip()
-
-    return redirect(
-        url_for(
-            "purchase_pricing",
-            tamara_q=query,
-        )
-        + "#tamara-adjustments"
-    )
 
 @app.get("/pricing-rules")
 def pricing_rules():

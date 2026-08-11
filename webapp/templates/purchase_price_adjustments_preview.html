@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Pirkimo kainų pakeitimų peržiūra · Furnibox Product Engine{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Pirkimo kainodara</p>
+    <h1>Pirkimo kainų pakeitimų peržiūra</h1>
+  </div>
+</section>
+
+<p class="lead">
+  Šiame žingsnyje duomenys dar nekeičiami.
+  Patikrinkite Excel rastus kainų skirtumus ir tik tada pritaikykite pakeitimus.
+</p>
+
+<section class="panel">
+  <h2>Importo suvestinė</h2>
+
+  <table>
+    <tbody>
+      <tr>
+        <td>Failas</td>
+        <td><strong>{{ source_filename }}</strong></td>
+      </tr>
+      <tr>
+        <td>Excel kainų eilučių</td>
+        <td>{{ summary["TOTAL"] }}</td>
+      </tr>
+      <tr>
+        <td>Naujos korekcijos</td>
+        <td>{{ summary["NEW"] }}</td>
+      </tr>
+      <tr>
+        <td>Pasikeitusios korekcijos</td>
+        <td>{{ summary["CHANGED"] }}</td>
+      </tr>
+      <tr>
+        <td>Nepasikeitusios</td>
+        <td>{{ summary["SAME"] }}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="panel" style="margin-top: 24px;">
+  <h2>Pakeitimai</h2>
+
+  {% if changed_total == 0 %}
+    <p>
+      Excel faile nėra naujų ar pasikeitusių pirkimo kainų korekcijų.
+    </p>
+  {% else %}
+    <p>
+      Rasta {{ changed_total }} naujų arba pasikeitusių kainų.
+      Žemiau rodomos iki 500 eilučių.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Statusas</th>
+            <th>SKU</th>
+            <th>Excel reali kaina</th>
+            <th>Dabartinė korekcija</th>
+            <th>Nauja korekcija</th>
+            <th>Skirtumas</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td><strong>{{ row.status }}</strong></td>
+              <td>{{ row.sku }}</td>
+              <td>
+                {% if row.excel_real_price is not none %}
+                  {{ "%.4f"|format(row.excel_real_price) }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if row.current_adjustment is not none %}
+                  {{ "%.4f"|format(row.current_adjustment) }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ "%.4f"|format(row.new_adjustment) }}</td>
+              <td>
+                {% if row.current_adjustment is not none %}
+                  {{ "%.4f"|format(row.new_adjustment - row.current_adjustment) }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+
+<section class="panel" style="margin-top: 24px;">
+  <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <a
+      class="secondary"
+      href="{{ url_for('purchase_pricing') }}#purchase-price-adjustments"
+    >
+      Atšaukti
+    </a>
+
+    {% if changed_total > 0 %}
+      <form
+        method="post"
+        action="{{ url_for('apply_purchase_price_excel', import_id=import_id) }}"
+      >
+        <button class="primary" type="submit">
+          Pritaikyti {{ changed_total }} pakeitimų
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

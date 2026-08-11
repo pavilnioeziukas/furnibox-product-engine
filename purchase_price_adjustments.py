@@ -71,7 +71,7 @@ def load_adjustments(path: Path) -> dict[str, dict[str, Any]]:
             )
 
         if sku in result:
-            raise ValueError(f"Tamaros korekcijose kartojasi SKU: {sku}")
+            raise ValueError(f"Pirkimo kain? korekcijose kartojasi SKU: {sku}")
 
         result[sku] = validate_adjustment(sku, raw_document)
 
@@ -88,7 +88,7 @@ def save_adjustments(
         sku = normalize_sku(raw_sku)
 
         if sku in validated:
-            raise ValueError(f"Tamaros korekcijose kartojasi SKU: {sku}")
+            raise ValueError(f"Pirkimo kain? korekcijose kartojasi SKU: {sku}")
 
         validated[sku] = validate_adjustment(sku, document)
 

@@ -47,10 +47,10 @@ def load_component_prices(path: Path) -> list[dict]:
         )
     }
     adjustments = {}
-    if "TAMARA ADJUSTMENTS" not in workbook.sheetnames:
+    if "PURCHASE PRICE ADJUSTMENTS" not in workbook.sheetnames:
         workbook.close()
-        raise ValueError(f"Faile '{path.name}' nerastas lapas TAMARA ADJUSTMENTS.")
-    adjustment_sheet = workbook["TAMARA ADJUSTMENTS"]
+        raise ValueError(f"Faile '{path.name}' nerastas lapas PURCHASE PRICE ADJUSTMENTS.")
+    adjustment_sheet = workbook["PURCHASE PRICE ADJUSTMENTS"]
     adjustment_headers = _headers(adjustment_sheet)
     adjustment_sku = _required(
         adjustment_headers, "Internal Reference", adjustment_sheet.title

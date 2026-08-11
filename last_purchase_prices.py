@@ -14,7 +14,7 @@ from openpyxl.styles import PatternFill
 from config import load_settings
 from excel_writer import HEADER_FILL, HEADER_FONT
 from odoo_client import OdooClient
-from tamara_adjustments import load_adjustments
+from purchase_price_adjustments import load_adjustments
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -24,7 +24,7 @@ SHARED_DATA_DIR = Path(
         BASE_DIR / "web_state" / "shared_data",
     )
 ).resolve()
-TAMARA_ADJUSTMENTS_PATH = SHARED_DATA_DIR / "tamara_adjustments.json"
+PURCHASE_PRICE_ADJUSTMENTS_PATH = SHARED_DATA_DIR / "purchase_price_adjustments.json"
 
 EXPORT_COLUMNS = [
     "Internal Reference",
@@ -43,7 +43,7 @@ CALCULATOR_COLUMNS = [
     "Reform Price",
 ]
 
-ADJUSTMENT_SHEET = "TAMARA ADJUSTMENTS"
+ADJUSTMENT_SHEET = "PURCHASE PRICE ADJUSTMENTS"
 
 OUTPUT_COLUMNS = [
     "Real Purchase Price" if column == "Last Purchase Price" else column
@@ -125,11 +125,11 @@ def write_purchase_prices(
     path,
     purchase_prices,
     metadata,
-    tamara_adjustments=None,
+    purchase_price_adjustments=None,
 ):
     """Sukuria komponentų pirkimo ir Reform kainų kontrolinį failą."""
-    if tamara_adjustments is None:
-        tamara_adjustments = load_adjustments(TAMARA_ADJUSTMENTS_PATH)
+    if purchase_price_adjustments is None:
+        purchase_price_adjustments = load_adjustments(PURCHASE_PRICE_ADJUSTMENTS_PATH)
 
     workbook = Workbook()
 
@@ -142,8 +142,8 @@ def write_purchase_prices(
         ("User", metadata["login"]),
         ("Odoo UID", metadata["uid"]),
         ("Products with Last Purchase Price", len(purchase_prices)),
-        ("Tamara adjustments source", str(TAMARA_ADJUSTMENTS_PATH)),
-        ("Tamara adjustments loaded", len(tamara_adjustments)),
+        ("Purchase price adjustments source", str(PURCHASE_PRICE_ADJUSTMENTS_PATH)),
+        ("Purchase price adjustments loaded", len(purchase_price_adjustments)),
     ]:
         info.append(row)
     info.column_dimensions["A"].width = 36
@@ -162,7 +162,7 @@ def write_purchase_prices(
     for row in purchase_prices:
         sku = str(row.get("Internal Reference") or "").strip()
         real_price = row.get("Last Purchase Price")
-        adjustment = tamara_adjustments.get(sku)
+        adjustment = purchase_price_adjustments.get(sku)
 
         if adjustment:
             adjusted_price = adjustment["adjusted_purchase_price"]
@@ -255,11 +255,11 @@ def write_purchase_prices(
     ])
     note.append([
         "Adjusted Purchase Price",
-        "Product Engine Tamara adjustment when configured; otherwise Real Purchase Price.",
+        "Product Engine purchase price adjustment when configured; otherwise Real Purchase Price.",
     ])
     note.append([
-        "Tamara adjustment source",
-        str(TAMARA_ADJUSTMENTS_PATH),
+        "Purchase price adjustment source",
+        str(PURCHASE_PRICE_ADJUSTMENTS_PATH),
     ])
     note.append([
         "Markup Factor",
@@ -281,7 +281,7 @@ def write_purchase_prices(
     note.column_dimensions["B"].width = 100
     note.freeze_panes = "A2"
 
-    info.append(("Tamara adjustments applied", applied_adjustments))
+    info.append(("Purchase price adjustments applied", applied_adjustments))
 
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True
@@ -314,10 +314,10 @@ def main():
     purchase_prices = load_last_purchase_prices(client)
     logging.info("Produktų su paskutine pirkimo kaina: %s", len(purchase_prices))
 
-    tamara_adjustments = load_adjustments(TAMARA_ADJUSTMENTS_PATH)
+    purchase_price_adjustments = load_adjustments(PURCHASE_PRICE_ADJUSTMENTS_PATH)
     logging.info(
         "Tamaros korekcijų saugykloje: %s",
-        len(tamara_adjustments),
+        len(purchase_price_adjustments),
     )
 
     output_path = settings.output_dir / "Last_Purchase_Prices.xlsx"
@@ -330,14 +330,14 @@ def main():
             "login": settings.login,
             "uid": uid,
         },
-        tamara_adjustments=tamara_adjustments,
+        purchase_price_adjustments=purchase_price_adjustments,
     )
 
     print()
     print("KOMPONENTŲ PIRKIMO IR REFORM KAINŲ FAILAS SUKURTAS")
     print("Failas:", output_path)
     print("Produktai su kaina:", len(purchase_prices))
-    print("Tamaros korekcijų saugykloje:", len(tamara_adjustments))
+    print("Tamaros korekcijų saugykloje:", len(purchase_price_adjustments))
 
 
 if __name__ == "__main__":

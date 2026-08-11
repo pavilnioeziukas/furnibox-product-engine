@@ -4,7 +4,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from tamara_adjustments import save_adjustments
+from purchase_price_adjustments import save_adjustments
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -15,7 +15,7 @@ TARGET_PATH = (
     BASE_DIR
     / "web_state"
     / "shared_data"
-    / "tamara_adjustments.json"
+    / "purchase_price_adjustments.json"
 )
 
 SOURCE_SKU_COLUMN = "Invoice lines/Product/Internal Reference"
@@ -110,7 +110,7 @@ def load_source_adjustments() -> dict[str, dict]:
 def migrate() -> None:
     if TARGET_PATH.exists():
         raise RuntimeError(
-            "Tamaros korekcijų saugykla jau egzistuoja. "
+            "pirkimo kain? korekcijų saugykla jau egzistuoja. "
             "Migracija automatiškai jos neperrašys:\n"
             f"{TARGET_PATH}"
         )
@@ -128,7 +128,7 @@ def migrate() -> None:
     print("Perkelta korekcijų:", len(adjustments))
     print()
     print(
-        "Toliau šis Excel failas nebėra Tamaros korekcijų "
+        "Toliau šis Excel failas nebėra pirkimo kain? korekcijų "
         "duomenų šaltinis."
     )
 
