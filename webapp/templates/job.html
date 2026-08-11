@@ -24,7 +24,6 @@
     <div><strong id="supply-mo-missing">–</strong><span>MO trūksta rezervuoti</span></div>
     <div><strong id="supply-sorting">–</strong><span>Laukia rūšiavimo</span></div>
     <div><strong id="supply-receipt">–</strong><span>Laukia priėmimo</span></div>
-    <div><strong id="supply-issues">–</strong><span>Reikia dėmesio</span></div>
   </div>
 
   <div id="supply-problems" hidden>
@@ -180,9 +179,6 @@ async function renderSupplyReport() {
 
     document.querySelector('#supply-receipt').textContent =
       quantity(summary.waiting_for_receipt);
-
-    document.querySelector('#supply-issues').textContent =
-      quantity(summary.requires_investigation);
 
     if (!problems.length) return;
 
