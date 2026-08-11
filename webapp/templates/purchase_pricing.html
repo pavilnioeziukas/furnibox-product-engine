@@ -174,4 +174,120 @@
     </p>
   </form>
 </section>
+
+<section id="tamara-adjustments" class="panel" style="margin-top: 24px;">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Pirkti komponentai</p>
+      <h2>Tamaros pirkimo kainų korekcijos</h2>
+    </div>
+    <p>{{ tamara_total }} išsaugotų korekcijų</p>
+  </div>
+
+  <p>
+    Realios pirkimo kainos gaunamos iš Odoo. Čia saugoma Tamaros
+    pakoreguota pirkimo kaina ir komentaras. Pakoreguota kaina naudojama
+    kaip New Purchase Price.
+  </p>
+
+  <form method="get" action="{{ url_for('purchase_pricing') }}">
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+      <input
+        name="tamara_q"
+        type="text"
+        value="{{ tamara_query }}"
+        placeholder="Ieškoti pagal SKU arba komentarą"
+        style="min-width: 320px;"
+      >
+      <button class="secondary" type="submit">Ieškoti</button>
+
+      {% if tamara_query %}
+        <a href="{{ url_for('purchase_pricing') }}#tamara-adjustments">
+          Išvalyti
+        </a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if tamara_rows %}
+    <div class="table-wrap" style="margin-top: 18px;">
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Adjusted Purchase Price</th>
+            <th>Komentaras</th>
+            <th>Veiksmas</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for row in tamara_rows %}
+            <tr>
+              <td>
+                <strong>{{ row.sku }}</strong>
+
+                <form
+                  id="tamara-{{ loop.index }}"
+                  method="post"
+                  action="{{ url_for('update_tamara_adjustment', sku=row.sku) }}"
+                >
+                  <input
+                    type="hidden"
+                    name="return_query"
+                    value="{{ tamara_query }}"
+                  >
+                </form>
+              </td>
+
+              <td>
+                <input
+                  form="tamara-{{ loop.index }}"
+                  name="adjusted_purchase_price"
+                  type="number"
+                  step="any"
+                  min="0"
+                  value="{{ row.adjusted_purchase_price }}"
+                  required
+                >
+              </td>
+
+              <td>
+                <input
+                  form="tamara-{{ loop.index }}"
+                  name="comment"
+                  type="text"
+                  value="{{ row.comment }}"
+                  style="width: 360px; max-width: 100%;"
+                >
+              </td>
+
+              <td>
+                <button
+                  form="tamara-{{ loop.index }}"
+                  class="secondary"
+                  type="submit"
+                >
+                  Išsaugoti
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if not tamara_query and tamara_total > tamara_rows|length %}
+      <p style="margin-top: 12px;">
+        Rodomos pirmos {{ tamara_rows|length }} korekcijų iš
+        {{ tamara_total }}. Konkrečiam SKU rasti naudok paiešką.
+      </p>
+    {% endif %}
+  {% else %}
+    <p style="margin-top: 18px;">
+      Korekcijų pagal pasirinktą paiešką nerasta.
+    </p>
+  {% endif %}
+</section>
+
 {% endblock %}

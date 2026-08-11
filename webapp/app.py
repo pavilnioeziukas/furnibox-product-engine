@@ -25,6 +25,11 @@ from cabinet_parts_price_parameters import (
     save_parameters as save_cabinet_parts_parameters,
     validate_parameters as validate_cabinet_parts_parameters,
 )
+from tamara_adjustments import (
+    load_adjustments as load_tamara_adjustments,
+    save_adjustments as save_tamara_adjustments,
+    validate_adjustment as validate_tamara_adjustment,
+)
 
 
 STATE_DIR = Path(os.getenv("FURNIBOX_WEB_STATE_DIR", BASE_DIR / "web_state")).resolve()
@@ -35,6 +40,9 @@ PRODUCTION_DATASET_PATH = PRODUCTION_DATASET_DIR / "latest.json"
 SO_PRICING_CONFIG_PATH = STATE_DIR / "shared_data" / "so_pricing_rules.json"
 CABINET_PARTS_PARAMETERS_PATH = (
     STATE_DIR / "shared_data" / "cabinet_parts_price_parameters.json"
+)
+TAMARA_ADJUSTMENTS_PATH = (
+    STATE_DIR / "shared_data" / "tamara_adjustments.json"
 )
 DEFAULT_SO_PRICING_CONFIG_PATH = BASE_DIR / "manifest" / "so_pricing_rules.json"
 MAX_UPLOAD_BYTES = int(os.getenv("FURNIBOX_MAX_UPLOAD_MB", "100")) * 1024 * 1024
@@ -339,9 +347,33 @@ def purchase_pricing():
     parameters = load_cabinet_parts_parameters(
         CABINET_PARTS_PARAMETERS_PATH
     )
+    tamara_adjustments = load_tamara_adjustments(
+        TAMARA_ADJUSTMENTS_PATH
+    )
+    tamara_query = request.args.get("tamara_q", "").strip()
+    tamara_rows = [
+        {
+            "sku": sku,
+            **document,
+        }
+        for sku, document in tamara_adjustments.items()
+    ]
+
+    if tamara_query:
+        query = tamara_query.casefold()
+        tamara_rows = [
+            row
+            for row in tamara_rows
+            if query in row["sku"].casefold()
+            or query in row["comment"].casefold()
+        ]
+
     return render_template(
         "purchase_pricing.html",
         parameters=parameters,
+        tamara_rows=tamara_rows[:200],
+        tamara_total=len(tamara_adjustments),
+        tamara_query=tamara_query,
     )
 
 
@@ -370,6 +402,40 @@ def update_purchase_pricing():
 
     flash("Pirkimo kainodaros parametrai išsaugoti.")
     return redirect(url_for("purchase_pricing"))
+
+
+@app.post("/purchase-pricing/tamara/<path:sku>")
+def update_tamara_adjustment(sku: str):
+    adjustments = load_tamara_adjustments(
+        TAMARA_ADJUSTMENTS_PATH
+    )
+
+    if sku not in adjustments:
+        abort(404)
+
+    try:
+        adjustments[sku] = validate_tamara_adjustment(
+            sku,
+            {
+                "adjusted_purchase_price": request.form.get(
+                    "adjusted_purchase_price", ""
+                ),
+                "comment": request.form.get("comment", ""),
+            },
+        )
+        save_tamara_adjustments(
+            TAMARA_ADJUSTMENTS_PATH,
+            adjustments,
+        )
+    except ValueError as exc:
+        abort(400, str(exc))
+
+    flash(f"Tamaros korekcija {sku} išsaugota.")
+    query = request.form.get("return_query", "").strip()
+    return redirect(
+        url_for("purchase_pricing", tamara_q=query)
+        + "#tamara-adjustments"
+    )
 
 
 @app.get("/pricing-rules")
