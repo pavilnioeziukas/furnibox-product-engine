@@ -56,9 +56,13 @@ class ReformPriceListTests(unittest.TestCase):
             part_row = rows["PART-1"]
             self.assertEqual(prices.cell(part_row, headers["Price Source"]).value, "CABINET PART CALCULATION")
             self.assertEqual(prices.cell(part_row, headers["Adjusted Furnibox Purchase Price"]).value, 11.5)
-            self.assertEqual(prices.cell(part_row, headers["Reform Markup Factor"]).value, 1.05)
-            self.assertEqual(prices.cell(part_row, headers["Reform Purchase Price"]).value, f"=F{part_row}*G{part_row}")
-
+            self.assertIsNone(
+            prices.cell(part_row, headers["Reform Markup Factor"]).value
+            )
+            self.assertEqual(
+            prices.cell(part_row, headers["Reform Purchase Price"]).value,
+             11.5,
+            )
             component_row = rows["ACCS-1"]
             self.assertEqual(prices.cell(component_row, headers["Adjusted Furnibox Purchase Price"]).value, 2.75)
             self.assertEqual(prices.cell(component_row, headers["Reform Markup Factor"]).value, 1.05)

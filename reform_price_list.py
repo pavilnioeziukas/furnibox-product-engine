@@ -152,11 +152,9 @@ def build_reform_price_list(
         purchase_price = row["Furnix Sales Price to Furnibox"]
         prices.append([
             row["Internal Reference"], "", "CABINET PART CALCULATION", "Furnix",
-            purchase_price, purchase_price, reform_markup_factor,
-            None, f'{row["Product Status"]} / {row["BOM Source"]}',
+            purchase_price, purchase_price, None,
+            purchase_price, f'{row["Product Status"]} / {row["BOM Source"]}',
         ])
-        excel_row = prices.max_row
-        prices.cell(excel_row, 8).value = f"=F{excel_row}*G{excel_row}"
 
     for row in sorted(components, key=lambda item: str(item["Internal Reference"]).casefold()):
         sku = str(row["Internal Reference"]).strip()
