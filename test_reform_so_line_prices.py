@@ -4,11 +4,63 @@ import unittest
 
 from openpyxl import Workbook, load_workbook
 
-from reform_so_line_prices import build_from_application_config, build_reform_so_line_prices
-from so_pricing_rules import load_config, migrate_legacy_workbook, save_config
+from reform_so_line_prices import (
+    Item,
+    add_generated_boms_to_graph,
+    build_from_application_config,
+    build_reform_so_line_prices,
+    calculate_boms,
+    key,
+)
+from so_pricing_rules import PricingRule, load_config, migrate_legacy_workbook, save_config
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
+    def test_assembled_cabinet_uses_generated_apack_and_hrd_a_boms(self):
+        cabinet = "EUB-C-CAB01-BAS001"
+        assembled = f"{cabinet}-A"
+        fpack = "FPACK-EU-CAB01-BAS001"
+        apack = "APACK-EU-C-CAB01-BAS001-A"
+        hrd = "UNI-P-ACC01-HRD206D"
+        hrd_a = f"{hrd}-A"
+        graph = {
+            key(cabinet): [(hrd, 1), (fpack, 1)],
+            key(hrd): [("HRD-PART", 2)],
+            key(fpack): [("CABINET-PART", 3)],
+        }
+        products = [
+            {"sku": cabinet, "product_category": "All / CABINETS"},
+            {"sku": assembled, "product_category": "All / CABINETS (Assembled)"},
+        ]
+
+        generated = add_generated_boms_to_graph(graph, products)
+
+        self.assertEqual(generated[key(assembled)], [(hrd_a, 1.0), (apack, 1.0)])
+        self.assertEqual(generated[key(hrd_a)], [("HRD-PART", 2.0)])
+        self.assertEqual(generated[key(apack)], [("CABINET-PART", 3.0)])
+
+        def rule(sku, assembly=0):
+            return PricingRule(sku, "", "", "", assembly, 0, 0, 0, 0, 0)
+
+        rules = {
+            key(sku): rule(sku, assembly=5.5 if sku == assembled else 0)
+            for sku in (cabinet, assembled, fpack, apack, hrd, hrd_a)
+        }
+        boms = {
+            cabinet: ("CABINETS", [Item(hrd, 1), Item(fpack, 1)]),
+            assembled: ("CABINETS (Assembled)", [Item(hrd_a, 1), Item(apack, 1)]),
+        }
+        prices = {
+            key("HRD-PART"): ("Hardware", 4.0, "DIRECT PRICE"),
+            key("CABINET-PART"): ("Cabinet part", 10.0, "DIRECT PRICE"),
+        }
+
+        rows, _ = calculate_boms(boms, prices, rules, adjustment=0, graph=generated)
+        by_sku = {row["sku"]: row for row in rows}
+        self.assertEqual(by_sku[cabinet]["cost"], 38.0)
+        self.assertEqual(by_sku[assembled]["cost"], 38.0)
+        self.assertEqual(sum(by_sku[assembled]["addons"]), 5.5)
+
     def test_bom_category_breakdown_and_non_bom_logic(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

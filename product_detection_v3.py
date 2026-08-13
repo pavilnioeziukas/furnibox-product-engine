@@ -225,8 +225,13 @@ def write_output(path: Path, reform_products, odoo_products, duplicates, info):
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Compare Reform products with Odoo")
+    parser.add_argument("--bom-input", type=Path, help="Reform BOM Input .xlsx")
+    args = parser.parse_args()
     base = Path(__file__).resolve().parent
-    input_path = find_bom_input(base)
+    input_path = args.bom_input or find_bom_input(base)
     print("Nuskaitomi visi Reform produktai ir komponentai...")
     reform_products, sheet_name, header_row = load_reform_universe(input_path)
     print("Unikalių Reform SKU:", len(reform_products))
@@ -257,4 +262,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

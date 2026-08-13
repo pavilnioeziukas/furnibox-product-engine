@@ -8,6 +8,8 @@ def load_webapp(monkeypatch, tmp_path):
     monkeypatch.setenv("FURNIBOX_WEB_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("FURNIBOX_WEB_SECRET", "test-secret")
     monkeypatch.delenv("FURNIBOX_WEB_PASSWORD", raising=False)
+    monkeypatch.delenv("FURNIBOX_SHARED_DATA", raising=False)
+    monkeypatch.delenv("FURNIBOX_SHARED_DATA_DIR", raising=False)
 
     import webapp.app as webapp
 
@@ -20,6 +22,7 @@ def test_health_and_index(monkeypatch, tmp_path):
 
     assert client.get("/health").get_json() == {"status": "ok"}
     assert client.get("/").status_code == 200
+    assert "Atnaujinti Reform kainodarą" in client.get("/").get_data(as_text=True)
 
 
 def test_upload_accepts_xlsx_and_rejects_other_files(monkeypatch, tmp_path):

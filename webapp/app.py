@@ -228,6 +228,27 @@ ACTIONS: dict[str, dict[str, Any]] = {
         "script": "last_purchase_prices.py",
         "requires_upload": False,
     },
+    "refresh_reform_pricing": {
+        "title": "Atnaujinti Reform kainodarą",
+        "description": (
+            "Vienu paleidimu atnaujina faktines ir Furnibox (Tamaros) pirkimo "
+            "kainas, Cabinet Parts kainas, "
+            "perskaičiuoja visą Reform BOM kainodarą ir pateikia galutinius "
+            "failus tik tada, kai nėra BLOCKED pozicijų. Odoo nekeičia."
+        ),
+        "script": "refresh_reform_pricing.py",
+        "requires_upload": True,
+        "collect_changed_outputs": False,
+        "blocked_return_codes": [2],
+        "args": [
+            "--bom-input",
+            "{upload}",
+            "--rules",
+            str(SO_PRICING_CONFIG_PATH),
+            "--output-dir",
+            "{output_dir}",
+        ],
+    },
     "so_line_prices": {
         "title": "Generuoti Reform SO kainas",
         "description": (
@@ -787,9 +808,10 @@ def run_job(
                 process.wait()
             )
 
-        files = collect_outputs(
-            before,
-            output_dir,
+        files = (
+            collect_outputs(before, output_dir)
+            if action.get("collect_changed_outputs", True)
+            else []
         )
 
         known_paths = {
@@ -812,11 +834,16 @@ def run_job(
                     }
                 )
 
+        blocked_return_codes = set(action.get("blocked_return_codes", []))
         job.update(
             status=(
                 "PASS"
                 if return_code == 0
-                else "FAIL"
+                else (
+                    "BLOCKED"
+                    if return_code in blocked_return_codes
+                    else "FAIL"
+                )
             ),
             return_code=return_code,
             finished_at=utc_now(),

@@ -292,55 +292,190 @@ def load_fpack_lines(
 
 def load_odoo_cabinet_parts(
     client: OdooClient,
-) -> tuple[dict[str, OdooProductPrice], dict[str, list[int]], list[tuple[str, str]]]:
-    """Read all active and archived products in a CABINET PART category."""
+) -> tuple[
+    dict[str, OdooProductPrice],
+    dict[str, list[int]],
+    list[tuple[str, str]],
+]:
+    """
+    Read Furnix dimensional parts that must use Cabinet Parts pricing.
+
+    Included Odoo product categories:
+    - CABINET PART
+    - SHELF PART
+
+    Products are later filtered by parse_dimensions(), so only
+    dimensional SKU that can actually be calculated enter pricing.
+    """
     categories = client.search_read_all(
-        "product.category", [], ["id", "name", "complete_name"]
+        "product.category",
+        [],
+        [
+            "id",
+            "name",
+            "complete_name",
+        ],
     )
-    category_ids = sorted({
-        int(row["id"])
-        for row in categories
-        if "CABINET PART" in {
-            canon(part)
-            for part in str(
-                row.get("complete_name") or row.get("name") or ""
-            ).split("/")
+
+    pricing_category_names = {
+        "CABINET PART",
+        "SHELF PART",
+    }
+
+    category_ids = sorted(
+        {
+            int(row["id"])
+            for row in categories
+            if any(
+                category_name
+                in {
+                    canon(part)
+                    for part
+                    in str(
+                        row.get("complete_name")
+                        or row.get("name")
+                        or ""
+                    ).split("/")
+                }
+                for category_name
+                in pricing_category_names
+            )
         }
-    })
+    )
+
     if not category_ids:
-        raise ValueError("Odoo nerasta produktų kategorija pavadinimu 'CABINET PART'.")
+        raise ValueError(
+            "Odoo nerastos Furnix detalių kategorijos: "
+            "CABINET PART arba SHELF PART."
+        )
 
     rows = client.search_read_all(
         "product.product",
-        [["categ_id", "in", category_ids]],
-        ["id", "default_code", "standard_price", "active"],
-        context={"active_test": False},
+        [
+            [
+                "categ_id",
+                "in",
+                category_ids,
+            ]
+        ],
+        [
+            "id",
+            "default_code",
+            "standard_price",
+            "active",
+        ],
+        context={
+            "active_test": False,
+        },
     )
 
-    grouped: dict[str, list[dict]] = defaultdict(list)
-    diagnostics: list[tuple[str, str]] = []
+    grouped: dict[
+        str,
+        list[dict],
+    ] = defaultdict(list)
+
+    diagnostics: list[
+        tuple[str, str]
+    ] = []
+
     for row in rows:
-        key = canon(row.get("default_code"))
-        if not key:
-            diagnostics.append((f"Odoo ID {row['id']}", "trūksta Internal Reference"))
-            continue
-        grouped[key].append(row)
+        sku = str(
+            row.get(
+                "default_code"
+            )
+            or ""
+        ).strip()
 
-    prices: dict[str, OdooProductPrice] = {}
-    duplicates: dict[str, list[int]] = {}
-    for key, matches in grouped.items():
-        if len(matches) != 1:
-            duplicates[key] = sorted(int(row["id"]) for row in matches)
-            continue
-        row = matches[0]
-        prices[key] = OdooProductPrice(
-            product_id=int(row["id"]),
-            sku=str(row.get("default_code") or "").strip(),
-            standard_price=float(row.get("standard_price") or 0.0),
-            active=bool(row.get("active")),
+        sku_key = canon(
+            sku
         )
-    return prices, duplicates, diagnostics
 
+        if not sku_key:
+            diagnostics.append(
+                (
+                    f"Odoo ID {row['id']}",
+                    "trūksta Internal Reference",
+                )
+            )
+            continue
+
+        # Cabinet Parts formula requires dimensions in SKU.
+        # Non-dimensional products in these categories are not
+        # silently treated as calculable Cabinet Parts.
+        if parse_dimensions(
+            sku
+        ) is None:
+            diagnostics.append(
+                (
+                    sku,
+                    (
+                        "Furnix detalių kategorija, "
+                        "bet SKU nerasti matmenys; "
+                        "Cabinet Parts formulė netaikoma."
+                    ),
+                )
+            )
+            continue
+
+        grouped[
+            sku_key
+        ].append(
+            row
+        )
+
+    prices: dict[
+        str,
+        OdooProductPrice,
+    ] = {}
+
+    duplicates: dict[
+        str,
+        list[int],
+    ] = {}
+
+    for sku_key, matches in grouped.items():
+        if len(matches) != 1:
+            duplicates[
+                sku_key
+            ] = sorted(
+                int(row["id"])
+                for row
+                in matches
+            )
+            continue
+
+        row = matches[0]
+
+        prices[
+            sku_key
+        ] = OdooProductPrice(
+            product_id=int(
+                row["id"]
+            ),
+            sku=str(
+                row.get(
+                    "default_code"
+                )
+                or ""
+            ).strip(),
+            standard_price=float(
+                row.get(
+                    "standard_price"
+                )
+                or 0.0
+            ),
+            active=bool(
+                row.get(
+                    "active"
+                )
+            ),
+        )
+
+    return (
+        prices,
+        duplicates,
+        diagnostics,
+    )
 
 def load_odoo_fpack_lines(
     client: OdooClient,
