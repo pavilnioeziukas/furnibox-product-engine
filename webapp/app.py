@@ -167,6 +167,21 @@ if (
 
 
 ACTIONS: dict[str, dict[str, Any]] = {
+    "odoo_supply_chain_audit": {
+        "title": "Audituoti Odoo tiekimo grandines",
+        "description": (
+            "Tik skaitymo būdu atskiria galiojančius WH/INT pagal WH/INPC "
+            "būseną, randa aktyvius MO su Invoiced SO ir patikrina "
+            "WH/Input-Custom likučius. Odoo duomenų nekeičia."
+        ),
+        "script": "run_odoo_supply_chain_audit.py",
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": [
+            "--output-dir",
+            "{output_dir}",
+        ],
+    },
     "stock_by_location": {
         "title": "Generuoti SKU likučius pagal lokaciją",
         "description": (
