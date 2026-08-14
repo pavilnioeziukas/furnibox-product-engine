@@ -203,14 +203,16 @@ async function renderSupplyReport() {
       `sutapo: ${quantity(moInt.matched_count)} · trūksta INT: ` +
       `${quantity(moInt.missing_int_count)} · papildomi INT: ` +
       `${quantity(moInt.missing_mo_count)} · dublikatų MO/INT: ` +
-      `${quantity(moInt.duplicate_mo_count)}/${quantity(moInt.duplicate_int_count)}`;
+      `${quantity(moInt.duplicate_mo_count)}/${quantity(moInt.duplicate_int_count)} · ` +
+      `KIT be MO: ${quantity(moInt.kit_int_count)} · ` +
+      `be grupės: ${quantity(moInt.missing_group_count)}`;
 
     const moIntRows = moInt.rows || [];
     const moIntBody = document.querySelector('#mo-int-body');
     for (const row of moIntRows) {
       const tr = document.createElement('tr');
       for (const value of [
-        row.group_name,
+        row.group_name || (row.status === 'KIT_NO_MO' ? 'KIT (be MO)' : ''),
         row.status,
         (row.mo_numbers || []).join(', '),
         (row.int_numbers || []).join(', '),

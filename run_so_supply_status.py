@@ -126,6 +126,8 @@ def main() -> None:
             "missing_mo_count": mo_sorting.missing_mo_count,
             "duplicate_mo_count": duplicate_mo,
             "duplicate_int_count": duplicate_int,
+            "kit_int_count": mo_sorting.kit_int_count,
+            "missing_group_count": mo_sorting.missing_group_count,
             "rows": [
                 {
                     "group_name": row.group_name,

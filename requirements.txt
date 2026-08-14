@@ -2,4 +2,4 @@ openpyxl>=3.1.5
 python-dotenv>=1.0.0
 Flask>=3.1.0,<4
 gunicorn>=23.0.0,<24
-furnibox-odoo-tools @ https://github.com/pavilnioeziukas/furnibox-odoo-tools/archive/4c09c872fa41aeee6f58ff9d5c6479ccc1614a3c.zip
+furnibox-odoo-tools @ https://github.com/pavilnioeziukas/furnibox-odoo-tools/archive/ae2849094bcf2ce87fc901cb96e59079325fc84a.zip
