@@ -13,6 +13,7 @@ from core.bom_selector import BomSelector
 from core.config import OdooConfig
 from core.dataset_execution_engine import DatasetExecutionEngine
 from core.odoo_client import OdooClient
+from core.mo_sorting_audit import duplicate_sides
 from validators.furnix_po_validator import FurnixPoValidator
 
 
@@ -84,6 +85,8 @@ def main() -> None:
     result = FurnixPoValidator(client, execution_engine).validate(so_number)
 
     rows = [row_payload(row) for row in result.rows]
+    mo_sorting = result.mo_sorting_audit
+    duplicate_mo, duplicate_int = duplicate_sides(mo_sorting.rows)
     supply_readiness = (
         "PARUOŠTA GAMYBAI"
         if result.status == "PASS"
@@ -108,6 +111,25 @@ def main() -> None:
         "batch_reference": result.batch_reference,
         "fallback_count": result.fallback_count,
         "fallbacks": result.fallbacks,
+        "mo_sorting_audit": {
+            "status": mo_sorting.status,
+            "mo_count": mo_sorting.mo_count,
+            "int_count": mo_sorting.int_count,
+            "matched_count": mo_sorting.matched_count,
+            "missing_int_count": mo_sorting.missing_int_count,
+            "missing_mo_count": mo_sorting.missing_mo_count,
+            "duplicate_mo_count": duplicate_mo,
+            "duplicate_int_count": duplicate_int,
+            "rows": [
+                {
+                    "group_name": row.group_name,
+                    "status": row.status,
+                    "mo_numbers": list(row.mo_names),
+                    "int_numbers": list(row.int_names),
+                }
+                for row in mo_sorting.rows
+            ],
+        },
         "summary": {
             "total_rows": len(result.rows),
             "bom_po_mismatches": sum(row.status != "PASS" for row in result.rows),

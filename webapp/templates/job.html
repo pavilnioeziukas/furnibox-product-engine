@@ -24,6 +24,18 @@
     <div><strong id="supply-mo-missing">–</strong><span>MO trūksta rezervuoti</span></div>
     <div><strong id="supply-sorting">–</strong><span>Laukia rūšiavimo</span></div>
     <div><strong id="supply-receipt">–</strong><span>Laukia priėmimo</span></div>
+    <div><strong id="mo-int-status">–</strong><span>MO ↔ Sorting INT</span></div>
+  </div>
+
+  <div id="mo-int-details" hidden>
+    <h3>MO ↔ Sorting INT pagal Sale Group Name</h3>
+    <p id="mo-int-summary" class="muted"></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Grupė</th><th>Būsena</th><th>MO</th><th>Sorting INT</th></tr></thead>
+        <tbody id="mo-int-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <div id="supply-problems" hidden>
@@ -155,6 +167,7 @@ async function renderSupplyReport() {
     const report = await response.json();
     const summary = report.summary || {};
     const rows = report.rows || [];
+    const moInt = report.mo_sorting_audit || {};
     const problems = rows.filter((row) =>
       row.supply_status &&
       row.supply_status !== 'AVAILABLE / RESERVED'
@@ -180,6 +193,32 @@ async function renderSupplyReport() {
 
     document.querySelector('#supply-receipt').textContent =
       quantity(summary.waiting_for_receipt);
+
+    document.querySelector('#mo-int-status').textContent = text(moInt.status);
+    document.querySelector('#mo-int-summary').textContent =
+      `MO: ${quantity(moInt.mo_count)} · INT: ${quantity(moInt.int_count)} · ` +
+      `sutapo: ${quantity(moInt.matched_count)} · trūksta INT: ` +
+      `${quantity(moInt.missing_int_count)} · papildomi INT: ` +
+      `${quantity(moInt.missing_mo_count)} · dublikatų MO/INT: ` +
+      `${quantity(moInt.duplicate_mo_count)}/${quantity(moInt.duplicate_int_count)}`;
+
+    const moIntRows = moInt.rows || [];
+    const moIntBody = document.querySelector('#mo-int-body');
+    for (const row of moIntRows) {
+      const tr = document.createElement('tr');
+      for (const value of [
+        row.group_name,
+        row.status,
+        (row.mo_numbers || []).join(', '),
+        (row.int_numbers || []).join(', '),
+      ]) {
+        const td = document.createElement('td');
+        td.textContent = text(value);
+        tr.appendChild(td);
+      }
+      moIntBody.appendChild(tr);
+    }
+    document.querySelector('#mo-int-details').hidden = !moIntRows.length;
 
     if (!problems.length) return;
 
