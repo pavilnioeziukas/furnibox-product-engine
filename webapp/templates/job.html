@@ -50,6 +50,8 @@
             <th>Priimta</th>
             <th>Surūšiuota</th>
             <th>Cross-SO</th>
+            <th>MO ↔ PO</th>
+            <th>Catalog ↔ PO</th>
             <th>Būsena</th>
             <th>Pastaba</th>
           </tr>
@@ -179,7 +181,8 @@ async function renderSupplyReport() {
 
     document.querySelector('#supply-summary').textContent =
       `SO ${text(report.so_number)} · PO ${text(report.po_number)} · ` +
-      `BOM–PO duomenys: ${text(report.data_quality_status)}`;
+      `MO–PO: ${text(report.mo_po_status)} · ` +
+      `Catalog–PO: ${text(report.catalog_po_status)}`;
 
     document.querySelector('#supply-reserved').textContent =
       `${quantity(report.mo_reserved_qty)} / ${quantity(report.mo_demand_qty)}`;
@@ -237,6 +240,8 @@ async function renderSupplyReport() {
         quantity(row.received_qty),
         quantity(row.sorted_qty),
         crossSo,
+        row.mo_po_status,
+        row.status,
         row.supply_status,
         row.supply_note,
       ];

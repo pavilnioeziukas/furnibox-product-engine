@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import io
+from pathlib import Path
 
 
 def load_webapp(monkeypatch, tmp_path):
@@ -23,6 +24,14 @@ def test_health_and_index(monkeypatch, tmp_path):
     assert client.get("/health").get_json() == {"status": "ok"}
     assert client.get("/").status_code == 200
     assert "Atnaujinti Reform kainodarą" in client.get("/").get_data(as_text=True)
+
+
+def test_supply_result_separates_mo_and_catalog_statuses():
+    template = (Path(__file__).parent / "webapp" / "templates" / "job.html").read_text(
+        encoding="utf-8"
+    )
+    assert "MO–PO:" in template
+    assert "Catalog–PO:" in template
 
 
 def test_upload_accepts_xlsx_and_rejects_other_files(monkeypatch, tmp_path):

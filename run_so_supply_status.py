@@ -42,6 +42,10 @@ def row_payload(row: Any) -> dict[str, Any]:
         "sorting_pending_qty": row.sorting_pending_qty,
         "mo_demand_qty": row.mo_demand_qty,
         "mo_reserved_qty": row.mo_reserved_qty,
+        "mo_group_demand": row.mo_group_demand,
+        "po_group_qty": row.po_group_qty,
+        "mo_po_status": row.mo_po_status,
+        "mo_po_note": row.mo_po_error,
         "cross_so_reserved_qty": row.cross_so_reserved_qty,
         "cross_so_reservations": row.cross_so_reservations,
         "supply_status": row.supply_status,
@@ -89,7 +93,7 @@ def main() -> None:
     duplicate_mo, duplicate_int = duplicate_sides(mo_sorting.rows)
     supply_readiness = (
         "PARUOŠTA GAMYBAI"
-        if result.status == "PASS"
+        if result.mo_po_status == "PASS"
         and bool(result.rows)
         and all(row.supply_status == "AVAILABLE / RESERVED" for row in result.rows)
         else "DAR NEPARUOŠTA GAMYBAI"
@@ -101,7 +105,9 @@ def main() -> None:
         "po_state": result.po_state,
         "vendor_name": result.vendor_name,
         "furnix_po_count": result.furnix_po_count,
-        "data_quality_status": result.status,
+        "data_quality_status": result.mo_po_status,
+        "mo_po_status": result.mo_po_status,
+        "catalog_po_status": result.status,
         "supply_readiness": supply_readiness,
         "mo_reserved_qty": total(result.rows, "mo_reserved_qty"),
         "mo_demand_qty": total(result.rows, "mo_demand_qty"),
@@ -132,7 +138,10 @@ def main() -> None:
         },
         "summary": {
             "total_rows": len(result.rows),
-            "bom_po_mismatches": sum(row.status != "PASS" for row in result.rows),
+            "mo_po_mismatches": result.mo_po_mismatch_count,
+            "catalog_po_mismatches": sum(
+                row.status != "PASS" for row in result.rows
+            ),
             "mo_missing_sku_count": sum(
                 mo_missing_qty(row) > 0.0
                 for row in result.rows
@@ -173,7 +182,8 @@ def main() -> None:
         f"{report['mo_demand_qty']:g}"
     )
     print(f"PO: {result.po_number or '-'} ({result.po_state or '-'})")
-    print(f"Duomenų kokybė: {result.status}")
+    print(f"MO–PO atitikimas: {result.mo_po_status}")
+    print(f"Catalog–PO diagnostika: {result.status}")
     if result.error:
         print(f"Pastaba: {result.error}")
     for key, value in report["summary"].items():
