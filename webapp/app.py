@@ -167,6 +167,18 @@ if (
 
 
 ACTIONS: dict[str, dict[str, Any]] = {
+    "mo_component_consumption_audit": {
+        "title": "Audituoti užbaigtų MO komponentų sunaudojimą",
+        "description": (
+            "Tik skaitymo būdu randa užbaigtus MO, kuriuose faktiškai "
+            "sunaudota mažiau komponentų negu buvo suplanuota pagal MO BOM. "
+            "Parodo planuotą, sunaudotą ir trūkstamą kiekį."
+        ),
+        "script": "run_mo_component_consumption_audit.py",
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": ["--output-dir", "{output_dir}", "--days", "550"],
+    },
     "odoo_supply_chain_audit": {
         "title": "Audituoti Odoo tiekimo grandines",
         "description": (
