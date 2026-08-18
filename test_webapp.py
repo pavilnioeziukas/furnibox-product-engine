@@ -6,6 +6,22 @@ from pathlib import Path
 
 
 def load_webapp(monkeypatch, tmp_path):
+    for name in (
+        "PRODUCT_ENGINE_APP_NAME",
+        "PRODUCT_ENGINE_BRAND",
+        "PRODUCT_ENGINE_BRAND_MARK",
+        "PRODUCT_ENGINE_HERO_EYEBROW",
+        "PRODUCT_ENGINE_HERO_TITLE",
+        "PRODUCT_ENGINE_HERO_DESCRIPTION",
+        "PRODUCT_ENGINE_STATE_DIR",
+        "PRODUCT_ENGINE_WEB_SECRET",
+        "PRODUCT_ENGINE_WEB_PASSWORD",
+        "PRODUCT_ENGINE_ENABLED_ACTIONS",
+        "PRODUCT_ENGINE_ACTION_MODULES",
+        "PRODUCT_ENGINE_SHOW_BOM_WORKSPACE",
+        "PRODUCT_ENGINE_SHOW_PRICING_NAV",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("FURNIBOX_WEB_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("FURNIBOX_WEB_SECRET", "test-secret")
     monkeypatch.delenv("FURNIBOX_WEB_PASSWORD", raising=False)
@@ -24,6 +40,26 @@ def test_health_and_index(monkeypatch, tmp_path):
     assert client.get("/health").get_json() == {"status": "ok"}
     assert client.get("/").status_code == 200
     assert "Atnaujinti Reform kainodarą" in client.get("/").get_data(as_text=True)
+
+
+def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    monkeypatch.setenv("PRODUCT_ENGINE_BRAND", "Furnix")
+    monkeypatch.setenv("PRODUCT_ENGINE_APP_NAME", "Furnix Product Engine")
+    monkeypatch.setenv("PRODUCT_ENGINE_HERO_TITLE", "Furnix Odoo ataskaitos")
+    monkeypatch.setenv("PRODUCT_ENGINE_ENABLED_ACTIONS", "stock_by_location")
+    monkeypatch.setenv("PRODUCT_ENGINE_SHOW_BOM_WORKSPACE", "false")
+    monkeypatch.setenv("PRODUCT_ENGINE_SHOW_PRICING_NAV", "false")
+    webapp = importlib.reload(webapp)
+
+    page = webapp.app.test_client().get("/").get_data(as_text=True)
+
+    assert "Furnix <strong>Product Engine</strong>" in page
+    assert "Furnix Odoo ataskaitos" in page
+    assert "Generuoti SKU likučius pagal lokaciją" in page
+    assert "Atnaujinti Reform kainodarą" not in page
+    assert "Reform BOM įvestis" not in page
+    assert "Pirkimo kainodara" not in page
 
 
 def test_supply_result_separates_mo_and_catalog_statuses():

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}SO kainodaros taisyklės · Furnibox Product Engine{% endblock %}
+{% block title %}SO kainodaros taisyklės · {{ product_engine.app_name }}{% endblock %}
 {% block content %}
 <style>.table-wrap input,.table-wrap select{box-sizing:border-box;width:130px;border:1px solid #bdc8c0;border-radius:7px;padding:8px;color:var(--ink);background:#fff}.table-wrap td:nth-child(2) input,.table-wrap td:nth-child(3) input,.assignment-table select{width:210px}.assignment-table{max-height:460px;overflow:auto}.assignment-table table{min-width:620px}</style>
 <section class="page-head"><div><p class="eyebrow">Aplikacijos konfigūracija</p><h1>SO kainodaros taisyklės</h1></div><span class="state {{ 'ready' if configured else 'waiting' }}">{{ 'Sukonfigūruota' if configured else 'Reikia migracijos' }}</span></section>

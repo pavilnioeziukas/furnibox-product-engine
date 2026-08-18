@@ -2,14 +2,14 @@
 {% block content %}
 <section class="hero">
   <div>
-    <p class="eyebrow">Production · tik skaitymas ir failų generavimas</p>
-    <h1>Produktų ir BOM paruošimas vienoje vietoje</h1>
-    <p>Įkelkite aktualų Reform BOM, paleiskite patikras ir atsisiųskite paruoštus Odoo importo failus.</p>
+    <p class="eyebrow">{{ product_engine.hero_eyebrow }}</p>
+    <h1>{{ product_engine.hero_title }}</h1>
+    <p>{{ product_engine.hero_description }}</p>
   </div>
   <div class="safety"><span>0</span><div><strong>Odoo pakeitimų</strong><small>Pilotas pats nieko neimportuoja</small></div></div>
 </section>
 
-<section class="grid status-grid">
+{% if show_bom_workspace %}<section class="grid status-grid">
   <article class="panel">
     <div class="panel-head"><div><p class="eyebrow">1 žingsnis</p><h2>Reform BOM įvestis</h2></div><span class="state {{ 'ready' if upload else 'waiting' }}">{{ 'Paruošta' if upload else 'Laukiama' }}</span></div>
     {% if upload %}<p class="file-name">{{ upload.name }}</p>{% else %}<p class="muted">Dar neįkeltas joks .xlsx failas.</p>{% endif %}
@@ -27,7 +27,7 @@
       <button class="secondary" type="submit">Įkelti Production Dataset</button>
     </form>
   </article>
-</section>
+</section>{% endif %}
 
 <section class="section-head"><div><p class="eyebrow">2 žingsnis</p><h2>Veiksmai</h2></div><p>Vienu metu vykdykite vieną sunkų veiksmą.</p></section>
 <section class="action-grid">

@@ -3,20 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{% block title %}Furnibox Product Engine{% endblock %}</title>
+  <title>{% block title %}{{ product_engine.app_name }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='pricing.css') }}">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}">
-      <span class="brand-mark">F</span>
-      <span>Furnibox <strong>Product Engine</strong></span>
+      <span class="brand-mark">{{ product_engine.brand_mark }}</span>
+      <span>{{ product_engine.brand_name }} <strong>Product Engine</strong></span>
     </a>
     <nav class="topnav">
       <a href="{{ url_for('index') }}">Veiksmai</a>
-      <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
-      <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
+      {% if product_engine.show_pricing_nav %}
+        <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
+        <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
+      {% endif %}
     </nav>
     {% if session.get('authenticated') %}
       <form method="post" action="{{ url_for('logout') }}"><button class="link-button">Atsijungti</button></form>

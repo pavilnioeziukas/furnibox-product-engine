@@ -47,14 +47,11 @@ from purchase_price_adjustments_import import (
     load_purchase_price_excel_adjustments,
     summarize_preview,
 )
+from webapp.product_engine import ProductEngineSettings, load_actions
 
 
-STATE_DIR = Path(
-    os.getenv(
-        "FURNIBOX_WEB_STATE_DIR",
-        BASE_DIR / "web_state",
-    )
-).resolve()
+SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
+STATE_DIR = SETTINGS.state_dir
 
 UPLOAD_DIR = STATE_DIR / "uploads"
 RUN_DIR = STATE_DIR / "runs"
@@ -103,24 +100,12 @@ DEFAULT_SO_PRICING_CONFIG_PATH = (
     / "so_pricing_rules.json"
 )
 
-MAX_UPLOAD_BYTES = (
-    int(
-        os.getenv(
-            "FURNIBOX_MAX_UPLOAD_MB",
-            "100",
-        )
-    )
-    * 1024
-    * 1024
-)
+MAX_UPLOAD_BYTES = SETTINGS.max_upload_mb * 1024 * 1024
 
 
 app = Flask(__name__)
 
-app.secret_key = os.getenv(
-    "FURNIBOX_WEB_SECRET",
-    secrets.token_hex(32),
-)
+app.secret_key = SETTINGS.web_secret or secrets.token_hex(32)
 
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
@@ -166,7 +151,7 @@ if (
     )
 
 
-ACTIONS: dict[str, dict[str, Any]] = {
+BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
     "mo_component_consumption_audit": {
         "title": "Audituoti užbaigtų MO komponentų sunaudojimą",
         "description": (
@@ -361,6 +346,12 @@ ACTIONS: dict[str, dict[str, Any]] = {
     },
 }
 
+ACTIONS = load_actions(
+    BUILTIN_ACTIONS,
+    enabled_actions=SETTINGS.enabled_actions,
+    action_modules=SETTINGS.action_modules,
+)
+
 
 _jobs_lock = threading.Lock()
 
@@ -379,12 +370,12 @@ def utc_now() -> str:
 
 
 def auth_enabled() -> bool:
-    return bool(
-        os.getenv(
-            "FURNIBOX_WEB_PASSWORD",
-            "",
-        ).strip()
-    )
+    return bool(SETTINGS.web_password)
+
+
+@app.context_processor
+def product_engine_context() -> dict[str, Any]:
+    return {"product_engine": SETTINGS}
 
 
 @app.before_request
@@ -419,10 +410,7 @@ def login():
     error = None
 
     if request.method == "POST":
-        expected = os.getenv(
-            "FURNIBOX_WEB_PASSWORD",
-            "",
-        )
+        expected = SETTINGS.web_password
 
         if secrets.compare_digest(
             request.form.get(
@@ -537,20 +525,10 @@ def latest_upload() -> Path | None:
 
 
 def latest_dataset() -> Path | None:
-    shared_roots = {
-        Path(
-            os.getenv(
-                "FURNIBOX_SHARED_DATA",
-                STATE_DIR / "shared_data",
-            )
-        ),
-        Path(
-            os.getenv(
-                "FURNIBOX_SHARED_DATA_DIR",
-                STATE_DIR / "shared_data",
-            )
-        ),
-    }
+    shared_roots = {SETTINGS.shared_data_dir}
+    legacy_shared_data = os.getenv("FURNIBOX_SHARED_DATA", "").strip()
+    if legacy_shared_data:
+        shared_roots.add(Path(legacy_shared_data))
 
     candidates: list[Path] = []
 
@@ -589,24 +567,7 @@ def snapshot_outputs() -> dict[str, int]:
         BASE_DIR / "validated_datasets",
     ]
 
-    roots.extend(
-        [
-            Path(
-                os.getenv(
-                    "FURNIBOX_SHARED_DATA",
-                    STATE_DIR
-                    / "shared_data",
-                )
-            ),
-            Path(
-                os.getenv(
-                    "FURNIBOX_SHARED_DATA_DIR",
-                    STATE_DIR
-                    / "shared_data",
-                )
-            ),
-        ]
-    )
+    roots.append(SETTINGS.shared_data_dir)
 
     for root in roots:
         if not root.exists():
@@ -774,9 +735,8 @@ def run_job(
 
     env = os.environ.copy()
 
-    env[
-        "FURNIBOX_ENVIRONMENT"
-    ] = "PRODUCTION"
+    env["PRODUCT_ENGINE_ENVIRONMENT"] = SETTINGS.environment
+    env["FURNIBOX_ENVIRONMENT"] = SETTINGS.environment
 
     env[
         "PYTHONUTF8"
@@ -787,15 +747,9 @@ def run_job(
         / "shared_data"
     )
 
-    env.setdefault(
-        "FURNIBOX_SHARED_DATA",
-        shared_data,
-    )
-
-    env.setdefault(
-        "FURNIBOX_SHARED_DATA_DIR",
-        shared_data,
-    )
+    env.setdefault("PRODUCT_ENGINE_SHARED_DATA_DIR", shared_data)
+    env.setdefault("FURNIBOX_SHARED_DATA", shared_data)
+    env.setdefault("FURNIBOX_SHARED_DATA_DIR", shared_data)
 
     log_path = (
         job_dir
@@ -910,6 +864,7 @@ def index():
         upload=latest_upload(),
         dataset=latest_dataset(),
         auth_enabled=auth_enabled(),
+        show_bom_workspace=SETTINGS.show_bom_workspace,
     )
 
 
