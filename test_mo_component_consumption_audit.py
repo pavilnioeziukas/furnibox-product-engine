@@ -1,4 +1,8 @@
-from mo_component_consumption_audit import detect_gaps
+from dataclasses import asdict
+
+from openpyxl import load_workbook
+
+from mo_component_consumption_audit import ConsumptionGap, _write_xlsx, detect_gaps
 
 
 PRODUCTS = {
@@ -34,3 +38,29 @@ def test_ignores_fully_consumed_and_zero_plan_moves():
         {"id": 101, "product_id": [21, "Component B"], "product_uom_qty": 0, "quantity": 0, "state": "cancel"},
     ]
     assert detect_gaps([production()], moves, PRODUCTS) == []
+
+
+def test_writes_formatted_excel_result(tmp_path):
+    row = ConsumptionGap(
+        mo_id=34218, mo="WH/MO/34218", finished_product_sku="UNI-P-ACC02-MIS005",
+        finished_product="ACCESSORIES - Interior", produced_qty=5, bom="BOM",
+        completion_date="2025-07-18 08:20:17", company="FurniBox LT, UAB",
+        component_sku="2601189846", component="ARENA BASKET", planned_qty=10,
+        consumed_qty=0, missing_qty=10, uom="Units", move_state="cancel",
+    )
+    summary = {
+        "generated_at": "2026-08-18T12:00:00+00:00", "days_checked": 550,
+        "completion_date_from": "2025-02-14 12:00:00", "completed_mos_checked": 1,
+        "raw_component_moves_checked": 2, "mos_with_short_consumption": 1,
+        "component_gaps": 1,
+    }
+    path = tmp_path / "audit.xlsx"
+    _write_xlsx(path, [asdict(row)], summary)
+    workbook = load_workbook(path, data_only=False)
+    assert workbook.sheetnames == ["Santrauka", "Neatitikimai"]
+    sheet = workbook["Neatitikimai"]
+    assert sheet.freeze_panes == "A2"
+    assert sheet["A2"].value == "WH/MO/34218"
+    assert sheet["H2"].value == "2601189846"
+    assert sheet["L2"].value == 10
+    assert list(sheet.tables) == ["MOComponentConsumptionGaps"]

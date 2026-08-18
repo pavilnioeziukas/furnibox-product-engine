@@ -1,12 +1,16 @@
 """Read-only audit of completed MOs with under-consumed components."""
 from __future__ import annotations
 
-import csv
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
 EPSILON = 1e-6
@@ -139,14 +143,84 @@ def collect_data(client, days: int = 550) -> tuple[list[dict[str, Any]], list[di
     return productions, moves, {int(row["id"]): row for row in products}, cutoff
 
 
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        path.write_text("", encoding="utf-8-sig")
-        return
-    with path.open("w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+def _write_xlsx(path: Path, rows: list[dict[str, Any]], summary: dict[str, Any]) -> None:
+    workbook = Workbook()
+    summary_sheet = workbook.active
+    summary_sheet.title = "Santrauka"
+    summary_sheet.sheet_view.showGridLines = False
+    summary_sheet.append(["Užbaigtų MO komponentų sunaudojimo auditas", ""])
+    summary_sheet.merge_cells("A1:B1")
+    summary_sheet["A1"].font = Font(size=16, bold=True, color="14532D")
+    summary_sheet["A1"].fill = PatternFill("solid", fgColor="DCFCE7")
+    summary_sheet["A1"].alignment = Alignment(vertical="center")
+    summary_sheet.row_dimensions[1].height = 28
+    summary_rows = [
+        ("Sugeneruota (UTC)", summary["generated_at"]),
+        ("Tikrintas laikotarpis, dienomis", summary["days_checked"]),
+        ("Tikrinta nuo (UTC)", summary["completion_date_from"]),
+        ("Patikrinta užbaigtų MO", summary["completed_mos_checked"]),
+        ("Patikrinta komponentų judėjimų", summary["raw_component_moves_checked"]),
+        ("MO su per mažu sunaudojimu", summary["mos_with_short_consumption"]),
+        ("Komponentų neatitikimų", summary["component_gaps"]),
+    ]
+    for item in summary_rows:
+        summary_sheet.append(item)
+    for cell in summary_sheet["A"]:
+        cell.font = Font(bold=cell.row > 1)
+    summary_sheet.column_dimensions["A"].width = 38
+    summary_sheet.column_dimensions["B"].width = 34
+
+    sheet = workbook.create_sheet("Neatitikimai")
+    sheet.sheet_view.showGridLines = False
+    headers = [
+        "MO", "Gatavo produkto kodas", "Gatavas produktas", "Pagaminta",
+        "BOM", "Užbaigimo data", "Įmonė", "Komponento kodas", "Komponentas",
+        "Planuota", "Sunaudota", "Trūksta", "Matavimo vnt.", "Judėjimo būsena",
+    ]
+    keys = [
+        "mo", "finished_product_sku", "finished_product", "produced_qty",
+        "bom", "completion_date", "company", "component_sku", "component",
+        "planned_qty", "consumed_qty", "missing_qty", "uom", "move_state",
+    ]
+    sheet.append(headers)
+    for row in rows:
+        values = [row.get(key, "") for key in keys]
+        if values[5]:
+            try:
+                values[5] = datetime.fromisoformat(str(values[5]))
+            except ValueError:
+                pass
+        sheet.append(values)
+
+    header_fill = PatternFill("solid", fgColor="14532D")
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    sheet.row_dimensions[1].height = 32
+    sheet.freeze_panes = "A2"
+    widths = [16, 22, 42, 12, 42, 20, 22, 20, 42, 12, 12, 12, 16, 18]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    for column in (4, 10, 11, 12):
+        for cell in sheet.iter_cols(min_col=column, max_col=column, min_row=2, max_row=sheet.max_row):
+            cell[0].number_format = "#,##0.00"
+    for cell in sheet.iter_cols(min_col=6, max_col=6, min_row=2, max_row=sheet.max_row):
+        cell[0].number_format = "yyyy-mm-dd hh:mm"
+    for cell in sheet.iter_cols(min_col=12, max_col=12, min_row=2, max_row=sheet.max_row):
+        cell[0].fill = PatternFill("solid", fgColor="FEE2E2")
+        cell[0].font = Font(color="991B1B", bold=True)
+    if rows:
+        table = Table(displayName="MOComponentConsumptionGaps", ref=f"A1:N{sheet.max_row}")
+        table.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium4", showFirstColumn=False, showLastColumn=False,
+            showRowStripes=True, showColumnStripes=False,
+        )
+        sheet.add_table(table)
+    else:
+        sheet.append(["Neatitikimų nerasta"] + [""] * (len(headers) - 1))
+        sheet.auto_filter.ref = f"A1:N{sheet.max_row}"
+    workbook.save(path)
 
 
 def run_mo_component_consumption_audit(client, output_dir: Path, days: int = 550) -> dict[str, Any]:
@@ -169,7 +243,7 @@ def run_mo_component_consumption_audit(client, output_dir: Path, days: int = 550
     (output_dir / "mo_component_consumption_audit.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
     )
-    _write_csv(output_dir / "mo_component_consumption_gaps.csv", rows)
+    _write_xlsx(output_dir / "mo_component_consumption_gaps.xlsx", rows, summary)
     lines = [
         "# Užbaigtų MO komponentų sunaudojimo auditas", "",
         "**Tik skaitymas:** ataskaita Odoo duomenų nekeičia.", "",
