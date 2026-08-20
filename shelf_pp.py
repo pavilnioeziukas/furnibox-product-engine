@@ -272,6 +272,25 @@ def choose_shelf_pp_operation_template(
         packing = [op for op in operations if "PAKAV" in canon(op.get("name"))]
         if len(operations) == 1 and len(packing) == 1:
             valid.append(template)
+
+    # Esamas Production SKU yra stipresnis etalonas už tos pačios geometrijos
+    # kitų spalvų analogus. Spalvų parametrų vienodumo reikalaujame tik tada,
+    # kai tikslinio PP Production dar nėra ir operaciją tenka paveldėti.
+    exact = [
+        template for template in valid
+        if canon(template.get("sku")) == target
+    ]
+    if exact:
+        exact_signatures = {
+            tuple(sorted((key, str(value)) for key, value in template["operations"][0].items()))
+            for template in exact
+        }
+        if len(exact_signatures) != 1:
+            raise ShelfPpError(
+                f"{target}: tikslūs Production PP operacijų etalonai nesutampa."
+            )
+        return exact[0]
+
     signatures = {
         tuple(sorted((key, str(value)) for key, value in template["operations"][0].items()))
         for template in valid

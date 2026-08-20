@@ -223,6 +223,36 @@ class ShelfPpTests(unittest.TestCase):
         selected = choose_shelf_pp_operation_template(self.pp, templates)
         self.assertEqual(selected["sku"], "EU-SREW-SHELF-563x564-WW-PP")
 
+    def test_exact_operation_wins_over_different_color_parameters(self):
+        target = "US-SREW-SHELF-420x339-BB-PP"
+        templates = {
+            1: {
+                "sku": target,
+                "operations": [{
+                    "name": "Lentynų pakavimas",
+                    "workcenter": "Pakuotojai",
+                    "time_mode": "manual",
+                    "time": 1,
+                    "sequence": 0,
+                }],
+            },
+            2: {
+                "sku": "US-SREW-SHELF-420x339-WW-PP",
+                "operations": [{
+                    "name": "Lentynų pakavimas",
+                    "workcenter": "Pakuotojai",
+                    "time_mode": "manual",
+                    "time": 2,
+                    "sequence": 0,
+                }],
+            },
+        }
+
+        selected = choose_shelf_pp_operation_template(target, templates)
+
+        self.assertEqual(selected["sku"], target)
+        self.assertEqual(selected["operations"][0]["time"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
