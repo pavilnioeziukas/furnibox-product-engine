@@ -45,6 +45,12 @@ from product_import_v7 import (
 )
 from product_detection_v2 import load_reform_universe
 from product_detection_v2 import find_bom_input
+from shelf_pp import (
+    add_generated_shelf_pp_boms,
+    build_shelf_pp_templates,
+    choose_shelf_pp_operation_template,
+    load_odoo_edges,
+)
 
 
 IMPORT_HEADERS = [
@@ -501,7 +507,7 @@ def load_stage_workcenters(client: OdooClient) -> tuple[set[str], set[str]]:
 def prepare_manufacture_boms(
     parents, lines, levels, bom_types, products, subcategories,
     operation_templates, workcenters, duplicate_workcenters, duplicate_skus,
-    generated_from, generated_hrd_from,
+    generated_from, generated_hrd_from, generated_shelf_pp_from,
 ):
     """Atrenka Manufacture BOM ir atskiria paruoštus nuo blokuojamų."""
     manufacture_skus = {
@@ -548,6 +554,11 @@ def prepare_manufacture_boms(
                 if sku in generated_hrd_from:
                     template = choose_hrd_assembled_operation_template(
                         operation_templates
+                    )
+                elif sku in generated_shelf_pp_from:
+                    template = choose_shelf_pp_operation_template(
+                        sku,
+                        operation_templates,
                     )
                 elif sku in generated_from:
                     template = choose_apack_operation_template(
@@ -836,6 +847,7 @@ def main() -> None:
     comparison_path = output_dir / "MAP_Comparison.xlsx"
     types_path = output_dir / "BOM_Type_Review.xlsx"
     references_path = base / "output" / "production" / "BOM_Operations_Reference.xlsx"
+    odoo_map_path = base / "output" / "production" / "Odoo_MAP.xlsx"
     output_path = output_dir / "BOM_Import_Manufacture_All.xlsx"
     lv2_output_path = output_dir / "BOM_Import_Manufacture_lv2.xlsx"
     lv1_output_path = output_dir / "BOM_Import_Manufacture_lv1.xlsx"
@@ -859,6 +871,19 @@ def main() -> None:
     generated_cabinet_from = add_generated_cabinet_assembled_kits(
         parents, lines, levels, bom_types, reform_products, reform_lines
     )
+    shelf_pp_templates = build_shelf_pp_templates(
+        load_odoo_edges(odoo_map_path)
+    )
+    generated_shelf_pp_from = add_generated_shelf_pp_boms(
+        parents,
+        lines,
+        levels,
+        bom_types,
+        reform_products,
+        shelf_pp_templates,
+        kit_type=KIT,
+        manufacture_type=MANUFACTURE,
+    )
     overlap = set(generated_from) & set(generated_hrd_from)
     if overlap:
         raise ValueError(
@@ -866,6 +891,7 @@ def main() -> None:
             + ", ".join(sorted(overlap))
         )
     generated_from.update(generated_hrd_from)
+    generated_from.update(generated_shelf_pp_from)
 
     settings = load_settings()
     client = OdooClient(settings)
@@ -886,7 +912,7 @@ def main() -> None:
     ready, review, diagnostics = prepare_manufacture_boms(
         parents, lines, levels, bom_types, products, subcategories,
         operation_templates, workcenters, duplicate_workcenters, duplicate_skus,
-        generated_from, generated_hrd_from,
+        generated_from, generated_hrd_from, generated_shelf_pp_from,
     )
     kit_ready, kit_review, kit_diagnostics, kit_excluded = prepare_kit_boms(
         parents, lines, levels, bom_types, products, duplicate_skus,

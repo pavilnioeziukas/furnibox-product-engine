@@ -213,7 +213,10 @@ def load_new_products(ws) -> tuple[dict[str, str], dict[str, tuple[int | float, 
         if (
             sku
             and action == "CREATE PRODUCT"
-            and "CABINET PART" in category
+            and any(
+                part_category in category
+                for part_category in ("CABINET PART", "SHELF PART")
+            )
             and parsed
         ):
             key = canon(sku)
@@ -252,8 +255,12 @@ def load_fpack_lines(
             or color in {"WW", "BB", "NO"}
             or component_key in (explicit_cabinet_parts or set())
         )
+        supported_parent = (
+            parent_key.startswith("FPACK-")
+            or component_key in (explicit_cabinet_parts or set())
+        )
         if (
-            not parent_key.startswith("FPACK-")
+            not supported_parent
             or not component_key
             or not parsed
             or not looks_like_cabinet_part

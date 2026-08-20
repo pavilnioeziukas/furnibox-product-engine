@@ -134,17 +134,23 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn("MISSING_OPERATIONS", codes)
         self.assertIn("MISSING_REQUIRED_OPERATION", codes)
 
-    def test_cabinet_shelf_manufacture_without_operations_passes(self):
+    def test_cabinet_shelf_uses_kit_and_shelf_pp_manufacture(self):
         dataset = {
             "products": [
                 product(
                     "EUB-C-CAB03-SLF901",
                     "CABINET SHELF",
-                    "MANUFACTURE",
-                    [component("PART-01")],
-                    operations=[],
+                    "KIT",
+                    [component("PART-01-PP"), component("PINS")],
                 ),
-                product("PART-01", "CABINET PART"),
+                product(
+                    "PART-01-PP",
+                    "SHELF PREPACK",
+                    "MANUFACTURE",
+                    [component("PART-01"), component("PACK"), component("LABEL")],
+                    operations=[{"name": "Pakavimas"}],
+                ),
+                product("PART-01", "SHELF PART"),
             ]
         }
         acceptance = Acceptance(dataset)
@@ -155,6 +161,7 @@ class AcceptanceTests(unittest.TestCase):
             if "OPERATION" in issue.test_code
         }
         self.assertEqual(operation_codes, set())
+        self.assertEqual(acceptance.metrics["shelf_structure_errors"], 0)
 
     def test_full_production_operation_names_are_recognized(self):
         dataset = {

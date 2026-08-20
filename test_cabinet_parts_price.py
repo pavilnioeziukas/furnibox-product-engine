@@ -56,12 +56,14 @@ class CabinetPartPriceWorkbookTests(unittest.TestCase):
             products.append(["EU-SIDE-SREW-800x590-WW", "All / CABINET PART", "", "", "CREATE PRODUCT"])
             products.append(["EU-BACK-SREW-787x179-WW", "All / CABINET PART", "", "", "CREATE PRODUCT"])
             products.append(["EU-PART-100x100-XX", "All / CABINET PART", "", "", "CREATE PRODUCT"])
+            products.append(["EU-SREW-SHELF-563x564-NO", "All / SHELF PART", "", "", "CREATE PRODUCT"])
             products.append(["NOT-A-PART-100x100-WW", "All / CABINET", "", "", "CREATE PRODUCT"])
             lines = wb.create_sheet("NEW BOM LINES")
             lines.append(["Parent SKU", "Component SKU", "Quantity", "Required Action"])
             lines.append(["FPACK-TEST", "EU-SIDE-SREW-800x590-WW", 2, "ADD BOM LINE"])
             lines.append(["FPACK-TEST", "EU-BACK-SREW-787x179-WW", 1, "ADD BOM LINE"])
             lines.append(["FPACK-TEST", "EU-PART-100x100-XX", 1, "ADD BOM LINE"])
+            lines.append(["EUB-C-CAB01-SLF001", "EU-SREW-SHELF-563x564-NO", 1, "ADD BOM LINE"])
             wb.save(source)
 
             parameters = PriceParameters(furnix_markup_percent=15)
@@ -69,7 +71,7 @@ class CabinetPartPriceWorkbookTests(unittest.TestCase):
                 source, output, parameters=parameters
             )
 
-            self.assertEqual((rows, unique_parts, fpack_count, diagnostics), (3, 3, 1, 1))
+            self.assertEqual((rows, unique_parts, fpack_count, diagnostics), (4, 4, 2, 1))
             result = load_workbook(output, data_only=True)
             self.assertEqual(
                 result.sheetnames,
@@ -83,7 +85,7 @@ class CabinetPartPriceWorkbookTests(unittest.TestCase):
                 ],
             )
             prices = result["CABINET PART PRICES"]
-            self.assertEqual(prices.max_row, 3)
+            self.assertEqual(prices.max_row, 4)
 
             price_headers = {
                 cell.value: cell.column
@@ -103,6 +105,7 @@ class CabinetPartPriceWorkbookTests(unittest.TestCase):
                 {
                     "EU-SIDE-SREW-800x590-WW",
                     "EU-BACK-SREW-787x179-WW",
+                    "EU-SREW-SHELF-563x564-NO",
                 },
             )
 
@@ -135,11 +138,23 @@ class CabinetPartPriceWorkbookTests(unittest.TestCase):
                     column=breakdown_headers["Component Total Purchase Price, EUR"],
                 ).value
                 for row in range(2, breakdown.max_row + 1)
+                if breakdown.cell(
+                    row=row,
+                    column=breakdown_headers["FPACK SKU"],
+                ).value == "FPACK-TEST"
+            )
+            fpack_row = next(
+                row
+                for row in range(2, breakdown.max_row + 1)
+                if breakdown.cell(
+                    row=row,
+                    column=breakdown_headers["FPACK SKU"],
+                ).value == "FPACK-TEST"
             )
             self.assertAlmostEqual(
                 component_total,
                 breakdown.cell(
-                    row=2,
+                    row=fpack_row,
                     column=breakdown_headers["FPACK Cabinet Parts Purchase Price, EUR"],
                 ).value,
                 places=4,

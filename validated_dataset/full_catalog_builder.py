@@ -16,6 +16,11 @@ from bom_import_manufacture_v5 import (
 from bom_import_pilot_v1 import calculate_levels
 from bom_import_pilot_v2 import choose_operation_template
 from operation_contract import is_cabinet_shelf
+from shelf_pp import (
+    ShelfPpTemplate,
+    add_generated_shelf_pp_boms,
+    choose_shelf_pp_operation_template,
+)
 from manifest.manifest_hash import calculate_bom_hash
 from manifest.manifest_models import ManifestComponent
 from validated_dataset.full_bom_type_catalog import FullBomTypeCatalog
@@ -55,6 +60,7 @@ def build_full_validated_dataset(
     reform_lines: dict[str, list[dict]],
     type_catalog: FullBomTypeCatalog,
     operation_templates: dict[int, dict],
+    shelf_pp_templates: dict[str, ShelfPpTemplate],
 ) -> ValidatedDataset:
     environment = str(environment or "").strip().lower()
     if environment == "prod":
@@ -117,10 +123,21 @@ def build_full_validated_dataset(
         reform_products,
         reform_lines,
     )
+    generated_shelf_pp = add_generated_shelf_pp_boms(
+        parents,
+        lines,
+        levels,
+        bom_types,
+        reform_products,
+        shelf_pp_templates,
+        kit_type=KIT,
+        manufacture_type=MANUFACTURE,
+    )
     generated_from = {
         **generated_apack,
         **generated_hrd,
         **generated_cabinet,
+        **generated_shelf_pp,
     }
 
     products = []
@@ -167,6 +184,8 @@ def build_full_validated_dataset(
             generated_source,
             reform_products,
         )
+        if sku in generated_shelf_pp:
+            category = "SHELF PREPACK"
 
         operations: list[ValidatedOperation] = []
         if bom_type == "MANUFACTURE":
@@ -176,6 +195,11 @@ def build_full_validated_dataset(
                     if sku in generated_hrd:
                         template = choose_hrd_assembled_operation_template(
                             operation_templates
+                        )
+                    elif sku in generated_shelf_pp:
+                        template = choose_shelf_pp_operation_template(
+                            sku,
+                            operation_templates,
                         )
                     elif sku in generated_apack:
                         template = choose_apack_operation_template(

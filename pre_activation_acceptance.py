@@ -66,6 +66,14 @@ def is_cabinet_part(product: dict[str, Any]) -> bool:
     return "CABINET PART" in category(product)
 
 
+def is_shelf(product: dict[str, Any]) -> bool:
+    return category(product) == "CABINET SHELF"
+
+
+def is_shelf_pp(product: dict[str, Any]) -> bool:
+    return category(product) == "SHELF PREPACK"
+
+
 def is_kit(value: str) -> bool:
     return canon(value) in {"KIT", "PHANTOM"}
 
@@ -286,6 +294,7 @@ class Acceptance:
     def run(self, structures: dict[str, dict[str, Any]]) -> None:
         self._operations()
         self._cabinet_pairs(structures)
+        self._shelf_structure(structures)
         self._kit_structure(structures)
         self._fpack_apack_parts(structures)
         self._hrd_subset(structures)
@@ -433,6 +442,52 @@ class Acceptance:
                     "Surinktas kabinetas neturi tikrinamo BOM.",
                 ))
         self.metrics["cabinet_pair_errors"] = errors
+
+    def _shelf_structure(self, structures: dict[str, dict[str, Any]]) -> None:
+        errors = 0
+        for sku, product in sorted(self.products.items()):
+            if not is_shelf(product):
+                continue
+            structure = structures.get(sku)
+            if not structure:
+                continue
+            pp_components = [
+                component
+                for component in structure["components"]
+                if component.endswith("-PP")
+            ]
+            if not is_kit(structure["bom_type"]):
+                errors += 1
+                self.issues.append(Issue(
+                    "SHELF_KIT_TYPE", "ERROR", sku, "",
+                    "Galutinės Shelf BOM tipas nėra KIT.", "KIT", structure["bom_type"],
+                ))
+            if len(pp_components) != 1:
+                errors += 1
+                self.issues.append(Issue(
+                    "SHELF_PP_COMPONENT", "ERROR", sku, "",
+                    "Galutinė Shelf turi turėti tiksliai vieną Shelf PP komponentą.",
+                    "1", str(len(pp_components)),
+                ))
+                continue
+            pp_sku = pp_components[0]
+            pp_product = self.products.get(pp_sku)
+            pp_structure = structures.get(pp_sku)
+            if not pp_product or not is_shelf_pp(pp_product) or not pp_structure:
+                errors += 1
+                self.issues.append(Issue(
+                    "SHELF_PP_BOM_EXISTS", "ERROR", sku, pp_sku,
+                    "Shelf PP kortelė arba jos BOM nerasta Dataset.",
+                ))
+                continue
+            if normalized_bom_type(pp_structure["bom_type"]) != "MANUFACTURE":
+                errors += 1
+                self.issues.append(Issue(
+                    "SHELF_PP_MANUFACTURE", "ERROR", sku, pp_sku,
+                    "Shelf PP BOM tipas nėra Manufacture.",
+                    "MANUFACTURE", pp_structure["bom_type"],
+                ))
+        self.metrics["shelf_structure_errors"] = errors
 
     def _kit_structure(self, structures: dict[str, dict[str, Any]]) -> None:
         errors = 0

@@ -21,6 +21,7 @@ from validated_dataset.full_bom_type_catalog import (
 from validated_dataset.full_catalog_builder import (
     build_full_validated_dataset,
 )
+from shelf_pp import build_shelf_pp_templates, load_odoo_edges
 
 
 def prepare_diagnostic_catalog(
@@ -81,12 +82,16 @@ def main() -> None:
         reform_path
     )
 
+    odoo_map_path = (
+        base / "output" / "production" / "Odoo_MAP.xlsx"
+    )
     type_catalog = build_full_bom_type_catalog(
         reform_products=reform_products,
         reform_lines=reform_lines,
-        odoo_map_path=(
-            base / "output" / "production" / "Odoo_MAP.xlsx"
-        ),
+        odoo_map_path=odoo_map_path,
+    )
+    shelf_pp_templates = build_shelf_pp_templates(
+        load_odoo_edges(odoo_map_path)
     )
     skipped: list[tuple[str, str]] = []
     if args.skip_unresolved_bom_types:
@@ -118,6 +123,7 @@ def main() -> None:
         reform_lines=reform_lines,
         type_catalog=type_catalog,
         operation_templates=operation_templates,
+        shelf_pp_templates=shelf_pp_templates,
     )
 
     output_path = write_validated_dataset(dataset)

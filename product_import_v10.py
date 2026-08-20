@@ -24,6 +24,10 @@ from product_import_v3 import (
     packaging_name,
     read_all,
 )
+from shelf_pp import shelf_profile
+from manifest.manifest_writer import calculate_file_hash
+from output_paths import environment_slug
+from validated_dataset import dataset_environment_dir
 
 
 # Šios parent kategorijos buvo rankiniu būdu patikrintos per pirmąjį Stage
@@ -79,11 +83,6 @@ IMPORT_HEADERS = [
     "invoice_policy", "packaging_name", "variant_seller_ids/partner_id/id",
 ]
 
-VALIDATED_DATASET_DIR = Path(
-    r"C:\Projects\furnibox-shared-data\validated_datasets\production"
-)
-
-
 def load_latest_validated_dataset(
     dataset_path: Path | None = None,
 ) -> tuple[dict, Path]:
@@ -95,20 +94,23 @@ def load_latest_validated_dataset(
                 f"Nerastas Validated Dataset: {path}"
             )
     else:
-        if not VALIDATED_DATASET_DIR.exists():
+        validated_dataset_dir = dataset_environment_dir(
+            environment_slug()
+        )
+        if not validated_dataset_dir.exists():
             raise FileNotFoundError(
                 "Nerastas Validated Dataset katalogas: "
-                f"{VALIDATED_DATASET_DIR}"
+                f"{validated_dataset_dir}"
             )
 
         candidates = list(
-            VALIDATED_DATASET_DIR.glob("*.json")
+            validated_dataset_dir.glob("*.json")
         )
 
         if not candidates:
             raise FileNotFoundError(
                 "Validated Dataset kataloge nėra JSON failų: "
-                f"{VALIDATED_DATASET_DIR}"
+                f"{validated_dataset_dir}"
             )
 
         path = max(
@@ -158,6 +160,64 @@ def validated_synthetic_apacks(
         result[sku] = product
 
     return result
+
+
+def validated_synthetic_shelf_pp(
+    dataset_record: dict,
+) -> dict[str, dict]:
+    """Grąžina tik Dataset patvirtintas sintetines Shelf PP korteles."""
+    result = {}
+    for product in dataset_record.get("products", []):
+        sku = canon(product.get("sku"))
+        generated_from = canon(
+            product.get("generated_from") or product.get("source_sku")
+        )
+        product_type = canon(product.get("product_type"))
+        if (
+            sku.endswith("-PP")
+            and generated_from
+            and product_type == "SHELF PREPACK"
+        ):
+            result[sku] = product
+    return result
+
+
+def validate_dataset_source(dataset_record: dict, reform_path: Path) -> None:
+    """Neleidžia produktų importui panaudoti ankstesnio Reform leidimo."""
+    source = dataset_record.get("source") or {}
+    expected_name = reform_path.name
+    actual_name = str(source.get("file_name") or "").strip()
+    expected_hash = calculate_file_hash(reform_path)
+    actual_hash = str(source.get("file_hash") or "").strip()
+    if actual_name != expected_name or actual_hash != expected_hash:
+        raise ValueError(
+            "Validated Dataset sukurtas ne iš pasirinkto Reform BOM failo: "
+            f"Dataset={actual_name or 'NERASTA'}, Reform={expected_name}. "
+            "Pirmiausia paleiskite GUI žingsnį 6A."
+        )
+
+
+def shelf_pp_reference_profile(
+    target_sku: str,
+    reference: dict[str, dict],
+) -> dict | None:
+    """Perima produkto kortelės laukus tik iš vienareikšmio PP profilio."""
+    matches = [
+        row
+        for sku, row in reference.items()
+        if canon(sku).endswith("-PP")
+        and shelf_profile(sku) == shelf_profile(target_sku)
+    ]
+    signatures = {
+        (row.get("category", ""), row.get("routes", ""), row.get("vendor", ""))
+        for row in matches
+    }
+    if len(signatures) != 1:
+        return None
+    category, routes, vendor = next(iter(signatures))
+    if not category or not routes:
+        return None
+    return {"category": category, "routes": routes, "vendor": vendor}
 
 
 def hrd_assembled_sku(sku: str) -> str:
@@ -549,11 +609,17 @@ def build_rows(
     missing_skus, existing_skus, reform_products, category_map,
     cabinet_assembled_category, apack_category, route_profile, component_rules,
     hrd_a_profiles, odoo_hrd_templates, validated_apacks,
+    validated_shelf_pp, reference,
 ):
     ready, review, diagnostics = [], [], []
+    reform_products_by_sku = {
+        canon(sku): product
+        for sku, product in reform_products.items()
+    }
     generated_apack = 0
     generated_cabinet_assembled = 0
     generated_hrd_assembled = 0
+    generated_shelf_prepack = 0
     for sku in sorted(missing_skus):
         product = reform_products[sku]
         if product["is_parent"]:
@@ -646,6 +712,49 @@ def build_rows(
         scheduled_skus.add(generated_code)
         generated_apack += 1
 
+    # Shelf PP kortelės generuojamos tik iš Validated Dataset. Kategorija ir
+    # maršrutai perimami iš tos pačios geometrijos Production PP analogo.
+    for generated_code, dataset_product in sorted(validated_shelf_pp.items()):
+        if generated_code in existing_skus or generated_code in scheduled_skus:
+            continue
+        source_sku = canon(
+            dataset_product.get("generated_from")
+            or dataset_product.get("source_sku")
+        )
+        source_product = reform_products_by_sku.get(source_sku)
+        profile = shelf_pp_reference_profile(generated_code, reference)
+        if source_product is None:
+            diagnostics.append(
+                f"{generated_code}: Dataset Shelf PP šaltinis {source_sku} "
+                "nerastas žaliame Reform faile"
+            )
+            continue
+        if profile is None:
+            diagnostics.append(
+                f"{generated_code}: nerastas vienareikšmis Production Shelf PP "
+                "produkto kortelės profilis"
+            )
+            continue
+        ready.append({
+            "Internal reference": generated_code,
+            "name": (
+                source_product.get("name_1")
+                or source_product.get("name_2")
+                or generated_code
+            ),
+            "route_ids/id": profile["routes"],
+            "type": "Storable Product",
+            "categ_id": profile["category"],
+            "invoice_policy": "Delivered quantities",
+            "packaging_name": "",
+            "variant_seller_ids/partner_id/id": profile["vendor"],
+            "Reform Role": "GENERATED SHELF PP",
+            "Reform Category / Part Group": "SHELF PREPACK",
+            "Review reason": "",
+        })
+        scheduled_skus.add(generated_code)
+        generated_shelf_prepack += 1
+
     # CABINETS-A nėra atskiras Reform šaltinio SKU. Kiekvienai bazinei
     # CABINETS kortelei sukuriame surinktą -A porą, jeigu jos Odoo dar nėra.
     for source_sku, product in sorted(reform_products.items()):
@@ -714,6 +823,7 @@ def build_rows(
     return (
         ready, review, diagnostics, generated_apack,
         generated_cabinet_assembled, generated_hrd_assembled,
+        generated_shelf_prepack,
     )
 
 
@@ -802,10 +912,14 @@ def main():
             args.dataset
         )
     )
+    validate_dataset_source(dataset_record, bom_input_path)
     validated_apacks = (
         validated_synthetic_apacks(
             dataset_record
         )
+    )
+    validated_shelf_prepack = validated_synthetic_shelf_pp(
+        dataset_record
     )
 
     if reference_path is not None:
@@ -883,11 +997,13 @@ def main():
     (
         ready, review, row_diagnostics, generated_apack,
         generated_cabinet_assembled, generated_hrd_assembled,
+        generated_shelf_prepack,
     ) = build_rows(
         missing_skus, set(odoo_products), reform_products, category_map,
         cabinet_assembled_category, apack_category, route_profile,
         component_rules, hrd_a_profiles, odoo_hrd_templates,
         validated_apacks,
+        validated_shelf_prepack, reference,
     )
     diagnostics = (
         category_diagnostics + route_diagnostics + component_diagnostics
@@ -899,6 +1015,7 @@ def main():
         "Stage rule source": reference_source,
         "Validated Dataset": str(dataset_path),
         "Validated synthetic APACK": len(validated_apacks),
+        "Validated synthetic Shelf PP": len(validated_shelf_prepack),
         "All unique Reform SKU": len(reform_products),
         "Missing Reform SKU": len(missing_skus),
         "Ready import rows": len(ready),
@@ -906,6 +1023,7 @@ def main():
         "Generated APACK": generated_apack,
         "Generated CABINET-A": generated_cabinet_assembled,
         "Generated HRD-A": generated_hrd_assembled,
+        "Generated Shelf PP": generated_shelf_prepack,
         "Manufacture routes": route_profile["manufacture"],
         "APACK routes": route_profile["apack"],
         "HRD-A source-category profiles": len(hrd_a_profiles),
@@ -922,6 +1040,7 @@ def main():
     print("Sugeneruota APACK:", generated_apack)
     print("Sugeneruota CABINET-A:", generated_cabinet_assembled)
     print("Sugeneruota HRD-A:", generated_hrd_assembled)
+    print("Sugeneruota Shelf PP:", generated_shelf_prepack)
     print("Diagnostikos įrašai:", len(diagnostics))
     print("Importas:", ready_path)
     print("Peržiūra:", review_path)

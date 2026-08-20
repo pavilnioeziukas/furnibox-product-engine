@@ -139,14 +139,7 @@ def business_rule(category: str, sku: str) -> tuple[str, str] | None:
     if category == "PREPACK CABINETS" or sku.startswith(("FPACK-", "APACK-")):
         return "normal", "PATVIRTINTA TAISYKLĖ: PREPACK/FPACK/APACK = MANUFACTURE"
     if category == "CABINET SHELF":
-        # Production etalonai rodo vienintelę išimtį: SLF901–SLF912 yra
-        # Manufacture. Kiti CABINET SHELF kodai (įskaitant naujus
-        # SLF028, SLF107–108 ir SLF210–213) yra Kit.
-        match = re.search(r"-SLF(\d+)(?:-A)?$", sku)
-        number = int(match.group(1)) if match else None
-        if number is not None and 901 <= number <= 912:
-            return "normal", "PATVIRTINTA TAISYKLĖ: CABINET SHELF SLF901–SLF912 = MANUFACTURE"
-        return "phantom", "PATVIRTINTA TAISYKLĖ: CABINET SHELF = KIT (IŠSKYRUS SLF901–SLF912)"
+        return "phantom", "PATVIRTINTA TAISYKLĖ: CABINET SHELF = KIT; GAMYBA VYKSTA SHELF PP"
     if category == "SINK":
         # Plautuvės ir sifono dalys gaunamos bei laikomos atskirai. Pardavimo
         # metu Odoo turi išskleisti komplektą į komponentus, o ne kurti MO.

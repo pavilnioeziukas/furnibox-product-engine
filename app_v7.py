@@ -125,9 +125,16 @@ class FurniboxApp(tk.Tk):
                 "map_comparison_v2.py",
                 "map_comparison.py",
             ))),
+            (
+                "6A. Sugeneruoti pilną Validated Product Dataset",
+                lambda: self.run_script("generate_full_validated_dataset.py"),
+            ),
             # 7 žingsnis pirmiausia renkasi naujausią patikrintą produktų
             # importo generatorių, o senesnes versijas palieka tik atsargai.
             ("7. Paruošti visų produktų importą", lambda: self.run_script(first_existing(
+                "product_import_v10.py",
+                "product_import_v9.py",
+                "product_import_v8.py",
                 "product_import_v7.py",
                 "product_import_v6.py",
                 "product_import_v5.py",
@@ -358,4 +365,3 @@ if __name__ == "__main__":
     app = FurniboxApp()
     app.protocol("WM_DELETE_WINDOW", app.on_close)
     app.mainloop()
-

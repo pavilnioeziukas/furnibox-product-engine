@@ -19,7 +19,7 @@ def product_category(record: dict[str, Any]) -> str:
 
 
 def is_cabinet_shelf(*, sku: str, category: str) -> bool:
-    """Production CABINET SHELF yra Manufacture BOM be operacijų."""
+    """Galutinė CABINET SHELF kortelė yra KIT, ne gamybos operacija."""
     return canon(category) == "CABINET SHELF"
 
 
@@ -31,6 +31,8 @@ def required_operation_names(*, sku: str, category: str) -> set[str]:
     # FPACK, todėl jam privalomas komplektavimas, ne pakavimas.
     if normalized_category == "CABINET HARDWARE":
         return {"KOMPLEKTAVIMAS"}
+    if normalized_category == "SHELF PREPACK" or normalized_sku.endswith("-PP"):
+        return {"PAKAVIMAS"}
     if normalized_sku.startswith("APACK-") or normalized_category == "APACK":
         return {"SURINKIMAS", "PAKAVIMAS"}
     if normalized_sku.startswith("FPACK-") or normalized_category == "FPACK":
@@ -59,6 +61,4 @@ def recognized_operation_names(operations: list[dict[str, Any]]) -> set[str]:
 
 def manufacture_operations_required(*, sku: str, category: str) -> bool:
     """Nurodo, ar Manufacture BOM privalo turėti bent vieną operaciją."""
-    if is_cabinet_shelf(sku=sku, category=category):
-        return False
     return True

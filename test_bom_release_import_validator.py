@@ -148,7 +148,7 @@ class BomReleaseImportValidatorTests(unittest.TestCase):
                 result.errors,
             )
 
-    def test_cabinet_shelf_without_operations_is_allowed(self):
+    def test_legacy_manufacture_cabinet_shelf_without_operations_is_blocked(self):
         cabinet_shelf = dataset()
         cabinet_shelf["products"][0]["sku"] = "EUB-C-CAB03-SLF901"
         cabinet_shelf["products"][0]["reform_category"] = "CABINET SHELF"
@@ -161,7 +161,7 @@ class BomReleaseImportValidatorTests(unittest.TestCase):
                 release_reference="RELEASE-1",
                 import_dir=output,
             )
-            self.assertFalse(
+            self.assertTrue(
                 any(
                     "Manufacture BOM neturi operacijų" in error
                     for error in result.errors
