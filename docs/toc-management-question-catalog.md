@@ -76,7 +76,7 @@ užsakymo poreikis → upstream prieinamumas → READY FOR ASSEMBLY
                   → Assembly → tolesnis vykdymas → Shipped
 ```
 
-`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir kliento tiekiamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas.
+`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir kliento tiekiamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas. Kadangi Furnibox Odoo nenaudoja pilno BOM ir jame neregistruojamas kliento fasadų bei stalčių fizinis gavimas, READY momento negalima patikimai apskaičiuoti vien iš dabartinių Odoo duomenų.
 
 #### 3.2. Diagnostikos signalai
 
@@ -133,7 +133,7 @@ Prieš implementaciją visi laukai turi būti patikrinti prieš faktinę Furnibo
 - Sales Order / Manufacturing Order ir jų identifikatoriai bei sąsajos;
 - užsakymo planuotos arba pažadėtos datos;
 - MO būsenos ir užbaigimo datos;
-- atsargų judėjimai, rezervacijos ir komponentų sąrašai;
+- Furnix ir kitų Odoo apskaitomų komponentų atsargų judėjimai bei rezervacijos, tačiau ne visas faktinis Assembly komponentų rinkinys;
 - pakavimo / pristatymo operacijų būsenos ir užbaigimo datos;
 - produktų kiekiai ir maršrutai.
 
@@ -146,11 +146,12 @@ Prieš implementaciją visi laukai turi būti patikrinti prieš faktinę Furnibo
 #### Kritiškai trūkstami duomenys
 
 - patikimas istorinis ir nuo šiol registruojamas `READY FOR ASSEMBLY` timestamp;
-- `READY FOR ASSEMBLY` apskaičiavimo taisyklė, apimanti visų Furnix ir kliento tiekiamų komponentų fizinio gavimo DC momentus;
+- atskiras `READY FOR ASSEMBLY` patvirtinimo įvykis, nes dabartinis Odoo neturi pilno BOM ir neregistruoja kliento fasadų bei stalčių fizinio gavimo DC;
+- patikimas šio įvykio timestamp, užsakymo / Assembly MO identifikatorius ir patvirtinęs asmuo arba šaltinis;
 - READY būsenos atšaukimo įvykis, kai darbas po pažymėjimo vėl tampa neprieinamas;
 - patvirtintas darbo svorio matas, leidžiantis palyginti nevienodo dydžio darbus.
 
-**Duomenų spraga, dėl kurios šiandien negalimas patikimas retrospektyvus atsakymas:** iš Odoo negalima nustatyti pirmo momento, kai konkrečiam Assembly MO vienu metu fiziškai buvo prieinami visi reikalingi komponentai, įskaitant kliento tiekiamas dalis. Todėl istoriniai vėlavimai negali patikimai atskirti Assembly pajėgumo trūkumo nuo Assembly badavimo dėl upstream prieinamumo.
+**Duomenų spraga, dėl kurios šiandien negalimas patikimas retrospektyvus atsakymas:** Furnibox Odoo nenaudojamas pilnas BOM, o kliento fasadų ir stalčių fizinis gavimas DC jame neregistruojamas. Todėl iš Odoo negalima nustatyti pirmo momento, kai konkrečiam Assembly MO vienu metu fiziškai buvo prieinami visi reikalingi komponentai. Istoriniai vėlavimai negali patikimai atskirti Assembly pajėgumo trūkumo nuo Assembly badavimo dėl upstream prieinamumo.
 
 ### 6. Būsimas Product Engine modulis
 
@@ -180,7 +181,7 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Kuris Odoo arba kitas įvykis patikimai įrodo fizinį kiekvieno komponento gavimą DC, ypač kliento tiekiamų fasadų ir stalčių?
+1. Kaip darbuotojai šiandien nustato, kad visi konkretaus užsakymo komponentai, įskaitant kliento fasadus ir stalčius, jau fiziškai yra DC?
 2. Kaip READY būsena koreguojama, jei DC esantis komponentas vėliau pripažįstamas netinkamu surinkimui?
 3. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
 4. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
