@@ -507,3 +507,5 @@ Modulis neturi vertinti darbuotojų pagal lokalų užimtumą. Jo paskirtis – n
 ## Kitas specifikacijos etapas
 
 MQ-004 dienos pajėgumo, tempo ir įsipareigojimų palyginimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-005 — „Kokius užsakymus Assembly turi surinkti šiandien?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+
+Pradinis MQ-005 kontekstas: šiandien Assembly darbų eilę daugiausia lemia žodiniai skubūs prašymai. Šis prioritetų šaltinis nėra audituojamas, gali keisti seką be matomo poveikio kitiems SO ir nebūtinai apsaugo artimiausią `Delivery Date`. MQ-005 turi pakeisti šią praktiką skaidria numatytąja eile, paliekant tik aiškiai registruojamas ir pagrindžiamas išimtis.
