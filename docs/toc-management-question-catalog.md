@@ -295,6 +295,111 @@ Rekomenduojamas veiksmas šiandien: ...
 
 Modulis neturi skatinti kaupti kuo daugiau READY darbo. Jo paskirtis – palaikyti mažiausią bufferį, kuris apsaugo Assembly, ir iš anksto signalizuoti apie badavimo riziką.
 
+---
+
+## MQ-003 — Kas neleidžia užsakymams tapti READY?
+
+### 1. Vadybinis klausimas
+
+**Kas ir kiek laiko neleidžia užsakymams tapti `READY FOR ASSEMBLY`: Furnix detalės, subrangovo fasadai ar stalčiai, kiti komponentai, fizinis suradimas, identifikavimas ar kita priežastis?**
+
+Klausimas turi parodyti ne bendrą vėluojančių užsakymų skaičių, o konkrečius aktyvius blokatorius, jų trukmę, paveiktas standartines Assembly valandas ir poveikį artimiausiam READY bufferiui.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+| Atsakymas | Keičiamas vadybinis sprendimas ir veiksmas |
+|---|---|
+| **Dominuoja Furnix detalių trūkumas** | Eskaluoti Furnix tiekimo, užsakymo, gamybos arba pristatymo patikimumą ir pirmiausia spręsti tuos trūkumus, kurie kelia READY bufferio badavimo riziką. |
+| **Dominuoja subrangovo fasadų ar stalčių trūkumas** | Keisti subrangovų pristatymo kontrolę, patvirtinimus ir prioritetus pagal būsimą Assembly poreikį. |
+| **Dominuoja kitų perkamų komponentų trūkumas** | Keisti pirkimo ir gavimo prioritetus pagal Assembly bufferio riziką, o ne vien bendrą vėlavimo datą. |
+| **Komponentai DC, bet nerandami ar neidentifikuojami** | Spręsti fizinio srauto, žymėjimo, lokacijų, priėmimo ar užsakymo priskyrimo procesą; nelaikyti problemos tiekėjo pajėgumo trūkumu. |
+| **Priežastys mišrios** | Prioritetizuoti pagal prarandamas Assembly standartines valandas, blokavimo trukmę ir artimiausių išsiuntimų riziką. |
+| **Priežastis nežinoma** | Tą pačią dieną išsiaiškinti ir perklasifikuoti; „kita“ negali tapti nuolatine dominuojančia kategorija. |
+
+### 3. Sprendimo logika
+
+Kiekvienos darbo dienos pradžioje per READY patikrą kiekvienam surenkamam užsakymui taikoma ši seka:
+
+1. Jei visi būtini komponentai fiziškai yra DC, užsakymas pažymimas `READY FOR ASSEMBLY`.
+2. Jei bent vieno būtino komponento nėra arba jo neįmanoma patikimai surasti / priskirti, užsakymas lieka `NOT READY`.
+3. `NOT READY` užsakymui pažymima viena ar kelios aktyvios blokavimo priežastys.
+4. Kiekviena priežastis turi pirmos aptikimo patikros timestamp ir pašalinimo patikros timestamp.
+5. Kai pašalinamos visos aktyvios priežastys, užsakymas kitos patikros metu tampa READY.
+
+Patvirtintas pradinis priežasčių katalogas:
+
+| Kodas | Priežastis |
+|---|---|
+| `FURNIX_PARTS_MISSING` | Trūksta Furnix detalių. |
+| `SUBCONTRACTOR_FRONTS_MISSING` | Neatvežti subrangovo fasadai. |
+| `SUBCONTRACTOR_DRAWERS_MISSING` | Neatvežti subrangovo stalčiai. |
+| `OTHER_PURCHASED_COMPONENTS_MISSING` | Trūksta kitų perkamų komponentų. |
+| `COMPONENTS_NOT_FOUND` | Komponentai laikomi esančiais DC, bet jų nepavyksta fiziškai rasti. |
+| `COMPONENT_ORDER_UNKNOWN` | Neaišku, kuriam užsakymui skirti atvežti komponentai. |
+| `OTHER` | Kita priežastis; privalomas trumpas komentaras. |
+
+Vienam užsakymui gali būti aktyvios kelios priežastys vienu metu. Bendra užsakymo NOT READY trukmė negali būti skaičiuojama sudedant persidengiančias priežasčių trukmes. Atskirai rodoma:
+
+- kiek kalendorinių / darbo dienų užsakymas iš viso buvo NOT READY;
+- kiek dienų buvo aktyvi kiekviena priežastis;
+- kiek užsakymų ir standartinių Assembly valandų kiekviena priežastis blokavo;
+- kuri priežastis buvo paskutinė pašalinta prieš READY momentą.
+
+Prioritetas priežasčiai suteikiamas ne vien pagal atvejų skaičių. Aukščiausias dėmesys skiriamas blokatoriui, kuris kelia didžiausią riziką READY bufferiui ir artimiausiems išsiuntimams.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| Užsakymo ir Assembly MO identifikatoriai | Susieti blokatorių su konkrečiu darbu. |
+| NOT READY priežasties kodas | Grupavimas ir vadybinio veiksmo parinkimas. |
+| Priežasties pirmo aptikimo timestamp | Nustatyti blokavimo pradžią dienos tikslumu. |
+| Priežasties pašalinimo timestamp | Nustatyti trukmę ir patvirtinti, kad kliūtis nebeaktyvi. |
+| Patvirtinusi gamybos vadovė / deleguotas tikrintojas | Auditas ir duomenų patikimumas. |
+| Komentaras kategorijai `OTHER` | Neleisti nežinomoms priežastims pasislėpti bendroje kategorijoje. |
+| Užsakymo standartinės Assembly valandos | Įvertinti blokuojamo būsimo Assembly darbo svorį. |
+| Pažadėta išsiuntimo data ir dienos prioritetas | Įvertinti pristatymo bei bufferio riziką. |
+| READY timestamp | Uždaryti NOT READY intervalą, kai pašalinamos visos priežastys. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba jau sutarti
+
+- užsakymo ir Assembly MO identifikatoriai;
+- BOM Assembly operacijų norminės valandos;
+- planuojama / pažadėta išsiuntimo data, jei jos semantika patvirtinama;
+- kasdienė gamybos vadovės READY patikra.
+
+#### Išvedami
+
+- bendra užsakymo NOT READY trukmė;
+- aktyvių priežasčių trukmė nepersidengiančiais intervalais ir pagal atskiras kategorijas;
+- kiekvienos priežasties paveiktų užsakymų bei Assembly standartinių valandų suma;
+- paskutinė kliūtis, kurios pašalinimas leido užsakymui tapti READY;
+- priežasčių poveikis prognozuojamam READY bufferiui.
+
+#### Trūkstami
+
+- rankinis NOT READY priežasties atidarymo ir uždarymo įvykis;
+- galimybė vienam užsakymui pažymėti kelias vienu metu aktyvias priežastis;
+- privalomas komentaras kategorijai `OTHER`;
+- duomenų kokybės kontrolė, aptinkanti NOT READY užsakymus be aktyvios priežasties.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-003 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **Readiness Blocker Control**. Ji turės pateikti:
+
+```text
+Aktyvūs NOT READY užsakymai: ...
+Blokuojamos Assembly standartinės valandos: ...
+READY bufferiui gresiantys užsakymai: ...
+Dominuojanti priežastis pagal valandas / trukmę / išsiuntimo riziką: ...
+Seniausi neišspręsti blokatoriai: ...
+Rekomenduojamas eskalavimo veiksmas šiandien: ...
+```
+
+Modulis turi leisti nuo agreguotos priežasties pereiti iki konkrečių užsakymų ir jų audito įvykių. Jis neturi bandyti retrospektyviai išgalvoti istorinių priežasčių iš nepilno Odoo BOM.
+
 ## Kitas specifikacijos etapas
 
-MQ-002 dienos pajėgumo ir pradinio bufferio skaičiavimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-003 — „Kas ir kiek laiko neleidžia užsakymams tapti `READY FOR ASSEMBLY`?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+Patvirtinti, ar vienam NOT READY užsakymui praktiškai turi būti leidžiamos kelios vienu metu aktyvios priežastys. Tada užbaigti MQ-003 ir ta pačia pilna struktūra formalizuoti MQ-004 — „Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia reikiamu tempu?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
