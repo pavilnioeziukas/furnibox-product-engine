@@ -611,6 +611,130 @@ Rankinės išimties poveikis kitiems SO: ...
 
 Modulis turi pateikti paaiškinamą rekomenduojamą seką, bet galutinį dienos planą patvirtina gamybos vadovė. Jo tikslas – panaikinti nematomą žodinių skubinimų valdymą, o ne atimti atsakomybę už pagrįstas išimtis.
 
+---
+
+## MQ-006 — Kas mažina Assembly našų laiką?
+
+### 1. Vadybinis klausimas
+
+**Kas konkrečiai mažina Assembly našų laiką, kai prioritetizuoto `READY FOR ASSEMBLY` darbo eilė nėra tuščia?**
+
+Klausimas atskiria tris skirtingus reiškinius:
+
+- normalų `PAUSED` laiką, pavyzdžiui, darbo dienos pabaigą ar įprastą pertrauką;
+- konkretaus WO `BLOCKED` trukmę ir jos poveikį užsakymo lead time;
+- realiai prarastas Assembly žmogaus valandas, kai darbuotojas negalėjo produktyviai vykdyti nei užblokuoto, nei kito READY darbo.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+| Dominuojantis praradimas | Keičiamas vadybinis sprendimas ir veiksmas |
+|---|---|
+| **Brokuotos Furnix detalės** | Taisyti Furnix kokybės kontrolę, pakeitimo prioritetą ir grįžtamąjį ryšį pagal prarandamas Assembly valandas bei rizikuojančius SO. |
+| **Brokuoti subrangovo fasadai ar stalčiai** | Keisti subrangovo kokybės, priėmimo ir pakaitinių detalių eskalavimo procesą. |
+| **Trūkumas nustatomas tik pradėjus Assembly** | Gerinti rytinę READY / pilno komplekto patikrą, jei trūkumą buvo įmanoma nustatyti iš anksto. |
+| **Techninė informacija ar brėžiniai** | Užtikrinti pilną informaciją prieš Assembly pradžią ir aiškų greito sprendimo savininką. |
+| **Įrankis ar įranga** | Prioritetizuoti priežiūrą, atsarginį įrankį ar proceso pakeitimą pagal constraint valandų nuostolį. |
+| **Laukiama vadovo sprendimo** | Nustatyti sprendimo SLA ir delegavimo ribas, kad Assembly nelauktų vadybinio atsako. |
+| **Daug WO blokavimų, bet beveik nėra prarastų valandų** | Neskubėti didinti pajėgumo; gerinti užsakymų srautą ir WIP, tačiau pripažinti, kad darbuotojai persijungė į kitą READY darbą. |
+| **Nežinoma arba `OTHER` dominuoja** | Gerinti priežasčių registravimo discipliną; bendroji kategorija negali būti pagrindas investiciniam sprendimui. |
+
+### 3. Sprendimo logika
+
+#### 3.1. `PAUSED` ir `BLOCKED` naudojimo taisyklė
+
+- `PAUSED` naudojamas normalioms pertraukoms ir darbo dienos pabaigai; priežastis neprivaloma.
+- `BLOCKED` naudojamas, kai WO negalima tęsti dėl nenormalaus trukdžio; priežastis privaloma.
+- Pradėjus kitą darbo dieną arba pasibaigus normaliai pertraukai darbuotojas turi atnaujinti WO būseną pagal faktinę situaciją.
+
+#### 3.2. Patvirtintas `BLOCKED` priežasčių katalogas
+
+| Kodas | Priežastis |
+|---|---|
+| `DEFECTIVE_FURNIX_PART` | Brokuota Furnix detalė. |
+| `DEFECTIVE_SUBCONTRACTOR_FRONT` | Brokuotas subrangovo fasadas. |
+| `DEFECTIVE_SUBCONTRACTOR_DRAWER` | Brokuotas subrangovo stalčius. |
+| `MISSING_COMPONENT_FOUND_DURING_ASSEMBLY` | Trūkumas pastebėtas tik pradėjus surinkimą. |
+| `TECHNICAL_INFORMATION_MISSING` | Trūksta techninės informacijos arba neaiškus brėžinys. |
+| `TOOL_OR_EQUIPMENT_UNAVAILABLE` | Trūksta įrankio arba įranga neveikia. |
+| `WAITING_FOR_MANAGER_DECISION` | Laukiama vadovo sprendimo. |
+| `OTHER` | Kita priežastis; privalomas trumpas komentaras. |
+
+#### 3.3. Dvi atskiros trukmės
+
+Kiekvienam `BLOCKED` įvykiui skaičiuojama:
+
+1. **WO blokavimo trukmė** – kiek darbo laiko užsakymas negalėjo būti tęsiamas; ji matuoja užsakymo srauto / lead time poveikį.
+2. **Prarastos Assembly žmogaus valandos** – kiek suplanuoto darbo laiko priskirtas darbuotojas negalėjo vykdyti jokio kito READY darbo dėl šio trukdžio.
+
+Jei darbuotojas užblokuoja WO ir nedelsdamas pradeda kitą READY darbą, pirmoji trukmė didėja, bet antroji lygi nuliui. Todėl negalima visos WO blokavimo trukmės automatiškai vadinti prarastu Assembly pajėgumu.
+
+Skaičiuojamas tik suplanuoto darbo grafiko laikas. Naktis, savaitgalis, normali pertrauka ar laikas po darbo dienos pabaigos nepriskiriami prarastoms Assembly žmogaus valandoms.
+
+#### 3.4. Prioritetų logika
+
+Kasdien pirmiausia eskaluojami blokatoriai, kurie:
+
+1. šiuo metu sukelia realų Assembly žmogaus valandų praradimą;
+2. blokuoja vėluojantį arba `SKUBUS` SO;
+3. gali sumažinti READY bufferį iki raudonos zonos;
+4. kartojasi ir per savaitę praranda daugiausia Assembly valandų.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| WO `BLOCKED` pradžios ir pabaigos timestamp | Matuoti blokavimo intervalą. |
+| Privalomas blokavimo priežasties kodas | Susieti nuostolį su konkrečiu vadybiniu veiksmu. |
+| Komentaras kategorijai `OTHER` | Neleisti nežinomoms priežastims pasislėpti. |
+| WO, MO ir SO identifikatoriai | Susieti blokatorių su `Delivery Date`, `SKUBUS` ir norminėmis valandomis. |
+| Darbuotojo / darbo centro darbo įrašai | Nustatyti, ar blokuojant vieną WO buvo pradėtas kitas READY darbas. |
+| Dienos planinis pajėgumas ir darbo grafikas | Skaičiuoti tik realiai suplanuoto laiko praradimus. |
+| READY bufferis blokavimo metu | Įvertinti, ar darbuotojas turėjo alternatyvaus darbo. |
+| Kito WO pradžios timestamp | Nustatyti persijungimo laiką ir faktines prarastas žmogaus valandas. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba jau sutarti
+
+- Odoo WO gali būti blokuojamas nurodant priežastį;
+- WO operacijos gali būti pradėtos, sustabdytos, atnaujintos ir užbaigtos;
+- `PAUSED` naudojamas normalioms pertraukoms bei darbo dienos pabaigai;
+- dienos Assembly pajėgumas apskaičiuojamas iš dirbančių darbuotojų skaičiaus × 8 val.;
+- READY bufferis ir prioritetų eilė apibrėžti MQ-002 bei MQ-005.
+
+#### Išvedami
+
+- WO blokavimo darbo laiko trukmė pagal priežastį;
+- laikas iki kito READY darbo pradžios;
+- realiai prarastos Assembly žmogaus valandos, kai nevyko joks alternatyvus darbas;
+- paveiktų SO, standartinių valandų ir `Delivery Date` rizikos suma;
+- savaitinis priežasčių Pareto pagal blokavimo trukmę ir atskirai pagal prarastas žmogaus valandas;
+- pasikartojantys blokatoriai ir vidutinis jų pašalinimo laikas.
+
+#### Trūkstami arba kalibruotini
+
+- patvirtintos Odoo blokavimo priežasčių reikšmės pagal šį katalogą;
+- patikra, ar darbuotojo ir alternatyvaus WO pradžios įvykių pakanka prarastoms žmogaus valandoms išvesti;
+- taisyklė situacijai, kai vieną WO kartu vykdo ar gali perimti daugiau nei vienas darbuotojas;
+- duomenų kokybės kontrolė, neleidžianti naudoti `BLOCKED` be priežasties;
+- darbo grafiko ribos, reikalingos naktims, savaitgaliams ir normalioms pertraukoms atmesti.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-006 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **Assembly Loss Control**. Ji turės pateikti:
+
+```text
+Aktyvūs BLOCKED WO: ...
+Šiuo metu prarandamos Assembly žmogaus valandos: ...
+Blokavimo trukmė pagal priežastį: ...
+Realiai prarastos žmogaus valandos pagal priežastį: ...
+Vėluojantys / SKUBUS paveikti SO: ...
+Didžiausias šiandienos eskalavimo prioritetas: ...
+Savaitinis pasikartojančių nuostolių Pareto: ...
+```
+
+Modulis neturi WO blokavimo kalendorinės trukmės automatiškai vadinti prarastu constraint pajėgumu. Jis turi parodyti ir užsakymo srauto žalą, ir tikrą Assembly žmogaus laiko nuostolį kaip du skirtingus dydžius.
+
 ## Kitas specifikacijos etapas
 
-MQ-005 prioritetų ir dienos metu atsirandančio `SKUBUS` SO taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-006 — „Kas konkrečiai mažina Assembly našų laiką, kai paruošto darbo eilė nėra tuščia?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+Patvirtinti, ar Odoo darbo įrašuose patikimai matomas konkretus Assembly darbuotojas ir jo perėjimas nuo užblokuoto WO prie kito WO. Tada užbaigti MQ-006 ir ta pačia pilna struktūra formalizuoti MQ-007 — „Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
