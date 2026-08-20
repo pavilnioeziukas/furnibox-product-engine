@@ -226,7 +226,7 @@ Pradinis tikslinis READY bufferis yra **2 Assembly darbo dienos**, išreikštos 
 
 Jei planuojamas arba patikimai demonstruojamas Assembly dienos pajėgumas yra `C` standartinių valandų, pradinis zonų modelis yra:
 
-Pradiniame etape `C` skaičiuojamas kaip tą darbo dieną faktiškai suplanuotų Assembly darbuotojų planinių darbo valandų suma. Assembly darbuotojai visą savo planuojamą laiką dirba tik surinkime, todėl papildomas laiko paskirstymo kitiems darbams koeficientas netaikomas. Neatvykimai, trumpesnės pamainos ir kiti iš anksto žinomi prieinamumo sumažėjimai turi mažinti konkrečios dienos `C`.
+Pradiniame etape `C` skaičiuojamas kaip tą darbo dieną faktiškai suplanuotų Assembly darbuotojų planinių darbo valandų suma. Assembly darbuotojai visą savo planuojamą laiką dirba tik surinkime, todėl papildomas laiko paskirstymo kitiems darbams koeficientas netaikomas. Neatvykimai, trumpesnės pamainos ir kiti iš anksto žinomi prieinamumo sumažėjimai turi mažinti konkrečios dienos `C`. BOM Assembly operacijos laikas nustatytas vienam gaminiui, darant prielaidą, kad jį renka vienas darbuotojas; todėl viena BOM norminė valanda tiesiogiai atitinka vieną standartinę žmogaus Assembly valandą ir gali būti lyginama su `C`.
 
 | Zona | READY, NOT STARTED standartinės valandos | Interpretacija |
 |---|---:|---|
@@ -276,7 +276,6 @@ Pradinis 2 dienų bufferis nėra nuolatinė norma. Jis kalibruojamas po 3–4 sa
 
 #### Trūkstami arba kalibruotini
 
-- patvirtinta BOM operacijos laiko semantika, kad jos standartines valandas būtų galima tiesiogiai lyginti su darbuotojų planinių valandų suma `C`;
 - aiški Assembly badavimo įvykio registravimo arba išvedimo taisyklė;
 - MQ-005 formalizuojama dienos prioritetų sudarymo taisyklė;
 - po 3–4 savaičių patvirtintos galutinės bufferio zonų ribos.
@@ -298,4 +297,4 @@ Modulis neturi skatinti kaupti kuo daugiau READY darbo. Jo paskirtis – palaiky
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti MQ-002 naudojamą Assembly dienos pajėgumo skaičiavimo taisyklę. Tada ta pačia pilna struktūra formalizuoti MQ-003 — „Kas ir kiek laiko neleidžia užsakymams tapti `READY FOR ASSEMBLY`?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+MQ-002 dienos pajėgumo ir pradinio bufferio skaičiavimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-003 — „Kas ir kiek laiko neleidžia užsakymams tapti `READY FOR ASSEMBLY`?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
