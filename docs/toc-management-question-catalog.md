@@ -226,6 +226,8 @@ Pradinis tikslinis READY bufferis yra **2 Assembly darbo dienos**, išreikštos 
 
 Jei planuojamas arba patikimai demonstruojamas Assembly dienos pajėgumas yra `C` standartinių valandų, pradinis zonų modelis yra:
 
+Pradiniame etape `C` skaičiuojamas kaip tą darbo dieną faktiškai suplanuotų Assembly darbuotojų planinių darbo valandų suma. Assembly darbuotojai visą savo planuojamą laiką dirba tik surinkime, todėl papildomas laiko paskirstymo kitiems darbams koeficientas netaikomas. Neatvykimai, trumpesnės pamainos ir kiti iš anksto žinomi prieinamumo sumažėjimai turi mažinti konkrečios dienos `C`.
+
 | Zona | READY, NOT STARTED standartinės valandos | Interpretacija |
 |---|---:|---|
 | **Raudona** | `< 1 × C` | Mažiau nei viena darbo diena; reikšminga Assembly badavimo rizika. |
@@ -274,7 +276,7 @@ Pradinis 2 dienų bufferis nėra nuolatinė norma. Jis kalibruojamas po 3–4 sa
 
 #### Trūkstami arba kalibruotini
 
-- pradinis patikimas Assembly dienos pajėgumas `C` standartinėmis valandomis;
+- patvirtinta BOM operacijos laiko semantika, kad jos standartines valandas būtų galima tiesiogiai lyginti su darbuotojų planinių valandų suma `C`;
 - aiški Assembly badavimo įvykio registravimo arba išvedimo taisyklė;
 - MQ-005 formalizuojama dienos prioritetų sudarymo taisyklė;
 - po 3–4 savaičių patvirtintos galutinės bufferio zonų ribos.
