@@ -400,6 +400,109 @@ Rekomenduojamas eskalavimo veiksmas šiandien: ...
 
 Modulis turi leisti nuo agreguotos priežasties pereiti iki konkrečių užsakymų ir jų audito įvykių. Jis neturi bandyti retrospektyviai išgalvoti istorinių priežasčių iš nepilno Odoo BOM.
 
+---
+
+## MQ-004 — Ar Assembly užbaigia darbus reikiamu tempu?
+
+### 1. Vadybinis klausimas
+
+**Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia tokiu tempu, kokio reikia SO `Delivery Date` įsipareigojimams įvykdyti?**
+
+SO `Delivery Date` reiškia datą, kada užsakymas turi būti išsiųstas iš Furnibox. Tarp Assembly pabaigos ir Packaging nėra nustatyto privalomo laiko tarpo: pakuotojai gali pradėti pakuoti iš karto užbaigus surinkimą. Todėl pradiniame dienos tikslumo modelyje Assembly operacija laikoma užbaigta laiku, jei ji užbaigta ne vėliau kaip SO `Delivery Date`. Dirbtinis papildomas Packaging rezervas netaikomas; taisyklė kalibruojama tik atsiradus faktiniams tos pačios dienos išsiuntimo praradimams.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+| Atsakymas | Keičiamas vadybinis sprendimas ir veiksmas |
+|---|---|
+| **Tempas pakankamas** | Nedidinti Assembly pajėgumo vien dėl pavienių vėlavimų; saugoti READY bufferį ir patvirtintą prioritetų seką. |
+| **Tempas nepakankamas, nors READY darbo ir planinių valandų pakanka** | Analizuoti aktyvaus laiko praradimus, WO blokavimus, normų tikslumą, darbo seką ir realų Assembly pajėgumą; tik išnaudojus esamą pajėgumą svarstyti jo didinimą. |
+| **Reikiamas tempas viršija turimą planinį pajėgumą** | Perplanuoti pajėgumą, prioritetus ar pažadus; įvertinti papildomas Assembly valandas / darbuotojus ir ekonominį poveikį. |
+| **Tempas mažas, nes trūko READY darbo** | Nepriskirti nuostolio Assembly pajėgumui; spręsti MQ-002 bufferio ir MQ-003 paruošimo priežastis. |
+| **Bendras tempas pakankamas, bet vėluoja prioritetiniai SO** | Taisyti darbų seką ir MQ-005 prioritetų taisyklę, o ne automatiškai didinti bendrą pajėgumą. |
+
+### 3. Sprendimo logika
+
+Vertinimas atliekamas kasdien operacinei kontrolei ir kartą per savaitę stabiliai tendencijai nustatyti.
+
+Pagrindiniai dydžiai:
+
+- **Planuotas pajėgumas (`C`)** – suplanuotų Assembly darbuotojų darbo valandų suma.
+- **Užbaigtas standartinis darbas** – per laikotarpį užbaigtų Assembly operacijų BOM norminių valandų suma.
+- **Reikalingas tempas** – Assembly standartinės valandos, kurias pagal SO `Delivery Date` būtina užbaigti pasirinktame laikotarpyje.
+- **READY prieinamumas** – ar vertinamu darbo metu buvo pakankamai `READY, NOT STARTED` darbo.
+- **Pajėgumo vykdymas** – užbaigto standartinio darbo santykis su planiniu pajėgumu, interpretuojamas tik kartu su READY prieinamumu, WIP, pauzėmis ir blokavimais.
+- **Paklausos apkrova** – reikalingo tempo santykis su planiniu pajėgumu.
+
+Klasifikavimo logika:
+
+| Stebimas raštas | Išvada |
+|---|---|
+| READY bufferis pakankamas, užbaigtos standartinės valandos atitinka reikalingą tempą, prioritetiniai SO užbaigiami iki `Delivery Date`. | **Assembly tempas pakankamas.** |
+| READY bufferis pakankamas, tačiau užbaigtos standartinės valandos sistemingai mažesnės už reikalingą tempą, READY eilė auga ar sensta. | **Assembly vykdymo arba pajėgumo problema.** |
+| Reikalingos standartinės valandos sistemingai viršija planinį `C`, net jei esamas darbas vykdomas pagal normą. | **Nominalus Assembly pajėgumo trūkumas.** |
+| Užbaigtas tempas mažas tomis dienomis, kai READY bufferis buvo raudonas arba tuščias. | **Upstream badavimas; ne Assembly pajėgumo įrodymas.** |
+| Bendrai užbaigtų valandų pakanka, bet praleidžiami artimiausio `Delivery Date` darbai. | **Prioritetų / sekos problema.** |
+
+Vienos dienos nuokrypis nėra pakankamas pajėgumo sprendimui. Savaitinė išvada remiasi pasikartojančiu raštu, o pirmoji pajėgumo hipotezė vertinama kartu su MQ-001 po 3–4 savaičių patikimų duomenų.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| SO `Delivery Date` | Nustatyti išsiuntimo įsipareigojimą ir reikiamą Assembly užbaigimo terminą. |
+| SO, MO ir WO sąsajos | Priskirti Assembly darbą konkrečiam išsiuntimo įsipareigojimui. |
+| BOM norminės Assembly valandos | Išreikšti poreikį ir užbaigtą darbą vienodu žmogaus valandų matu. |
+| Assembly operacijos pradžios ir pabaigos timestamp | Nustatyti WIP ir faktinę užbaigimo dieną. |
+| Dienos planinis Assembly pajėgumas `C` | Palyginti reikiamą ir galimą tempą. |
+| Kasdienis READY bufferis | Atskirti pajėgumo trūkumą nuo darbo badavimo. |
+| WO `PAUSED` ir `BLOCKED` intervalai bei blokavimo priežastys | Paaiškinti neužbaigtą pajėgumą, kai darbo buvo. |
+| Dienos prioritetų seka | Patikrinti, ar laiku vykdyti svarbiausi SO. |
+| Faktinis išsiuntimo timestamp | Patikrinti, ar tos pačios dienos Assembly pabaiga praktiškai leido išsiųsti pagal `Delivery Date`. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba jau sutarti
+
+- kiekvieno SO `Delivery Date` – planuojama išsiuntimo iš Furnibox data;
+- BOM Assembly operacijų laikas vienam gaminiui, atitinkantis vieno darbuotojo standartines valandas;
+- Odoo WO pradžios, pabaigos, pauzės ir blokavimo įvykiai;
+- Assembly darbuotojai planiniu darbo metu dirba tik surinkime;
+- pakuotojai gali pradėti pakuoti iš karto užbaigus Assembly.
+
+#### Išvedami
+
+- kasdien ir kas savaitę užbaigtos standartinės Assembly valandos;
+- pagal `Delivery Date` reikalingos standartinės valandos;
+- planinio pajėgumo vykdymo ir paklausos apkrovos santykiai;
+- laiku ir pavėluotai užbaigtų Assembly darbų dalis;
+- dienos, kai tempą ribojo READY badavimas, atskirai nuo dienų, kai READY darbo buvo pakankamai;
+- prioritetų neatitikimai, kai vėlesnis SO vykdytas prieš artimesnio termino SO be patvirtintos išimties.
+
+#### Trūkstami arba kalibruotini
+
+- patikimas dienos darbuotojų planas / neatvykimai dienos pajėgumui `C` apskaičiuoti;
+- formalizuota MQ-005 prioritetų ir leidžiamų išimčių taisyklė;
+- faktinio išsiuntimo timestamp semantikos patikra;
+- po 3–4 savaičių kalibruotos ribos, kada vykdymo nuokrypis laikomas sisteminiu;
+- patikra, ar tos pačios `Delivery Date` dienos Assembly pabaiga realiai nesukelia Packaging / išsiuntimo vėlavimo.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-004 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **Assembly Pace Control**. Ji turės pateikti:
+
+```text
+Laikotarpis: ...
+Planuotas Assembly pajėgumas: ... standartinių valandų
+Reikalingas tempas pagal Delivery Date: ... standartinių valandų
+Užbaigtas standartinis darbas: ... valandų
+READY prieinamumas: pakankamas / nepakankamas
+Pagrindinė nuokrypio klasė: capacity / execution / starvation / priority
+Rizikuojantys SO: ...
+Rekomenduojamas vadybinis veiksmas: ...
+```
+
+Modulis neturi vertinti darbuotojų pagal lokalų užimtumą. Jo paskirtis – nustatyti, ar bendras Assembly srautas pajėgia įvykdyti išsiuntimo įsipareigojimus ir kas konkrečiai paaiškina nuokrypį.
+
 ## Kitas specifikacijos etapas
 
-MQ-003 priežasčių ir persidengiančių intervalų taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-004 — „Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia reikiamu tempu?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+Patvirtinti, kaip Furnibox nustato dienos Assembly darbuotojų planą ir neatvykimus, naudojamus pajėgumui `C`. Tada užbaigti MQ-004 ir ta pačia pilna struktūra formalizuoti MQ-005 — „Kokius užsakymus Assembly turi surinkti šiandien?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
