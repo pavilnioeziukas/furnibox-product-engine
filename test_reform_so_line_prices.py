@@ -19,7 +19,9 @@ from reform_so_line_prices import (
     build_reform_so_line_prices,
     calculate_boms,
     component_cost_only_manufacture_products,
+    exclude_bom_products_from_non_bom,
     inherit_generated_apack_rules,
+    inherit_unambiguous_analog_rules,
     key,
     load_target_dataset_graph,
 )
@@ -28,6 +30,21 @@ from so_pricing_rules import PricingRule, load_config, migrate_legacy_workbook, 
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
+    @staticmethod
+    def pricing_rule(sku, assembly=0, storage=0, packaging=0):
+        return PricingRule(
+            sku,
+            "CATEGORY",
+            "Category",
+            "Odoo / Category",
+            assembly,
+            storage,
+            packaging,
+            0,
+            0,
+            0,
+        )
+
     def test_generated_manufacture_children_are_component_cost_only(self):
         apack = "APACK-EU-C-CAB01-BAS001-A"
         part = "CON7X50"
@@ -130,6 +147,121 @@ class ReformSoLinePriceTests(unittest.TestCase):
             component_cost_only_manufacture_products(dataset),
             {key(apack), key(shelf_pp)},
         )
+
+    def test_missing_rule_inherits_from_unanimous_exact_analogs(self):
+        target = "FPACK-EU-CAB03-WAL015"
+        analogs = [
+            "FPACK-EU-CAB01-WAL015",
+            "FPACK-EU-CAB02-WAL015",
+            "FPACK-US-CAB03-WAL015",
+        ]
+        dataset = {
+            "product_catalog": [
+                {
+                    "sku": sku,
+                    "has_bom": True,
+                    "product_type": "PREPACK CABINETS",
+                    "name_2": "WALL Cabinet - W30 H80 D37",
+                }
+                for sku in [target, *analogs]
+            ],
+        }
+        rules = {
+            key(sku): self.pricing_rule(sku, assembly=4)
+            for sku in analogs
+        }
+
+        result = inherit_unambiguous_analog_rules(rules, dataset)
+
+        self.assertEqual(result[key(target)].sku, target)
+        self.assertEqual(result[key(target)].addons, (4, 0, 0, 0, 0, 0))
+
+    def test_shelf_pp_rule_may_inherit_across_width_only(self):
+        target = "EUB-PACK-CAB03-SLF902-PP"
+        analogs = [
+            ("EUB-PACK-CAB03-SLF901-PP", "W20"),
+            ("EUB-PACK-CAB03-SLF903-PP", "W60"),
+            ("EUB-PACK-CAB03-SLF904-PP", "W80"),
+        ]
+        catalog = [{
+            "sku": target,
+            "has_bom": True,
+            "product_type": "SHELF PREPACK",
+            "name_2": "Shelf - W40 D60 - Shelf with integrated light (silver)",
+        }]
+        catalog.extend({
+            "sku": sku,
+            "has_bom": True,
+            "product_type": "SHELF PREPACK",
+            "name_2": f"Shelf - {width} D60 - Shelf with integrated light (silver)",
+        } for sku, width in analogs)
+        clothing_rod = "EUB-PACK-CAB03-SLF909-PP"
+        catalog.append({
+            "sku": clothing_rod,
+            "has_bom": True,
+            "product_type": "SHELF PREPACK",
+            "name_2": "Shelf - W40 D60 - Shelf with integrated light (silver) & clothing rod",
+        })
+        rules = {
+            key(sku): self.pricing_rule(
+                sku,
+                assembly=7.16,
+                storage=0.5,
+                packaging=1,
+            )
+            for sku, _ in analogs
+        }
+        rules[key(clothing_rod)] = self.pricing_rule(
+            clothing_rod,
+            assembly=7.16,
+            storage=0.7,
+            packaging=1,
+        )
+
+        result = inherit_unambiguous_analog_rules(
+            rules,
+            {"product_catalog": catalog},
+        )
+
+        self.assertEqual(result[key(target)].sku, target)
+        self.assertEqual(
+            result[key(target)].addons,
+            (7.16, 0.5, 1, 0, 0, 0),
+        )
+
+    def test_ambiguous_analog_profiles_remain_without_rule(self):
+        target = "TARGET-PP"
+        dataset = {"product_catalog": [{
+            "sku": sku,
+            "has_bom": True,
+            "product_type": "SHELF PREPACK",
+            "name_2": name,
+        } for sku, name in (
+            (target, "Shelf - W40 D60 - Standard"),
+            ("ANALOG-1-PP", "Shelf - W20 D60 - Standard"),
+            ("ANALOG-2-PP", "Shelf - W60 D60 - Standard"),
+        )]}
+        rules = {
+            key("ANALOG-1-PP"): self.pricing_rule("ANALOG-1-PP", storage=0.5),
+            key("ANALOG-2-PP"): self.pricing_rule("ANALOG-2-PP", storage=0.7),
+        }
+
+        result = inherit_unambiguous_analog_rules(rules, dataset)
+
+        self.assertNotIn(key(target), result)
+
+    def test_bom_product_is_excluded_from_non_bom_pricing(self):
+        bom_item = ("BOM", "BOM", "Category", "Pricing", 0, 0, 0, 0)
+        non_bom_item = (
+            "NON-BOM", "Non-BOM", "Category", "Pricing", 0, 0, 0, 0
+        )
+
+        result = exclude_bom_products_from_non_bom(
+            [bom_item, non_bom_item],
+            {key("BOM"): [("PART", 1)]},
+        )
+
+        self.assertEqual(result, [non_bom_item])
 
     def test_pricing_uses_full_target_dataset_for_shelf_pp(self):
         with tempfile.TemporaryDirectory() as directory:

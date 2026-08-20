@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -482,6 +483,103 @@ def inherit_generated_apack_rules(rules, dataset):
         )
 
     return result
+
+
+def _pricing_rule_signature(rule):
+    """Return every pricing-profile field except the assigned SKU."""
+    return (
+        rule.category_id,
+        rule.category_name,
+        rule.odoo_category,
+        *rule.addons,
+    )
+
+
+def _normalized_product_name(value, ignore_width=False):
+    """Normalize Dataset names for conservative analog matching."""
+    result = " ".join(text(value).upper().split())
+    if ignore_width:
+        result = re.sub(
+            r"\bW\d+(?:[.,]\d+)?\b",
+            "W*",
+            result,
+        )
+    return result
+
+
+def inherit_unambiguous_analog_rules(rules, dataset):
+    """Copy missing BOM rules only from unanimous catalog analogs.
+
+    Exact product type and Product Name 2 are authoritative. Shelf prepack
+    products additionally allow the width token to differ, while depth and
+    all descriptive text must remain identical. Inferred rules never become
+    source candidates for another inference.
+    """
+    result = dict(rules)
+    source_rules = dict(rules)
+    catalog = [
+        product
+        for product in dataset.get("product_catalog") or []
+        if product.get("has_bom")
+        and text(product.get("sku"))
+        and text(product.get("product_type"))
+        and text(product.get("name_2"))
+    ]
+
+    def matching_rules(target, ignore_width=False):
+        target_type = key(target.get("product_type"))
+        target_name = _normalized_product_name(
+            target.get("name_2"),
+            ignore_width=ignore_width,
+        )
+        matches = []
+        for candidate in catalog:
+            if key(candidate.get("product_type")) != target_type:
+                continue
+            if _normalized_product_name(
+                candidate.get("name_2"),
+                ignore_width=ignore_width,
+            ) != target_name:
+                continue
+            rule = source_rules.get(key(candidate.get("sku")))
+            if rule is not None:
+                matches.append(rule)
+        return matches
+
+    for product in catalog:
+        sku = text(product.get("sku"))
+        if key(sku) in result:
+            continue
+
+        candidates = matching_rules(product)
+        if not candidates and sku.upper().endswith("-PP"):
+            candidates = matching_rules(
+                product,
+                ignore_width=True,
+            )
+        signatures = {
+            _pricing_rule_signature(candidate)
+            for candidate in candidates
+        }
+        if len(signatures) != 1:
+            continue
+
+        result[key(sku)] = replace(
+            candidates[0],
+            sku=sku,
+        )
+
+    return result
+
+
+def exclude_bom_products_from_non_bom(items, graph):
+    """A current Target BOM parent cannot also be priced as a non-BOM SKU."""
+    bom_skus = {key(sku) for sku in graph}
+    return [
+        item
+        for item in items
+        if item and key(item[0]) not in bom_skus
+    ]
 
 
 def load_reform_boms(
@@ -2909,6 +3007,10 @@ def build_from_application_config(
             rules,
             target_dataset,
         )
+        rules = inherit_unambiguous_analog_rules(
+            rules,
+            target_dataset,
+        )
         component_cost_only_tops = (
             component_cost_only_manufacture_products(
                 target_dataset
@@ -2939,8 +3041,11 @@ def build_from_application_config(
 
     non_rows = (
         calculate_non_bom(
-            non_bom_from_config(
-                document
+            exclude_bom_products_from_non_bom(
+                non_bom_from_config(
+                    document
+                ),
+                graph,
             ),
             prices,
         )
