@@ -76,7 +76,7 @@ užsakymo poreikis → upstream prieinamumas → READY FOR ASSEMBLY
                   → Assembly → tolesnis vykdymas → Shipped
 ```
 
-`READY FOR ASSEMBLY` reiškia pirmą momentą, kai konkrečiam Assembly MO fiziškai ir informaciškai prieinami visi darbui pradėti būtini komponentai, įskaitant kliento tiekiamus fasadus ir stalčius, ir nėra kitos žinomos pradžią blokuojančios sąlygos. Vien Odoo rezervacija arba Furnix detalių atvykimas savaime nėra pakankamas READY įrodymas.
+`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir kliento tiekiamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas.
 
 #### 3.2. Diagnostikos signalai
 
@@ -146,7 +146,7 @@ Prieš implementaciją visi laukai turi būti patikrinti prieš faktinę Furnibo
 #### Kritiškai trūkstami duomenys
 
 - patikimas istorinis ir nuo šiol registruojamas `READY FOR ASSEMBLY` timestamp;
-- patvirtintas `READY FOR ASSEMBLY` verslo apibrėžimas, apimantis kliento tiekiamus fasadus / stalčius ir fizinį, ne vien sisteminį, prieinamumą;
+- `READY FOR ASSEMBLY` apskaičiavimo taisyklė, apimanti visų Furnix ir kliento tiekiamų komponentų fizinio gavimo DC momentus;
 - READY būsenos atšaukimo įvykis, kai darbas po pažymėjimo vėl tampa neprieinamas;
 - patvirtintas darbo svorio matas, leidžiantis palyginti nevienodo dydžio darbus.
 
@@ -180,8 +180,8 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Koks tikslus fizinis ir informacinis kriterijų rinkinys reiškia `READY FOR ASSEMBLY` Furnibox procese?
-2. Kas, kada ir kokiu įvykiu patvirtina READY būseną; kaip registruojamas jos atšaukimas?
+1. Kuris Odoo arba kitas įvykis patikimai įrodo fizinį kiekvieno komponento gavimą DC, ypač kliento tiekiamų fasadų ir stalčių?
+2. Kaip READY būsena koreguojama, jei DC esantis komponentas vėliau pripažįstamas netinkamu surinkimui?
 3. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
 4. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
 5. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
