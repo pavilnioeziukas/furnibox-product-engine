@@ -82,7 +82,7 @@ Kasdienio patvirtinimo timestamp žymi pirmą patikrą, per kurią visas komplek
 
 Jei netinkamas komponentas nustatomas per rytinę patikrą iki Assembly pradžios, užsakymas nelaikomas READY, nes tinkamo komponento fiziškai nėra. Jei brokas ar kitas komponento netinkamumas nustatomas jau pradėjus Assembly, istorinis READY timestamp nekeičiamas: užsakymas yra WIP ir registruojamas kaip `ASSEMBLY BLOCKED` nuo sutrikimo pradžios iki jo pašalinimo. Šis praradimas analizuojamas MQ-006, o ne priskiriamas per vėlam pasiruošimui iki Assembly.
 
-Odoo patikimai fiksuoja Assembly operacijos pradžios ir pabaigos momentus. Todėl būsenų seka yra: `NOT READY` → `READY, NOT STARTED` → `ASSEMBLY WIP` → `ASSEMBLY COMPLETED`. BOM pateikia bendrą norminį operacijos laiką, tačiau operacija neskaidoma į dalines operacijas, todėl pradėto WIP likusios norminės valandos iš operacijos progreso patikimai neišvedamos. READY eilės svoriui iki operacijos pradžios naudojama visa BOM norminė trukmė; WIP rodomas atskirai.
+Odoo patikimai fiksuoja Assembly operacijos pradžios ir pabaigos momentus, o pradėta operacija gali būti sustabdyta. Todėl būsenų seka yra: `NOT READY` → `READY, NOT STARTED` → `ASSEMBLY WIP ACTIVE` / `ASSEMBLY WIP PAUSED` → `ASSEMBLY COMPLETED`. BOM pateikia bendrą norminį operacijos laiką, tačiau operacija neskaidoma į dalines operacijas, todėl pradėto WIP likusios norminės valandos iš operacijos progreso patikimai neišvedamos. READY eilės svoriui iki operacijos pradžios naudojama visa BOM norminė trukmė; WIP rodomas atskirai. Jei Odoo saugo patikimus sustabdymo ir atnaujinimo momentus, jie naudojami aktyviam operacijos laikui atskirti nuo sustabdyto WIP laiko.
 
 #### 3.2. Diagnostikos signalai
 
@@ -116,6 +116,7 @@ Minimalus sprendimo procedūros duomenų rinkinys vienam užsakymui / darbui:
 | Pažadėta / planuota išsiuntimo data | Nustatyti Throughput riziką ir eilės prioritetą. |
 | `READY FOR ASSEMBLY` timestamp ir būsenos versija | Nustatyti, kada darbas realiai pateko į Assembly valdomą eilę. |
 | Odoo fiksuojami Assembly operacijos pradžios ir užbaigimo timestamp | Matuoti laukimą po READY, patikimai atskirti nepradėtą eilę nuo WIP ir nustatyti užbaigimo tempą. Pradžios–pabaigos intervalas savaime nelaikomas grynu našiu darbo laiku. |
+| Assembly operacijos sustabdymo ir atnaujinimo įvykiai | Atskirti aktyviai vykdomą operaciją nuo sustabdyto WIP ir nevertinti viso pradžios–pabaigos intervalo kaip darbo laiko. |
 | Packed / shipped timestamp | Susieti operacinį srautą su laiku realizuotu išsiuntimu. |
 | Standartinės Assembly darbo valandos, apskaičiuotos iš BOM operacijų laikų | Palyginti nevienodo dydžio darbus ir READY eilę išreikšti laukiančiu Assembly darbo krūviu, o ne vien MO skaičiumi. |
 | READY būsenos atšaukimas ir priežastis, jei iki Assembly pradžios nustatomas klaidingas patvirtinimas | Išlaikyti teisingą eilės istoriją ir duomenų auditą neperrašant pradinio įvykio. |
@@ -188,7 +189,7 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Ar Odoo fiksuojamos Assembly operacijos pauzės arba blokavimo laikotarpiai, ar matomi tik pradžios ir pabaigos momentai?
+1. Ar sustabdant Assembly operaciją Odoo nurodoma patikima sustabdymo priežastis, ar registruojamas tik pauzės laikas?
 2. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
 3. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
 
