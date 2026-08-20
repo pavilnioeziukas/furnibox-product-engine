@@ -149,6 +149,20 @@ def business_rule(category: str, sku: str) -> tuple[str, str] | None:
         # komplektai. Jiems neturi būti kuriamas MO ar priskiriamos operacijos.
         return "phantom", "PATVIRTINTA TAISYKLĖ: LED HARDWARE = KIT"
     if category == "INTERIOR STORAGE":
+        # Reform v10 atliekų rūšiavimo pozicijos tęsia Production EUB
+        # gamybinių BOM seriją (MIS003–MIS023). Toje pačioje šeimoje
+        # MIS800/MIS900 yra KIT, todėl bendras analogų algoritmas pagrįstai
+        # grąžina REVIEW; šiems trims patvirtintiems SKU tipą fiksuojame
+        # tiesiogiai ir neplečiame taisyklės visai INTERIOR STORAGE grupei.
+        if sku in {
+            "EUB-P-ACC02-MIS030",
+            "EUB-P-ACC02-MIS031",
+            "EUB-P-ACC02-MIS032",
+        }:
+            return (
+                "normal",
+                "PATVIRTINTA TAISYKLĖ: EUB ATLIEKŲ RŪŠIAVIMO POZICIJOS = MANUFACTURE",
+            )
         # Šie trys komplektai turi kelis komponentus / tvirtinimo detales ir
         # atitinka esamus Production gamybinius analogus.
         if sku.endswith(("-MIS010", "-MIS050", "-MIS051")):
