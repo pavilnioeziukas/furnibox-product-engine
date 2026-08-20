@@ -18,6 +18,8 @@ from reform_so_line_prices import (
     build_from_application_config,
     build_reform_so_line_prices,
     calculate_boms,
+    generated_manufacture_pricing_products,
+    inherit_generated_apack_rules,
     key,
     load_target_dataset_graph,
 )
@@ -26,6 +28,96 @@ from so_pricing_rules import PricingRule, load_config, migrate_legacy_workbook, 
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
+    def test_generated_manufacture_children_are_component_cost_only(self):
+        apack = "APACK-EU-C-CAB01-BAS001-A"
+        part = "CON7X50"
+        rules = {
+            key(apack): PricingRule(
+                apack, "", "APACK", "", 5, 0, 0, 0, 0, 0
+            ),
+        }
+        boms = {
+            apack: ("APACK", [Item(part, 4)]),
+        }
+        prices = {
+            key(part): ("Connector", 0.25, "DIRECT PRICE"),
+        }
+
+        rows, details = calculate_boms(
+            boms,
+            prices,
+            rules,
+            adjustment=0,
+            graph={key(apack): [(part, 4)]},
+            component_cost_only_tops={apack},
+        )
+
+        self.assertEqual(rows[0]["status"], "COMPLETE")
+        self.assertEqual(rows[0]["issues"], "")
+        self.assertAlmostEqual(rows[0]["cost"], 1.0)
+        self.assertAlmostEqual(rows[0]["final"], 6.0)
+        self.assertEqual([row["level"] for row in details], ["LEVEL I BOM"])
+
+    def test_generated_cost_only_scope_does_not_hide_parent_rule_gap(self):
+        cabinet = "EUB-C-CAB01-BAS001-A"
+        apack = "APACK-EU-C-CAB01-BAS001-A"
+        part = "PART"
+        rules = {
+            key(cabinet): PricingRule(
+                cabinet, "", "CABINET-A", "", 1, 0, 0, 0, 0, 0
+            ),
+        }
+        boms = {
+            cabinet: ("CABINETS (Assembled)", [Item(apack, 1)]),
+        }
+        prices = {
+            key(part): ("Part", 2.0, "DIRECT PRICE"),
+        }
+
+        rows, _ = calculate_boms(
+            boms,
+            prices,
+            rules,
+            adjustment=0,
+            graph={
+                key(cabinet): [(apack, 1)],
+                key(apack): [(part, 1)],
+            },
+            component_cost_only_tops={apack},
+        )
+
+        self.assertEqual(rows[0]["status"], "BLOCKED")
+        self.assertIn(
+            f"Missing LEVEL II BOM pricing rule: {apack}",
+            rows[0]["issues"],
+        )
+
+    def test_apack_rule_inherits_only_from_exact_generated_fpack(self):
+        fpack = "FPACK-EU-CAB01-BNF002"
+        apack = "APACK-EU-C-CAB01-BNF002-A"
+        source = PricingRule(
+            fpack, "8", "FPACK", "", 5, 0.2, 0, 0, 0, 0
+        )
+        dataset = {
+            "products": [{
+                "sku": apack,
+                "generated_from": fpack,
+                "bom_type": "MANUFACTURE",
+            }],
+        }
+
+        rules = inherit_generated_apack_rules(
+            {key(fpack): source},
+            dataset,
+        )
+
+        self.assertEqual(rules[key(apack)].sku, apack)
+        self.assertEqual(rules[key(apack)].addons, source.addons)
+        self.assertEqual(
+            generated_manufacture_pricing_products(dataset),
+            {key(apack)},
+        )
+
     def test_pricing_uses_full_target_dataset_for_shelf_pp(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -442,6 +442,43 @@ def load_target_dataset_graph(
             "transformacijos žymos. Pricing iš seno Dataset blokuojamas."
         )
     return dataset, graph
+
+
+def generated_manufacture_pricing_products(dataset):
+    """Generated MANUFACTURE BOM children contribute cost, not extra add-ons."""
+    return {
+        key(product.get("sku"))
+        for product in dataset.get("products") or []
+        if text(product.get("generated_from"))
+        and text(product.get("bom_type")).upper() == "MANUFACTURE"
+        and text(product.get("sku"))
+    }
+
+
+def inherit_generated_apack_rules(rules, dataset):
+    """Copy a missing APACK add-on profile only from its exact source FPACK."""
+    result = dict(rules)
+
+    for product in dataset.get("products") or []:
+        sku = text(product.get("sku"))
+        source_sku = text(product.get("generated_from"))
+        sku_key = key(sku)
+        source_key = key(source_sku)
+
+        if (
+            not sku.upper().startswith("APACK-")
+            or not source_sku.upper().startswith("FPACK-")
+            or sku_key in result
+            or source_key not in result
+        ):
+            continue
+
+        result[sku_key] = replace(
+            result[source_key],
+            sku=sku,
+        )
+
+    return result
 
 
 def load_reform_boms(
@@ -1078,6 +1115,7 @@ def calculate_boms(
     rules,
     adjustment=ADJUSTMENT,
     graph=None,
+    component_cost_only_tops=None,
 ):
     """
     Calculate BOM sale prices.
@@ -1100,6 +1138,14 @@ def calculate_boms(
         graph = normalize_graph(
             graph
         )
+
+    component_cost_only_tops = {
+        key(value)
+        for value in (
+            component_cost_only_tops
+            or set()
+        )
+    }
 
     results = []
     details = []
@@ -1262,6 +1308,14 @@ def calculate_boms(
                         ),
                     }
                 )
+
+            if key(top) in component_cost_only_tops:
+                # APACK, HRD-A and Shelf-PP are generated internal
+                # MANUFACTURE products. Their child materials already enter
+                # recursive component cost. Requiring another sales add-on
+                # rule for every screw, package or sticker would apply the
+                # legacy Level II rule at the wrong structural level.
+                continue
 
             has_bom = bool(
                 graph.get(
@@ -2842,6 +2896,22 @@ def build_from_application_config(
         document
     )
 
+    component_cost_only_tops = set()
+    if dataset_path is not None:
+        target_dataset, _ = load_target_dataset_graph(
+            dataset_path,
+            bom_path,
+        )
+        rules = inherit_generated_apack_rules(
+            rules,
+            target_dataset,
+        )
+        component_cost_only_tops = (
+            generated_manufacture_pricing_products(
+                target_dataset
+            )
+        )
+
     boms, graph = load_reform_boms(
         bom_path,
         document[
@@ -2858,6 +2928,9 @@ def build_from_application_config(
             rules,
             adjustment=adjustment,
             graph=graph,
+            component_cost_only_tops=(
+                component_cost_only_tops
+            ),
         )
     )
 
