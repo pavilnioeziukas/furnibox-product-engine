@@ -551,6 +551,7 @@ Kadangi vieną gaminį renka vienas darbuotojas, sistema turi rodyti ne tik bend
 
 - Žodinis skubus prašymas savaime eilės nekeičia.
 - Jei poreikis yra tikrai skubus, gamybos vadovė priskiria SO `SKUBUS` tagą.
+- Jei naujas `READY + SKUBUS` SO atsiranda jau vykstant darbo dienai, jis nenutraukia šiuo metu vykdomos Assembly operacijos ir įtraukiamas kaip pirmas darbas po jos.
 - Rankinis nukrypimas nuo apskaičiuotos sekos leidžiamas tik gamybos vadovei, nurodant priežastį.
 - Prieš patvirtinant nukrypimą sistema parodo, kurie kiti SO dėl jo gali pereiti į vėlavimo riziką.
 - Išimties audite saugoma kas, kada, ką perkėlė, priežastis ir prieš / po buvusi seka.
@@ -612,4 +613,4 @@ Modulis turi pateikti paaiškinamą rekomenduojamą seką, bet galutinį dienos 
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti, kada ryte dienos Assembly planas laikomas galutinai patvirtintu ir kaip elgtis su vėliau tą pačią dieną atsiradusiu `SKUBUS` SO. Tada užbaigti MQ-005 ir ta pačia pilna struktūra formalizuoti MQ-006 — „Kas konkrečiai mažina Assembly našų laiką, kai paruošto darbo eilė nėra tuščia?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+MQ-005 prioritetų ir dienos metu atsirandančio `SKUBUS` SO taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-006 — „Kas konkrečiai mažina Assembly našų laiką, kai paruošto darbo eilė nėra tuščia?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
