@@ -367,7 +367,7 @@ Prioritetas priežasčiai suteikiamas ne vien pagal atvejų skaičių. Aukščia
 
 - užsakymo ir Assembly MO identifikatoriai;
 - BOM Assembly operacijų norminės valandos;
-- planuojama / pažadėta išsiuntimo data, jei jos semantika patvirtinama;
+- kiekviename Sales Order esantis `Delivery Date`; jo tiksli verslo semantika dar turi būti patvirtinta;
 - kasdienė gamybos vadovės READY patikra.
 
 #### Išvedami
