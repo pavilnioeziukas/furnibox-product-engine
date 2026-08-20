@@ -504,8 +504,112 @@ Rekomenduojamas vadybinis veiksmas: ...
 
 Modulis neturi vertinti darbuotojų pagal lokalų užimtumą. Jo paskirtis – nustatyti, ar bendras Assembly srautas pajėgia įvykdyti išsiuntimo įsipareigojimus ir kas konkrečiai paaiškina nuokrypį.
 
+---
+
+## MQ-005 — Kokius užsakymus Assembly turi surinkti šiandien?
+
+### 1. Vadybinis klausimas
+
+**Kokius `READY FOR ASSEMBLY` užsakymus ir kokia seka Assembly turi vykdyti šiandien, kad būtų apsaugoti artimiausi išsiuntimo įsipareigojimai ir bendras Furnibox Throughput?**
+
+Šiandien Assembly darbų eilę daugiausia lemia žodiniai skubūs prašymai. Šis prioritetų šaltinis nėra audituojamas, gali keisti seką be matomo poveikio kitiems SO ir nebūtinai apsaugo artimiausią `Delivery Date`. MQ-005 pakeičia šią praktiką skaidria numatytąja eile ir oficialiu Odoo `SKUBUS` signalu.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+MQ-005 atsakymas kiekvienos darbo dienos pradžioje nustato:
+
+- kuriuos READY darbus pradėti šiandien;
+- kokia jų tarpusavio seka;
+- kurių READY darbų šiandien nepradėti dėl riboto pajėgumo;
+- kuriuos SO būtina eskaluoti, nes net teisinga seka nebeleidžia įvykdyti `Delivery Date`;
+- kokį kitų SO pavėlavimo pavojų sukuria kiekviena patvirtinta prioriteto išimtis.
+
+### 3. Sprendimo logika
+
+#### 3.1. Tinkamumas eilėje
+
+Į dienos Assembly eilę patenka tik `READY, NOT STARTED` darbai. `NOT READY`, `WIP ACTIVE`, `WIP PAUSED`, `WIP BLOCKED` ir `COMPLETED` darbai į naujai pradedamų darbų eilę neįtraukiami; jie rodomi atskirose kontrolės grupėse.
+
+#### 3.2. Patvirtinta numatytoji prioritetų seka
+
+| Prioriteto lygis | Taisyklė |
+|---:|---|
+| **1** | Jau vėluojantys READY užsakymai, pirmiausia su seniausia pradelsta SO `Delivery Date`. |
+| **2** | Dar nevėluojantys `READY + SKUBUS` užsakymai, pirmiausia su artimiausia `Delivery Date`. |
+| **3** | Kiti READY užsakymai, pirmiausia su artimiausia `Delivery Date`. |
+| **4** | Kai to paties prioriteto lygio SO `Delivery Date` vienoda, pirmiau vykdomas anksčiau READY tapęs užsakymas. |
+
+`SKUBUS` žyma saugoma Odoo kaip Sales Order tagas ir per SO–MO sąsają perduodama Assembly eilei. SO kuria, `SKUBUS` tagą priskiria ir nuima gamybos vadovė, todėl ji yra prioriteto savininkė. `SKUBUS` yra aukščiau visų dar nevėluojančių įprastų SO, bet neužgožia jau vėluojančio READY užsakymo.
+
+#### 3.3. Dienos pajėgumo užpildymas
+
+Rytinės patikros metu gamybos vadovė įveda dirbančių Assembly darbuotojų skaičių, o sistema apskaičiuoja `C = darbuotojų skaičius × 8 val.`. READY darbai pagal patvirtintą seką pridedami į dienos planą iki planinio `C`.
+
+Kadangi vieną gaminį renka vienas darbuotojas, sistema turi rodyti ne tik bendrą dienos valandų sumą, bet ir konkretų darbų paskirstymą prieinamiems darbuotojams. Jei paskutinis darbas netelpa į likusias dienos valandas, jis gali būti pradėtas tik tada, jei gamybos vadovė sąmoningai priima WIP perkėlimo į kitą dieną sprendimą; sistema neturi apsimesti, kad visa jo norminė trukmė bus užbaigta tą dieną.
+
+#### 3.4. Išimtys ir auditas
+
+- Žodinis skubus prašymas savaime eilės nekeičia.
+- Jei poreikis yra tikrai skubus, gamybos vadovė priskiria SO `SKUBUS` tagą.
+- Rankinis nukrypimas nuo apskaičiuotos sekos leidžiamas tik gamybos vadovei, nurodant priežastį.
+- Prieš patvirtinant nukrypimą sistema parodo, kurie kiti SO dėl jo gali pereiti į vėlavimo riziką.
+- Išimties audite saugoma kas, kada, ką perkėlė, priežastis ir prieš / po buvusi seka.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| READY būsena ir timestamp | Atrinkti vykdytinus darbus ir išspręsti vienodų datų prioritetą. |
+| SO `Delivery Date` | Nustatyti vėluojančius ir artimiausius įsipareigojimus. |
+| SO `SKUBUS` tagas | Taikyti oficialų aukštesnį prioritetą nevėluojantiems SO. |
+| SO–MO–WO sąsajos | Perduoti SO prioritetą konkrečiam Assembly darbui. |
+| BOM norminės Assembly valandos | Užpildyti dienos pajėgumą ir prognozuoti užbaigimą. |
+| Ryte dirbančių Assembly darbuotojų skaičius | Apskaičiuoti dienos `C` ir paskirstyti darbus. |
+| Esamas WIP bei WO `PAUSED` / `BLOCKED` būsenos | Neplanuoti to paties darbo kaip naujo ir rezervuoti dėmesį pradėtam darbui. |
+| Rankinio sekos pakeitimo įvykis ir priežastis | Audituoti išimtis bei jų poveikį kitiems SO. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba jau sutarti
+
+- SO `Delivery Date`;
+- Odoo SO `SKUBUS` tagas;
+- SO–MO ir MO–WO ryšiai, kuriuos reikia techniškai validuoti;
+- BOM norminės Assembly valandos;
+- WO pradžios, pabaigos, pauzės ir blokavimo būsenos;
+- kasdienis gamybos vadovės READY patvirtinimas;
+- gamybos vadovės įvedamas dirbančių darbuotojų skaičius.
+
+#### Išvedami
+
+- keturių lygių prioritetų seka;
+- į dienos pajėgumą telpantys ir netelpantys darbai;
+- numatoma kiekvieno READY darbo pradžios ir užbaigimo diena;
+- SO, kuriems gresia praleisti `Delivery Date` net laikantis taisyklės;
+- rankinio eilės pakeitimo paveikti SO.
+
+#### Trūkstami
+
+- rankinio sekos pakeitimo priežasties ir audito įvykis;
+- patvirtintos leidžiamų išimčių priežasčių kategorijos arba pradinis laisvas komentaras;
+- aiškus dienos plano patvirtinimo momentas;
+- techninė patikra, ar Odoo `SKUBUS` tago pakeitimo istorijoje prieinami kas / kada duomenys.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-005 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **Assembly Priority Board**. Ji turės pateikti:
+
+```text
+Dirbantys Assembly darbuotojai: ...
+Dienos pajėgumas: ... standartinių valandų
+Šiandienos eilė: SO / MO / prioritetas / Delivery Date / SKUBUS / norminės valandos
+Netelpantys į dienos pajėgumą darbai: ...
+Delivery Date rizika: ...
+Rankinės išimties poveikis kitiems SO: ...
+```
+
+Modulis turi pateikti paaiškinamą rekomenduojamą seką, bet galutinį dienos planą patvirtina gamybos vadovė. Jo tikslas – panaikinti nematomą žodinių skubinimų valdymą, o ne atimti atsakomybę už pagrįstas išimtis.
+
 ## Kitas specifikacijos etapas
 
-MQ-004 dienos pajėgumo, tempo ir įsipareigojimų palyginimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-005 — „Kokius užsakymus Assembly turi surinkti šiandien?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
-
-Pradinis MQ-005 kontekstas: šiandien Assembly darbų eilę daugiausia lemia žodiniai skubūs prašymai. Šis prioritetų šaltinis nėra audituojamas, gali keisti seką be matomo poveikio kitiems SO ir nebūtinai apsaugo artimiausią `Delivery Date`. Furnibox taip pat turi oficialiai `SKUBUS` pažymimų užsakymų; ši žyma saugoma Odoo kaip Sales Order tagas ir per SO–MO sąsają gali būti naudojama Assembly eilei. SO kuria ir `SKUBUS` tagą priskiria arba nuima gamybos vadovė, todėl ji yra prioriteto savininkė. `SKUBUS` turi tapti aiškiu prioritetų taisyklės signalu, tačiau jo poveikis dienos eilei turi būti matomas ir audituojamas, kad nepakeistų žodinio skubinimo kita nekontroliuojama išimtimi. MQ-005 turi pakeisti dabartinę praktiką skaidria numatytąja eile, paliekant tik aiškiai registruojamas ir pagrindžiamas išimtis.
+Patvirtinti, kada ryte dienos Assembly planas laikomas galutinai patvirtintu ir kaip elgtis su vėliau tą pačią dieną atsiradusiu `SKUBUS` SO. Tada užbaigti MQ-005 ir ta pačia pilna struktūra formalizuoti MQ-006 — „Kas konkrečiai mažina Assembly našų laiką, kai paruošto darbo eilė nėra tuščia?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
