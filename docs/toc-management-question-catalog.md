@@ -226,7 +226,7 @@ Pradinis tikslinis READY bufferis yra **2 Assembly darbo dienos**, išreikštos 
 
 Jei planuojamas arba patikimai demonstruojamas Assembly dienos pajėgumas yra `C` standartinių valandų, pradinis zonų modelis yra:
 
-Pradiniame etape `C` skaičiuojamas kaip tą darbo dieną faktiškai suplanuotų Assembly darbuotojų planinių darbo valandų suma. Assembly darbuotojai visą savo planuojamą laiką dirba tik surinkime, todėl papildomas laiko paskirstymo kitiems darbams koeficientas netaikomas. Neatvykimai, trumpesnės pamainos ir kiti iš anksto žinomi prieinamumo sumažėjimai turi mažinti konkrečios dienos `C`. BOM Assembly operacijos laikas nustatytas vienam gaminiui, darant prielaidą, kad jį renka vienas darbuotojas; todėl viena BOM norminė valanda tiesiogiai atitinka vieną standartinę žmogaus Assembly valandą ir gali būti lyginama su `C`.
+Pradiniame etape `C` skaičiuojamas kaip tą darbo dieną faktiškai suplanuotų Assembly darbuotojų planinių darbo valandų suma. Assembly darbuotojai visą savo planuojamą laiką dirba tik surinkime, todėl papildomas laiko paskirstymo kitiems darbams koeficientas netaikomas. Neatvykimai, trumpesnės pamainos ir kiti iš anksto žinomi prieinamumo sumažėjimai turi mažinti konkrečios dienos `C`. Ši informacija šiuo metu žinoma tik gamybos vadovei ir Odoo nefiksuojama, todėl `C` turi būti rankiniu būdu patvirtinamas per rytinę READY patikrą. BOM Assembly operacijos laikas nustatytas vienam gaminiui, darant prielaidą, kad jį renka vienas darbuotojas; todėl viena BOM norminė valanda tiesiogiai atitinka vieną standartinę žmogaus Assembly valandą ir gali būti lyginama su `C`.
 
 | Zona | READY, NOT STARTED standartinės valandos | Interpretacija |
 |---|---:|---|
@@ -276,6 +276,7 @@ Pradinis 2 dienų bufferis nėra nuolatinė norma. Jis kalibruojamas po 3–4 sa
 
 #### Trūkstami arba kalibruotini
 
+- gamybos vadovės rankiniu būdu per rytinę patikrą patvirtinamos tos dienos realiai prieinamos Assembly žmogaus valandos `C`, nes darbuotojų planas ir neatvykimai Odoo nefiksuojami;
 - aiški Assembly badavimo įvykio registravimo arba išvedimo taisyklė;
 - MQ-005 formalizuojama dienos prioritetų sudarymo taisyklė;
 - po 3–4 savaičių patvirtintos galutinės bufferio zonų ribos.
@@ -480,7 +481,7 @@ Vienos dienos nuokrypis nėra pakankamas pajėgumo sprendimui. Savaitinė išvad
 
 #### Trūkstami arba kalibruotini
 
-- patikimas dienos darbuotojų planas / neatvykimai dienos pajėgumui `C` apskaičiuoti;
+- gamybos vadovės rankiniu būdu patvirtinamos tos dienos realiai prieinamos Assembly žmogaus valandos `C`; darbuotojų planas ir neatvykimai šiuo metu žinomi tik jai ir Odoo nefiksuojami;
 - formalizuota MQ-005 prioritetų ir leidžiamų išimčių taisyklė;
 - faktinio išsiuntimo timestamp semantikos patikra;
 - po 3–4 savaičių kalibruotos ribos, kada vykdymo nuokrypis laikomas sisteminiu;
@@ -505,4 +506,4 @@ Modulis neturi vertinti darbuotojų pagal lokalų užimtumą. Jo paskirtis – n
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti, kaip Furnibox nustato dienos Assembly darbuotojų planą ir neatvykimus, naudojamus pajėgumui `C`. Tada užbaigti MQ-004 ir ta pačia pilna struktūra formalizuoti MQ-005 — „Kokius užsakymus Assembly turi surinkti šiandien?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+Patvirtinti paprasčiausią gamybos vadovės dienos pajėgumo `C` įvedimo formą. Tada užbaigti MQ-004 ir ta pačia pilna struktūra formalizuoti MQ-005 — „Kokius užsakymus Assembly turi surinkti šiandien?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
