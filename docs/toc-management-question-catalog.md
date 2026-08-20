@@ -115,7 +115,7 @@ Minimalus sprendimo procedūros duomenų rinkinys vienam užsakymui / darbui:
 | `READY FOR ASSEMBLY` timestamp ir būsenos versija | Nustatyti, kada darbas realiai pateko į Assembly valdomą eilę. |
 | Assembly pradžios ir užbaigimo timestamp | Matuoti laukimą po READY, užbaigimo tempą ir darbų išėjimą. |
 | Packed / shipped timestamp | Susieti operacinį srautą su laiku realizuotu išsiuntimu. |
-| Kiekis ir vienodas darbo / srauto svorio matas | Neleisti skirtingo dydžio darbų klaidingai lyginti vien pagal MO skaičių. Pradinis matas turi būti patvirtintas. |
+| Standartinės Assembly darbo valandos, apskaičiuotos iš BOM operacijų laikų | Palyginti nevienodo dydžio darbus ir READY eilę išreikšti laukiančiu Assembly darbo krūviu, o ne vien MO skaičiumi. |
 | READY būsenos atšaukimas ir priežastis, jei iki Assembly pradžios nustatomas klaidingas patvirtinimas | Išlaikyti teisingą eilės istoriją ir duomenų auditą neperrašant pradinio įvykio. |
 | `ASSEMBLY BLOCKED` pradžios, pabaigos ir priežasties įvykiai | Atskirti po Assembly pradžios užblokuotą WIP nuo vėlavimo iki READY. |
 | Snapshot / event timestamp | Atkurti eilės dydį ir amžių bet kuriuo stebėjimo momentu. |
@@ -154,7 +154,7 @@ Prieš implementaciją visi laukai turi būti patikrinti prieš faktinę Furnibo
 - atskiras rankinis `READY FOR ASSEMBLY` patvirtinimo įvykis po vizualios komponentų patikros, nes dabartinis Odoo neturi pilno BOM ir neregistruoja subrangovų fasadų bei stalčių fizinio gavimo DC;
 - patikimas šio įvykio timestamp, užsakymo / Assembly MO identifikatorius ir patvirtinęs asmuo arba šaltinis;
 - `ASSEMBLY BLOCKED` įvykis darbui, kuris po Assembly pradžios tampa nebetęsiamas; tokiu atveju istorinis READY įvykis neatšaukiamas;
-- patvirtintas darbo svorio matas, leidžiantis palyginti nevienodo dydžio darbus.
+- patikimai apskaičiuojamos standartinės Assembly darbo valandos iš BOM operacijų laikų, įskaitant aiškią taisyklę užsakymams, kuriems operacijų laikas neužpildytas.
 
 **Duomenų spraga, dėl kurios šiandien negalimas patikimas retrospektyvus atsakymas:** Furnibox Odoo nenaudojamas pilnas BOM, o kliento fasadų ir stalčių fizinis gavimas DC jame neregistruojamas. Todėl iš Odoo negalima nustatyti pirmo momento, kai konkrečiam Assembly MO vienu metu fiziškai buvo prieinami visi reikalingi komponentai. Istoriniai vėlavimai negali patikimai atskirti Assembly pajėgumo trūkumo nuo Assembly badavimo dėl upstream prieinamumo.
 
@@ -186,7 +186,7 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
+1. Ar BOM operacijų laikai patikimai užpildyti visiems surenkamiems užsakymams ir kaip žymėti užsakymą, kuriam trūksta norminio laiko?
 2. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
 3. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
 
