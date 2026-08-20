@@ -338,7 +338,7 @@ Patvirtintas pradinis priežasčių katalogas:
 | `COMPONENT_ORDER_UNKNOWN` | Neaišku, kuriam užsakymui skirti atvežti komponentai. |
 | `OTHER` | Kita priežastis; privalomas trumpas komentaras. |
 
-Vienam užsakymui gali būti aktyvios kelios priežastys vienu metu. Bendra užsakymo NOT READY trukmė negali būti skaičiuojama sudedant persidengiančias priežasčių trukmes. Atskirai rodoma:
+Vienam užsakymui leidžiamos kelios vienu metu aktyvios priežastys. Bendra užsakymo NOT READY trukmė negali būti skaičiuojama sudedant persidengiančias priežasčių trukmes. Atskirai rodoma:
 
 - kiek kalendorinių / darbo dienų užsakymas iš viso buvo NOT READY;
 - kiek dienų buvo aktyvi kiekviena priežastis;
@@ -402,4 +402,4 @@ Modulis turi leisti nuo agreguotos priežasties pereiti iki konkrečių užsakym
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti, ar vienam NOT READY užsakymui praktiškai turi būti leidžiamos kelios vienu metu aktyvios priežastys. Tada užbaigti MQ-003 ir ta pačia pilna struktūra formalizuoti MQ-004 — „Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia reikiamu tempu?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+MQ-003 priežasčių ir persidengiančių intervalų taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-004 — „Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia reikiamu tempu?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
