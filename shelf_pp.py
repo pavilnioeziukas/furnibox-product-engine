@@ -32,6 +32,32 @@ class ShelfPpTemplate:
     extra_components: tuple[tuple[str, float], ...]
 
 
+# Naujos Reform geometrijos, kurioms Production dar neturi tiesioginio -PP.
+# Kiekvienas etalonas parinktas iš tos pačios rinkos ir patikrintos pakuotės
+# klasės. Sąrašas sąmoningai baigtinis: naujas neatpažintas dydis turi sustabdyti
+# generavimą, o ne tyliai paveldėti galimai netinkamą pakuotę.
+SHELF_PP_PROFILE_FALLBACKS = {
+    "EU-SREW-SHELF-CORNER-R_LEFT-963X564-{COLOR}":
+        "EU-SREW-SHELF-CORNER-R_LEFT-1238X564-{COLOR}",
+    "EU-SREW-SHELF-CORNER-R_RIGHT-963X564-{COLOR}":
+        "EU-SREW-SHELF-CORNER-R_RIGHT-1238X564-{COLOR}",
+    "EU-SREW-SHELF-CORNER-RW_LEFT-963X340-{COLOR}":
+        "EU-SREW-SHELF-FIX-1163X340-{COLOR}",
+    "EU-SREW-SHELF-CORNER-RW_RIGHT-963X340-{COLOR}":
+        "EU-SREW-SHELF-FIX-1163X340-{COLOR}",
+    "US-SREW-SHELF-163X339-{COLOR}":
+        "US-SREW-SHELF-268X339-{COLOR}",
+    "US-SREW-SHELF-FIX-878X339-{COLOR}":
+        "US-SREW-SHELF-FIX-726X339-{COLOR}",
+    "US-SREW-SHELF-FIX-878X574-{COLOR}":
+        "US-SREW-SHELF-FIX-726X574-{COLOR}",
+    "US-SREW-SHELF-CORNER-R_LEFT-963X574-{COLOR}":
+        "US-SREW-SHELF-CORNER-R_LEFT-1157X574-{COLOR}",
+    "US-SREW-SHELF-CORNER-R_RIGHT-963X574-{COLOR}":
+        "US-SREW-SHELF-CORNER-R_RIGHT-1157X574-{COLOR}",
+}
+
+
 def shelf_pp_sku(part_sku: str) -> str:
     code = canon(part_sku)
     if not code:
@@ -44,8 +70,17 @@ def shelf_profile(sku: str) -> str:
     code = canon(sku)
     if code.endswith("-PP"):
         code = code[:-3]
+    # Reform v10 turi vieną „163 x339“ variantą su tarpu; SKU geometrijoje
+    # tarpai nėra semantiniai.
+    code = re.sub(r"\s+", "", code)
     # Spalva nekeičia pakuotės profilio, bet regionas, šeima ir matmenys lieka.
     return re.sub(r"-(WW|BB|NO)$", "-{COLOR}", code)
+
+
+def shelf_reference_profile(sku: str) -> str:
+    """Grąžina tiesioginį arba aiškiai patvirtintą Production profilį."""
+    profile = shelf_profile(sku)
+    return SHELF_PP_PROFILE_FALLBACKS.get(profile, profile)
 
 
 def load_odoo_edges(path: Path) -> dict[str, list[dict[str, Any]]]:
@@ -119,7 +154,7 @@ def choose_shelf_pp_template(
     target = canon(target_pp_sku)
     if target in templates:
         return templates[target]
-    profile = shelf_profile(target)
+    profile = shelf_reference_profile(target)
     matches = [
         template
         for sku, template in templates.items()
@@ -163,6 +198,10 @@ def add_generated_shelf_pp_boms(
         product = products_by_sku.get(parent, {})
         if canon(product.get("category")) != "CABINET SHELF":
             continue
+        # Reform jau gali turėti atskirą specialios lentynos prepack BOM.
+        # Jis yra Manufacture produkto šaltinis, ne galutinė Shelf struktūra.
+        if parent.endswith("-PP"):
+            continue
         source_lines = lines.get(raw_parent, lines.get(parent, []))
         shelf_part_lines = []
         for line in source_lines:
@@ -170,6 +209,17 @@ def add_generated_shelf_pp_boms(
             component_product = products_by_sku.get(component, {})
             if canon(component_product.get("part_group")) == "SHELF PART":
                 shelf_part_lines.append(line)
+        if not shelf_part_lines:
+            # Kai Reform jau pateikia atskirą prepack komponentą, galutinė
+            # lentyna yra tinkama Furnibox struktūra ir jos antrą kartą
+            # neperpakuojame.
+            prepacked = [
+                line for line in source_lines
+                if canon(line.get("component")).endswith("-PP")
+            ]
+            if len(prepacked) == 1:
+                bom_types[parent] = kit_type
+                continue
         if len(shelf_part_lines) != 1:
             raise ShelfPpError(
                 f"{parent}: tikėtasi vieno SHELF PART komponento, "
@@ -214,7 +264,7 @@ def choose_shelf_pp_operation_template(
         template
         for template in operation_templates.values()
         if canon(template.get("sku")).endswith("-PP")
-        and shelf_profile(template.get("sku")) == shelf_profile(target)
+        and shelf_profile(template.get("sku")) == shelf_reference_profile(target)
     ]
     valid = []
     for template in candidates:

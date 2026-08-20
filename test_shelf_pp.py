@@ -85,6 +85,109 @@ class ShelfPpTests(unittest.TestCase):
                 manufacture_type="MANUFACTURE",
             )
 
+    def test_existing_prepack_component_is_not_generated_again(self):
+        shelf = "EUB-C-CAB01-SLF301"
+        prepack = "EUB-PACK-CAB01-SLF301-PP"
+        parents = {shelf}
+        lines = {shelf: [
+            {"component": prepack, "quantity": 1},
+            {"component": "SLF-LED-HRD-4", "quantity": 1},
+        ]}
+        bom_types = {shelf: "OLD"}
+
+        generated = add_generated_shelf_pp_boms(
+            parents,
+            lines,
+            {shelf: 1},
+            bom_types,
+            {
+                shelf: {"category": "CABINET SHELF"},
+                prepack: {"part_group": "CABINET SHELF"},
+            },
+            self.templates,
+            kit_type="KIT",
+            manufacture_type="MANUFACTURE",
+        )
+
+        self.assertEqual(generated, {})
+        self.assertEqual(bom_types[shelf], "KIT")
+        self.assertEqual(lines[shelf][0]["component"], prepack)
+
+    def test_existing_prepack_parent_is_not_transformed(self):
+        prepack = "EUB-PACK-CAB01-SLF301-PP"
+        parents = {prepack}
+        lines = {prepack: [
+            {"component": "EU-SREW-SHELF-ROD-1163X340-WW", "quantity": 1},
+            {"component": "EU-PROSLEEVE-D37", "quantity": 1},
+        ]}
+        bom_types = {prepack: "MANUFACTURE"}
+
+        generated = add_generated_shelf_pp_boms(
+            parents,
+            lines,
+            {prepack: 1},
+            bom_types,
+            {
+                prepack: {"category": "CABINET SHELF"},
+                "EU-SREW-SHELF-ROD-1163X340-WW": {
+                    "part_group": "SHELF PART"
+                },
+                "EU-PROSLEEVE-D37": {"part_group": "SHELF PART"},
+            },
+            self.templates,
+            kit_type="KIT",
+            manufacture_type="MANUFACTURE",
+        )
+
+        self.assertEqual(generated, {})
+        self.assertEqual(bom_types[prepack], "MANUFACTURE")
+
+    def test_reform_v10_new_corner_uses_approved_packaging_class(self):
+        from shelf_pp import choose_shelf_pp_template
+
+        templates = build_shelf_pp_templates({
+            "EU-SREW-SHELF-CORNER-R_LEFT-1238x564-WW-PP": [
+                {
+                    "component":
+                        "EU-SREW-SHELF-CORNER-R_LEFT-1238x564-WW",
+                    "quantity": 1,
+                },
+                {"component": "N9570A", "quantity": 0.4},
+                {"component": "TERMO 90X48", "quantity": 2},
+            ],
+        })
+
+        selected = choose_shelf_pp_template(
+            "EU-SREW-SHELF-CORNER-R_LEFT-963x564-NO-PP",
+            templates,
+        )
+
+        self.assertEqual(selected.source_pp_sku,
+            "EU-SREW-SHELF-CORNER-R_LEFT-1238X564-WW-PP")
+        self.assertEqual(selected.extra_components[0], ("N9570A", 0.4))
+
+    def test_reform_v10_fallback_is_used_for_packing_operation(self):
+        templates = {
+            1: {
+                "sku": "US-SREW-SHELF-FIX-726x574-WW-PP",
+                "operations": [{
+                    "name": "Lentynų pakavimas",
+                    "workcenter": "Pakuotojai",
+                    "time_mode": "manual",
+                    "time": 1,
+                    "sequence": 0,
+                }],
+            }
+        }
+
+        selected = choose_shelf_pp_operation_template(
+            "US-SREW-SHELF-FIX-878x574-NO-PP",
+            templates,
+        )
+
+        self.assertEqual(selected["sku"],
+            "US-SREW-SHELF-FIX-726x574-WW-PP")
+
     def test_ambiguous_packaging_profile_is_blocked(self):
         target = "EU-SREW-SHELF-563x564-NO-PP"
         ambiguous = {
