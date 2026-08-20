@@ -1,17 +1,50 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
 from refresh_reform_pricing import (
     read_pricing_status,
+    refresh,
     write_blocker_report,
     write_furnibox_purchase_prices,
 )
 
 
 class RefreshReformPricingTests(unittest.TestCase):
+    def test_refresh_passes_generated_target_dataset_to_pricing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "BOM_for Furnibox_v10.xlsx"
+            bom.write_bytes(b"source")
+            output = base / "result"
+            calls = []
+
+            with (
+                patch(
+                    "refresh_reform_pricing.run_step",
+                    side_effect=lambda title, *args: calls.append((title, args)),
+                ),
+                patch(
+                    "refresh_reform_pricing.read_pricing_status",
+                    return_value=({"COMPLETE": 1}, []),
+                ),
+                patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
+                patch("refresh_reform_pricing.shutil.copy2"),
+            ):
+                self.assertEqual(refresh(bom, output), 0)
+
+            self.assertIn("Pilnas Furnibox Target Dataset", calls[0][0])
+            pricing_args = calls[-1][1]
+            self.assertIn("--dataset", pricing_args)
+            dataset_index = pricing_args.index("--dataset") + 1
+            self.assertEqual(
+                Path(pricing_args[dataset_index]),
+                output / "Furnibox_Target_Dataset.json",
+            )
+
     def make_result(self, path: Path, rows):
         workbook = Workbook()
         sheet = workbook.active

@@ -57,10 +57,19 @@ def dataset_environment_dir(
 def write_validated_dataset(
     dataset: ValidatedDataset,
 ) -> Path:
-    if not dataset.products:
+    return write_validated_dataset_record(dataset.to_dict())
+
+
+def write_validated_dataset_record(
+    record: dict,
+) -> Path:
+    products = list(record.get("products") or [])
+    if not products:
         raise DatasetWriterError(
             "Negalima išsaugoti tuščio Dataset."
         )
+
+    environment = str(record.get("environment") or "").strip()
 
     created_at = datetime.now(
         timezone.utc
@@ -68,7 +77,7 @@ def write_validated_dataset(
 
     environment_directory = (
         dataset_environment_dir(
-            dataset.environment
+            environment
         )
     )
 
@@ -92,7 +101,7 @@ def write_validated_dataset(
     )
 
     dataset_json = json.dumps(
-        dataset.to_dict(),
+        record,
         ensure_ascii=False,
         indent=2,
     )

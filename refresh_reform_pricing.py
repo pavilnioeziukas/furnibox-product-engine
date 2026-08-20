@@ -141,9 +141,15 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
     odoo_map = PRODUCTION_DIR / "Odoo_MAP.xlsx"
     detection = PRODUCTION_DIR / "Product_Detection_All.xlsx"
     comparison = PRODUCTION_DIR / "MAP_Comparison.xlsx"
+    target_dataset = output_dir / "Furnibox_Target_Dataset.json"
 
-    run_step("1/8 Reform BOM paruošimas", "reform_map.py", "--input", str(bom_input), "--output", str(reform_map))
-    run_step("2/8 Aktualus Odoo BOM žemėlapis", "odoo_map.py")
+    run_step(
+        "1/8 Pilnas Furnibox Target Dataset",
+        "generate_full_validated_dataset.py",
+        "--bom-input", str(bom_input),
+        "--output-path", str(target_dataset),
+    )
+    run_step("2/8 Reform BOM paruošimas", "reform_map.py", "--input", str(bom_input), "--output", str(reform_map))
     run_step("3/8 Reform SKU patikra Odoo", "product_detection_v3.py", "--bom-input", str(bom_input))
     run_step(
         "4/8 Reform ir Odoo BOM palyginimas",
@@ -159,6 +165,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         run_step(
             "8/8 Galutinės Reform pardavimo kainos",
             "reform_so_line_prices.py", "--bom-input", str(bom_input),
+            "--dataset", str(target_dataset),
             "--price-input", str(PRODUCTION_DIR / "Reform_Final_Prices.xlsx"),
             "--rules", str(rules_path), "--output-dir", str(candidate_dir),
         )

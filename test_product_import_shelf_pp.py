@@ -14,6 +14,7 @@ if "dotenv" not in sys.modules:
 
 from product_import_v10 import (  # noqa: E402
     build_rows,
+    load_reference_from_odoo,
     shelf_pp_reference_profile,
     validate_dataset_source,
     validated_synthetic_shelf_pp,
@@ -22,6 +23,71 @@ from manifest.manifest_writer import calculate_file_hash  # noqa: E402
 
 
 class ProductImportShelfPpTests(unittest.TestCase):
+    def test_reference_is_loaded_directly_from_odoo(self):
+        class FakeClient:
+            def search_read_all(
+                self, model, domain, fields, batch_size=1000, **kwargs
+            ):
+                if model == "product.product":
+                    self.assert_context(kwargs)
+                    return [{
+                        "id": 1,
+                        "default_code": "SHELF-PP",
+                        "product_tmpl_id": [101, "Shelf PP"],
+                        "active": True,
+                    }]
+                if model == "product.template":
+                    self.assert_context(kwargs)
+                    return [{
+                        "id": 101,
+                        "categ_id": [201, "Shelf PP"],
+                        "route_ids": [301, 302],
+                        "seller_ids": [401],
+                    }]
+                if model == "product.supplierinfo":
+                    return [{
+                        "id": 401,
+                        "partner_id": [501, "Vendor"],
+                        "sequence": 1,
+                    }]
+                if model == "ir.model.data":
+                    wanted = domain[0][2]
+                    values = {
+                        "product.category": (201, "category_shelf_pp"),
+                        "stock.route": [
+                            (301, "route_mto"),
+                            (302, "route_manufacture"),
+                        ],
+                        "res.partner": (501, "vendor"),
+                    }[wanted]
+                    if isinstance(values, tuple):
+                        values = [values]
+                    return [
+                        {
+                            "module": "test",
+                            "name": name,
+                            "res_id": record_id,
+                        }
+                        for record_id, name in values
+                    ]
+                return []
+
+            @staticmethod
+            def assert_context(kwargs):
+                if kwargs.get("context") != {"active_test": False}:
+                    raise AssertionError("Trūksta active_test=False")
+
+        self.assertEqual(
+            load_reference_from_odoo(FakeClient()),
+            {
+                "SHELF-PP": {
+                    "category": "test.category_shelf_pp",
+                    "routes": "test.route_mto,test.route_manufacture",
+                    "vendor": "test.vendor",
+                }
+            },
+        )
+
     def test_product_import_contains_generated_shelf_pp_card(self):
         part = "EU-SREW-SHELF-163X564-WW"
         pp = f"{part}-PP"

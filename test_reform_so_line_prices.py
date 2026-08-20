@@ -1,8 +1,16 @@
 from pathlib import Path
+import json
+import sys
 import tempfile
+import types
 import unittest
 
 from openpyxl import Workbook, load_workbook
+
+if "dotenv" not in sys.modules:
+    dotenv_stub = types.ModuleType("dotenv")
+    dotenv_stub.load_dotenv = lambda *_args, **_kwargs: None
+    sys.modules["dotenv"] = dotenv_stub
 
 from reform_so_line_prices import (
     Item,
@@ -11,11 +19,88 @@ from reform_so_line_prices import (
     build_reform_so_line_prices,
     calculate_boms,
     key,
+    load_target_dataset_graph,
 )
+from manifest.manifest_writer import calculate_file_hash
 from so_pricing_rules import PricingRule, load_config, migrate_legacy_workbook, save_config
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
+    def test_pricing_uses_full_target_dataset_for_shelf_pp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "Reform BOM.xlsx"
+            bom.write_bytes(b"reform")
+            dataset_path = base / "target.json"
+            shelf = "SHELF"
+            shelf_pp = "SHELF-PART-PP"
+            dataset_path.write_text(json.dumps({
+                "environment": "production",
+                "source": {"file_hash": calculate_file_hash(bom)},
+                "products": [
+                    {
+                        "sku": shelf,
+                        "components": [
+                            {"sku": shelf_pp, "quantity": 1},
+                            {"sku": "PINS", "quantity": 1},
+                        ],
+                    },
+                    {
+                        "sku": shelf_pp,
+                        "components": [
+                            {"sku": "SHELF-PART", "quantity": 1},
+                            {"sku": "PACKAGE", "quantity": 0.4},
+                            {"sku": "STICKER", "quantity": 2},
+                        ],
+                    },
+                ],
+            }), encoding="utf-8")
+            _, graph = load_target_dataset_graph(dataset_path, bom)
+            prices = {
+                key("SHELF-PART"): ("Part", 10.0, "DIRECT"),
+                key("PACKAGE"): ("Package", 2.0, "DIRECT"),
+                key("STICKER"): ("Sticker", 0.1, "DIRECT"),
+                key("PINS"): ("Pins", 1.0, "DIRECT"),
+            }
+            from reform_so_line_prices import resolve_component_cost
+            result = resolve_component_cost(shelf, prices, graph)
+            self.assertAlmostEqual(result["cost"], 12.0)
+            self.assertEqual(result["issues"], [])
+
+    def test_stale_target_dataset_is_blocked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "Reform BOM.xlsx"
+            bom.write_bytes(b"current")
+            dataset = base / "target.json"
+            dataset.write_text(json.dumps({
+                "environment": "production",
+                "source": {"file_hash": "old"},
+                "products": [{
+                    "sku": "TOP",
+                    "components": [{"sku": "PART", "quantity": 1}],
+                }],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "ne iš pateikto Reform"):
+                load_target_dataset_graph(dataset, bom)
+
+    def test_untransformed_apack_dataset_is_blocked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "Reform BOM.xlsx"
+            bom.write_bytes(b"current")
+            dataset = base / "target.json"
+            dataset.write_text(json.dumps({
+                "environment": "production",
+                "source": {"file_hash": calculate_file_hash(bom)},
+                "products": [{
+                    "sku": "APACK-EU-C-CAB01-BAS001-A",
+                    "components": [{"sku": "PART", "quantity": 1}],
+                }],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "seno Dataset"):
+                load_target_dataset_graph(dataset, bom)
+
     def test_assembled_cabinet_uses_generated_apack_and_hrd_a_boms(self):
         cabinet = "EUB-C-CAB01-BAS001"
         assembled = f"{cabinet}-A"

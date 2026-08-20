@@ -20,6 +20,7 @@ from validated_dataset.writer import (
     DatasetWriterError,
     dataset_environment_dir,
     write_validated_dataset,
+    write_validated_dataset_record,
 )
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "DatasetWriterError",
     "dataset_environment_dir",
     "write_validated_dataset",
+    "write_validated_dataset_record",
     "PreparedBom",
     "PreparedBomError",
     "PreparedComponent",

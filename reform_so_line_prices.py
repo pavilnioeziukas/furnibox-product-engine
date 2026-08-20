@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,6 +28,7 @@ from bom_import_manufacture_v5 import (
     add_generated_hrd_assembled_boms,
 )
 from bom_import_pilot_v1 import calculate_levels
+from manifest.manifest_writer import calculate_file_hash
 
 
 PRICE_FILE = "Reform_Final_Prices.xlsx"
@@ -395,10 +397,58 @@ def add_generated_boms_to_graph(
     }
 
 
+def load_target_dataset_graph(
+    dataset_path: Path,
+    bom_path: Path,
+):
+    """Grąžina autoritetingą Furnibox BOM grafiką iš Validated Dataset."""
+    dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    source = dataset.get("source") or {}
+    expected_hash = text(source.get("file_hash"))
+    actual_hash = calculate_file_hash(bom_path)
+    if not expected_hash or expected_hash != actual_hash:
+        raise ValueError(
+            "Target Dataset sukurtas ne iš pateikto Reform BOM failo. "
+            "Pirmiausia sugeneruokite naują pilną Dataset."
+        )
+    if text(dataset.get("environment")).lower() != "production":
+        raise ValueError("Pricing leidžiamas tik iš Production Target Dataset.")
+
+    graph = {}
+    for product in dataset.get("products") or []:
+        sku = text(product.get("sku"))
+        if not sku:
+            raise ValueError("Target Dataset turi BOM produktą be SKU.")
+        children = []
+        for component in product.get("components") or []:
+            child = text(component.get("sku"))
+            quantity = float(component.get("quantity") or 0)
+            if not child or quantity <= 0:
+                raise ValueError(f"Target Dataset BOM {sku} turi blogą komponentą.")
+            children.append((child, quantity))
+        if not children:
+            raise ValueError(f"Target Dataset BOM {sku} neturi komponentų.")
+        graph[key(sku)] = children
+
+    if not graph:
+        raise ValueError("Target Dataset neturi BOM struktūrų.")
+    has_apack = any(
+        text(product.get("sku")).upper().startswith("APACK-")
+        for product in dataset.get("products") or []
+    )
+    if has_apack and not dataset.get("apack_hrd_transformation"):
+        raise ValueError(
+            "Target Dataset turi APACK, bet neturi APACK/HRD-A "
+            "transformacijos žymos. Pricing iš seno Dataset blokuojamas."
+        )
+    return dataset, graph
+
+
 def load_reform_boms(
     path: Path,
     products,
     rules=None,
+    dataset_path: Path | None = None,
 ):
     """
     Build pricing input and preserve the full Reform BOM graph.
@@ -407,10 +457,6 @@ def load_reform_boms(
     - configured Reform top-level BOM products;
     - FPACK BOMs found in the Reform BOM graph and having a pricing rule;
     - APACK BOMs found in the Reform BOM graph and having a pricing rule.
-
-    Shelf Prepack / -PP is intentionally not promoted to a standalone
-    pricing row yet. It can still participate inside another BOM graph,
-    but its separate Production Odoo BOM pricing will be implemented later.
 
     The graph is not limited to Level I -> Level II -> Level III.
     It can be recursively resolved to any depth.
@@ -447,11 +493,11 @@ def load_reform_boms(
             "Pirmiausia pataisykite įvestį."
         )
 
-    graph = normalize_graph(
-        raw_graph
-    )
-
-    graph = add_generated_boms_to_graph(graph, products)
+    graph = normalize_graph(raw_graph)
+    if dataset_path is not None:
+        _, graph = load_target_dataset_graph(dataset_path, path)
+    else:
+        graph = add_generated_boms_to_graph(graph, products)
 
     pricing_products = {}
 
@@ -477,7 +523,7 @@ def load_reform_boms(
     # FPACK/APACK are valid standalone pricing objects as well as BOM nodes.
     # Synthetic APACK graph nodes above follow the same FPACK -> APACK rule
     # already used by the BOM import pipeline.
-    # Shelf Prepack (-PP) is deliberately deferred for now.
+    # Dataset gali turėti FPACK/APACK/Shelf-PP tarpinius kainos objektus.
     if rules:
         for parent_key in graph:
             if parent_key in pricing_products:
@@ -498,11 +544,6 @@ def load_reform_boms(
                 original_sku.upper()
             )
 
-            if upper_sku.endswith(
-                "-PP"
-            ):
-                continue
-
             if not (
                 upper_sku.startswith(
                     "FPACK-"
@@ -510,6 +551,7 @@ def load_reform_boms(
                 or upper_sku.startswith(
                     "APACK-"
                 )
+                or upper_sku.endswith("-PP")
             ):
                 continue
 
@@ -2769,6 +2811,7 @@ def build_from_application_config(
     price_path: Path,
     config_path: Path,
     output_path: Path,
+    dataset_path: Path | None = None,
 ):
     document = load_config(
         config_path
@@ -2805,6 +2848,7 @@ def build_from_application_config(
             "bom_products"
         ],
         rules=rules,
+        dataset_path=dataset_path,
     )
 
     bom_rows, details = (
@@ -2853,6 +2897,12 @@ def main():
     )
 
     parser.add_argument(
+        "--dataset",
+        type=Path,
+        help="Pilnas iš to paties Reform failo sugeneruotas Target Dataset.",
+    )
+
+    parser.add_argument(
         "--price-input",
         type=Path,
         default=(
@@ -2893,6 +2943,12 @@ def main():
                 f"{path.resolve()}"
             )
 
+    if args.dataset is not None and not args.dataset.exists():
+        raise FileNotFoundError(
+            "Nerastas Target Dataset: "
+            f"{args.dataset.resolve()}"
+        )
+
     output = (
         args.output_dir
         / OUTPUT_FILE
@@ -2907,6 +2963,7 @@ def main():
         args.price_input,
         args.rules,
         output,
+        dataset_path=args.dataset,
     )
 
     print(

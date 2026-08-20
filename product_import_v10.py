@@ -310,6 +310,99 @@ def load_reference_export(path: Path):
     return result
 
 
+def load_reference_from_odoo(client: OdooClient) -> dict[str, dict]:
+    """Sukuria produkto kortelių etaloną tiesiai iš pasirinktos Odoo.
+
+    Tai pakeičia rankinį ``Product (product.template)...xlsx`` eksportą.
+    Naudojamos tik aktyvios, vienareikšmės produkto kortelės ir tik jau
+    egzistuojantys External ID.
+    """
+    variants = read_all(
+        client,
+        "product.product",
+        [["default_code", "!=", False]],
+        ["id", "default_code", "product_tmpl_id", "active"],
+        context={"active_test": False},
+    )
+    grouped = defaultdict(list)
+    for variant in variants:
+        sku = canon(variant.get("default_code"))
+        template = variant.get("product_tmpl_id")
+        if sku and template:
+            grouped[sku].append(variant)
+
+    selected_templates = {}
+    for sku, matches in grouped.items():
+        active = [row for row in matches if row.get("active", True)]
+        candidates = active or matches
+        template_ids = {
+            int(row["product_tmpl_id"][0])
+            for row in candidates
+            if row.get("product_tmpl_id")
+        }
+        if len(template_ids) == 1:
+            selected_templates[sku] = next(iter(template_ids))
+
+    template_ids = sorted(set(selected_templates.values()))
+    templates = read_all(
+        client,
+        "product.template",
+        [["id", "in", template_ids]],
+        ["id", "categ_id", "route_ids", "seller_ids"],
+        context={"active_test": False},
+    )
+    template_by_id = {int(row["id"]): row for row in templates}
+
+    category_xmlids = external_ids(client, "product.category")
+    route_xmlids = external_ids(client, "stock.route")
+    partner_xmlids = external_ids(client, "res.partner")
+
+    seller_ids = sorted({
+        int(seller_id)
+        for template in templates
+        for seller_id in (template.get("seller_ids") or [])
+    })
+    sellers = read_all(
+        client,
+        "product.supplierinfo",
+        [["id", "in", seller_ids]],
+        ["id", "partner_id", "sequence"],
+    ) if seller_ids else []
+    seller_by_id = {int(row["id"]): row for row in sellers}
+
+    result = {}
+    for sku, template_id in selected_templates.items():
+        template = template_by_id.get(template_id, {})
+        category = template.get("categ_id")
+        category_id = int(category[0]) if category else 0
+        route_ids = sorted(int(value) for value in (template.get("route_ids") or []))
+        category_xmlid = category_xmlids.get(category_id, "")
+        routes = [route_xmlids.get(route_id, "") for route_id in route_ids]
+        if not category_xmlid or not all(routes):
+            continue
+
+        seller_candidates = [
+            seller_by_id[seller_id]
+            for seller_id in template.get("seller_ids") or []
+            if seller_id in seller_by_id
+        ]
+        seller_candidates.sort(
+            key=lambda row: (int(row.get("sequence") or 0), int(row["id"]))
+        )
+        vendor = ""
+        if seller_candidates:
+            partner = seller_candidates[0].get("partner_id")
+            partner_id = int(partner[0]) if partner else 0
+            vendor = partner_xmlids.get(partner_id, "")
+
+        result[sku] = {
+            "category": category_xmlid,
+            "routes": ",".join(routes),
+            "vendor": vendor,
+        }
+    return result
+
+
 def infer_component_rules(reform_products, reference):
     votes = defaultdict(Counter)
     for sku, existing in reference.items():
@@ -887,10 +980,7 @@ def main():
         if not env_path.exists():
             raise FileNotFoundError(f"Nerastas aplinkos failas: {env_path}")
         load_dotenv(env_path, override=True)
-    reference_path = (
-        args.reference
-        or find_reference_export(base)
-    )
+    reference_path = args.reference
     bom_input_path = (
         args.bom_input
         or find_bom_input(base)
@@ -922,33 +1012,19 @@ def main():
         dataset_record
     )
 
-    if reference_path is not None:
-        reference = load_reference_export(
-            reference_path
-        )
-        reference_source = str(
-            reference_path
-        )
-    else:
-        reference = {}
-        reference_source = (
-            "NENAUDOTAS – Stage produkto "
-            "eksportas nerastas"
-        )
-        print(
-            "PASTABA: Stage produkto eksportas "
-            "nerastas. Tęsiamas sintetinių porų "
-            "(APACK/CABINET-A/HRD-A) generavimas. "
-            "Nauji nepatvirtintų grupių komponentai "
-            "gali patekti į REVIEW."
-        )
-
     settings = load_settings()
     output_dir = output_dir or settings.output_dir
     print("Naudojama Odoo aplinka:", settings.url)
     client = OdooClient(settings)
     uid = client.authenticate()
     print(f"Prisijungta prie Odoo. UID={uid}")
+    if reference_path is not None:
+        reference = load_reference_export(reference_path)
+        reference_source = str(reference_path)
+    else:
+        reference = load_reference_from_odoo(client)
+        reference_source = "TIESIOGIAI IŠ ODOO API"
+        print("Produkto kortelių etalonai nuskaityti tiesiai iš Odoo API:", len(reference))
     odoo_products, _ = read_odoo_products(client)
     missing_skus = set(reform_products) - set(odoo_products)
     print("Visi Reform SKU:", len(reform_products))

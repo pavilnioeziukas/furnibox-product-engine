@@ -104,8 +104,21 @@ def load_bom_parents(path: Path) -> set[str]:
     return result
 
 
-def read_all(client: OdooClient, model: str, domain, fields, batch_size=1000):
-    return client.search_read_all(model, domain, fields, batch_size=batch_size)
+def read_all(
+    client: OdooClient,
+    model: str,
+    domain,
+    fields,
+    batch_size=1000,
+    **kwargs,
+):
+    return client.search_read_all(
+        model,
+        domain,
+        fields,
+        batch_size=batch_size,
+        **kwargs,
+    )
 
 
 def external_ids(client: OdooClient, model: str) -> dict[int, str]:
