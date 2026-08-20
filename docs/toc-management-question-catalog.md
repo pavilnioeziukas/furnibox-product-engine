@@ -84,6 +84,8 @@ Jei netinkamas komponentas nustatomas per rytinę patikrą iki Assembly pradžio
 
 Odoo patikimai fiksuoja Assembly operacijos pradžios ir pabaigos momentus, o pradėta operacija gali būti sustabdyta. Sustabdant priežasties nurodyti neprivaloma. WO taip pat galima atskirai blokuoti nurodant blokavimo priežastį. Todėl būsenų seka yra: `NOT READY` → `READY, NOT STARTED` → `ASSEMBLY WIP ACTIVE` / `ASSEMBLY WIP PAUSED` / `ASSEMBLY WIP BLOCKED` → `ASSEMBLY COMPLETED`. BOM pateikia bendrą norminį operacijos laiką, tačiau operacija neskaidoma į dalines operacijas, todėl pradėto WIP likusios norminės valandos iš operacijos progreso patikimai neišvedamos. READY eilės svoriui iki operacijos pradžios naudojama visa BOM norminė trukmė; WIP rodomas atskirai. Sustabdymo ir atnaujinimo momentai naudojami aktyviam operacijos laikui atskirti nuo neaktyvaus WIP laiko, tačiau paprasta pauzė be priežasties negali būti priskirta konkrečiam blokatoriui.
 
+Naudojimo taisyklė: jei darbo negalima tęsti dėl realaus trukdžio — pavyzdžiui, trūkstamos ar brokuotos detalės, informacijos, įrankio arba kitos nenormalios sąlygos — WO blokuojamas ir privalomai nurodoma priežastis. Paprastas operacijos sustabdymas naudojamas normalioms pertraukoms ir darbo dienos pabaigai. Šių įvykių paskirtis neturi būti maišoma.
+
 #### 3.2. Diagnostikos signalai
 
 Sprendimo procedūra turi vertinti ne vieną tašką, o eilių dydžio, senėjimo ir užbaigimo dinamiką per pasirinktą laiko langą.
@@ -190,9 +192,8 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Kokiomis aplinkybėmis darbuotojai turi naudoti WO blokavimą su priežastimi, o kada pakanka paprasto operacijos sustabdymo?
-2. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
-3. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
+1. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
+2. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
 
 ## Kitas specifikacijos etapas
 
