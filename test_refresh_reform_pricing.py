@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -22,10 +23,26 @@ class RefreshReformPricingTests(unittest.TestCase):
             output = base / "result"
             calls = []
 
+            def fake_run_step(title, *args):
+                calls.append((title, args))
+                if "reconciliation" in title.lower():
+                    reconciliation_path = Path(args[args.index("--output") + 1])
+                    reconciliation_path.write_text(
+                        json.dumps({
+                            "mode": "READ_ONLY",
+                            "environment": "production",
+                            "summary": {
+                                "product_statuses": {"BLOCKED": 4},
+                                "bom_statuses": {"BLOCKED": 46},
+                            },
+                        }),
+                        encoding="utf-8",
+                    )
+
             with (
                 patch(
                     "refresh_reform_pricing.run_step",
-                    side_effect=lambda title, *args: calls.append((title, args)),
+                    side_effect=fake_run_step,
                 ),
                 patch(
                     "refresh_reform_pricing.read_pricing_status",
@@ -37,12 +54,21 @@ class RefreshReformPricingTests(unittest.TestCase):
                 self.assertEqual(refresh(bom, output), 0)
 
             self.assertIn("Pilnas Furnibox Target Dataset", calls[0][0])
+            self.assertIn("--local-only", calls[0][1])
+            self.assertIn("reconciliation", calls[1][0].lower())
             pricing_args = calls[-1][1]
             self.assertIn("--dataset", pricing_args)
             dataset_index = pricing_args.index("--dataset") + 1
             self.assertEqual(
                 Path(pricing_args[dataset_index]),
                 output / "Furnibox_Target_Dataset.json",
+            )
+            result = json.loads(
+                (output / "Reform_Pricing_Result.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                result["target_reconciliation"]["bom_statuses"]["BLOCKED"],
+                46,
             )
 
     def make_result(self, path: Path, rows):

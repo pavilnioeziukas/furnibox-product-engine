@@ -133,6 +133,18 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     result.save(destination)
 
 
+def read_reconciliation_summary(path: Path) -> dict:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if document.get("mode") != "READ_ONLY":
+        raise ValueError("Target reconciliation rezultatas nėra READ_ONLY.")
+    if str(document.get("environment") or "").lower() != "production":
+        raise ValueError("Target reconciliation atliktas ne su Production Odoo.")
+    summary = document.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("Target reconciliation rezultatas neturi summary.")
+    return summary
+
+
 def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     PRODUCTION_DIR.mkdir(parents=True, exist_ok=True)
@@ -142,28 +154,37 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
     detection = PRODUCTION_DIR / "Product_Detection_All.xlsx"
     comparison = PRODUCTION_DIR / "MAP_Comparison.xlsx"
     target_dataset = output_dir / "Furnibox_Target_Dataset.json"
+    target_reconciliation = output_dir / "Target_Odoo_Reconciliation.json"
 
     run_step(
-        "1/8 Pilnas Furnibox Target Dataset",
+        "1/9 Pilnas Furnibox Target Dataset",
         "generate_full_validated_dataset.py",
         "--bom-input", str(bom_input),
         "--output-path", str(target_dataset),
+        "--local-only",
     )
-    run_step("2/8 Reform BOM paruošimas", "reform_map.py", "--input", str(bom_input), "--output", str(reform_map))
-    run_step("3/8 Reform SKU patikra Odoo", "product_detection_v3.py", "--bom-input", str(bom_input))
     run_step(
-        "4/8 Reform ir Odoo BOM palyginimas",
+        "2/9 Target Dataset ir Production Odoo reconciliation",
+        "reconcile_target_odoo.py",
+        "--dataset", str(target_dataset),
+        "--output", str(target_reconciliation),
+    )
+    reconciliation_summary = read_reconciliation_summary(target_reconciliation)
+    run_step("3/9 Reform BOM paruošimas", "reform_map.py", "--input", str(bom_input), "--output", str(reform_map))
+    run_step("4/9 Reform SKU patikra Odoo", "product_detection_v3.py", "--bom-input", str(bom_input))
+    run_step(
+        "5/9 Legacy MAP palyginimas detalių kainodarai",
         "map_comparison_v5.py", "--reform", str(reform_map), "--odoo", str(odoo_map),
         "--products", str(detection), "--bom-input", str(bom_input), "--output", str(comparison),
     )
-    run_step("5/8 Cabinet Parts kainos", "cabinet_parts_price_v1.py")
-    run_step("6/8 Naujausios pirkimo kainos", "last_purchase_prices.py")
-    run_step("7/8 Bendras Reform pirkimo kainų šaltinis", "reform_price_list.py")
+    run_step("6/9 Cabinet ir Shelf detalių kainos", "cabinet_parts_price_v1.py")
+    run_step("7/9 Naujausios pirkimo kainos", "last_purchase_prices.py")
+    run_step("8/9 Bendras Reform pirkimo kainų šaltinis", "reform_price_list.py")
 
     with tempfile.TemporaryDirectory(prefix="reform-pricing-") as temporary:
         candidate_dir = Path(temporary)
         run_step(
-            "8/8 Galutinės Reform pardavimo kainos",
+            "9/9 Galutinės Reform pardavimo kainos",
             "reform_so_line_prices.py", "--bom-input", str(bom_input),
             "--dataset", str(target_dataset),
             "--price-input", str(PRODUCTION_DIR / "Reform_Final_Prices.xlsx"),
@@ -177,6 +198,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "bom_input": str(bom_input),
             "statuses": dict(statuses),
             "blocked": blocked,
+            "target_reconciliation": reconciliation_summary,
             "released": not blocked,
             "odoo_changed": False,
         }
