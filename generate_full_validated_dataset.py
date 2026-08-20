@@ -88,6 +88,7 @@ def build_target_product_catalog(
             or product.get("source_sku")
             or ""
         ).strip().upper()
+        source_product = reform_products.get(generated_from) or {}
         rows[sku] = {
             "sku": sku,
             "origin": "FURNIBOX GENERATED",
@@ -98,9 +99,9 @@ def build_target_product_catalog(
             "source_sku": generated_from,
             "generated_from": generated_from,
             "product_type": str(product.get("product_type") or "").strip(),
-            "part_group": "",
-            "name_1": "",
-            "name_2": "",
+            "part_group": str(source_product.get("part_group") or "").strip(),
+            "name_1": str(source_product.get("name_1") or "").strip(),
+            "name_2": str(source_product.get("name_2") or "").strip(),
         }
     return [rows[sku] for sku in sorted(rows)]
 
@@ -241,7 +242,18 @@ def main() -> None:
         type=Path,
         help="Papildoma konkreti pilno Target Dataset JSON kopija.",
     )
+    parser.add_argument(
+        "--local-only",
+        action="store_true",
+        help=(
+            "Išsaugo tik --output-path ir neatnaujina bendro "
+            "Validated Dataset katalogo ar latest.json."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.local_only and args.output_path is None:
+        parser.error("--local-only būtinas --output-path.")
 
     base = Path(__file__).resolve().parent
     environment = environment_slug()
@@ -332,7 +344,9 @@ def main() -> None:
         analysis,
         audit,
     )
-    output_path = write_validated_dataset_record(target_record)
+    output_path = None
+    if not args.local_only:
+        output_path = write_validated_dataset_record(target_record)
     if args.output_path is not None:
         args.output_path.parent.mkdir(parents=True, exist_ok=True)
         args.output_path.write_text(
@@ -371,7 +385,10 @@ def main() -> None:
     print("Diagnostikai praleisti BOM:", len(skipped))
     print("APACK / HRD-A analizė:", analysis_path)
     print("APACK / HRD-A auditas:", audit_path)
-    print("Failas:", output_path)
+    if output_path is not None:
+        print("Publikuotas Dataset:", output_path)
+    else:
+        print("Bendras Dataset katalogas neatnaujintas (--local-only).")
     if args.output_path is not None:
         print("Target Dataset kopija:", args.output_path.resolve())
 

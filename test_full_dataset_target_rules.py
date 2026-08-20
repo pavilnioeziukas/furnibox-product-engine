@@ -23,6 +23,7 @@ class FullDatasetTargetRulesTests(unittest.TestCase):
                 "is_parent": True,
                 "is_component": False,
                 "category": "CABINETS",
+                "name_1": "Cabinet name",
             },
             "HANDLE": {
                 "is_parent": False,
@@ -47,6 +48,7 @@ class FullDatasetTargetRulesTests(unittest.TestCase):
         self.assertEqual(catalog["HANDLE"]["role"], "NON-BOM COMPONENT")
         self.assertFalse(catalog["HANDLE"]["has_bom"])
         self.assertEqual(catalog["CABINET-A"]["origin"], "FURNIBOX GENERATED")
+        self.assertEqual(catalog["CABINET-A"]["name_1"], "Cabinet name")
         self.assertEqual(result["statistics"]["non_bom_product_count"], 1)
         self.assertEqual(len(result["transformation_rules"]), 4)
 
