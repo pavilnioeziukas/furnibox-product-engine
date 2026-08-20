@@ -352,30 +352,37 @@ def choose_apack_operation_template(
             f"(naudojamas etalonas {reference_family}/CAB{cabinet_type}; "
             f"šaltinio pakategorė {subcategory})"
         )
-    template = max(
-        candidates,
+    valid_candidates = []
+    for candidate in candidates:
+        assembly = [
+            dict(operation)
+            for operation in candidate["operations"]
+            if "SURINK" in canon(operation.get("name"))
+        ]
+        packing = [
+            dict(operation)
+            for operation in candidate["operations"]
+            if "PAKAV" in canon(operation.get("name"))
+        ]
+        if len(assembly) == 1 and len(packing) == 1:
+            valid_candidates.append((candidate, assembly[0], packing[0]))
+
+    if not valid_candidates:
+        raise ValueError(
+            "Production APACK šeimos etalonai neturi tiksliai vienos "
+            "surinkimo ir vienos pakavimo operacijos: "
+            f"{reference_family}/CAB{cabinet_type} "
+            f"({len(candidates)} kandidatų)"
+        )
+    template, assembly, packing = max(
+        valid_candidates,
         key=lambda value: SequenceMatcher(
-            None, canon(sku), canon(value["sku"])
+            None, canon(sku), canon(value[0]["sku"])
         ).ratio(),
     )
-    assembly = [
-        dict(operation)
-        for operation in template["operations"]
-        if "SURINK" in canon(operation.get("name"))
-    ]
-    packing = [
-        dict(operation)
-        for operation in template["operations"]
-        if "PAKAV" in canon(operation.get("name"))
-    ]
-    if len(assembly) != 1 or len(packing) != 1:
-        raise ValueError(
-            "Production APACK analogas neturi tiksliai vienos surinkimo ir "
-            f"vienos pakavimo operacijos: {template['sku']}"
-        )
-    assembly[0]["sequence"] = 100
-    packing[0]["sequence"] = 101
-    return {**template, "operations": [assembly[0], packing[0]]}
+    assembly["sequence"] = 100
+    packing["sequence"] = 101
+    return {**template, "operations": [assembly, packing]}
 
 
 def choose_hrd_assembled_operation_template(
