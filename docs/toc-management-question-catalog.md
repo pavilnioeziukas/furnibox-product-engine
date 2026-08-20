@@ -76,7 +76,7 @@ užsakymo poreikis → upstream prieinamumas → READY FOR ASSEMBLY
                   → Assembly → tolesnis vykdymas → Shipped
 ```
 
-`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir subrangovų atvežamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas. Kadangi Furnibox Odoo nenaudoja pilno BOM ir jame neregistruojamas subrangovų fasadų bei stalčių fizinis gavimas, READY momento negalima patikimai apskaičiuoti vien iš dabartinių Odoo duomenų. Šiandien darbuotojai komponentų buvimą nustato vizualiai, kai fasadai ir stalčiai fiziškai atvežami į DC; todėl pradinis patikimas READY šaltinis turi būti rankinis patvirtinimas po fizinės patikros. READY būsenos savininkė ir už jos teisingumą atsakinga rolė yra gamybos vadovė; fizinę patikrą ji gali deleguoti, tačiau patvirtinimo audito įraše turi likti atsakingas asmuo. Patikra ir naujų READY būsenų patvirtinimas atliekami kartą per darbo dieną.
+`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir subrangovų atvežamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas. Kadangi Furnibox Odoo nenaudoja pilno BOM ir jame neregistruojamas subrangovų fasadų bei stalčių fizinis gavimas, READY momento negalima patikimai apskaičiuoti vien iš dabartinių Odoo duomenų. Šiandien darbuotojai komponentų buvimą nustato vizualiai, kai fasadai ir stalčiai fiziškai atvežami į DC; todėl pradinis patikimas READY šaltinis turi būti rankinis patvirtinimas po fizinės patikros. READY būsenos savininkė ir už jos teisingumą atsakinga rolė yra gamybos vadovė; fizinę patikrą ji gali deleguoti, tačiau patvirtinimo audito įraše turi likti atsakingas asmuo. Patikra ir naujų READY būsenų patvirtinimas atliekami kiekvienos darbo dienos pradžioje, prieš nustatant tos dienos Assembly prioritetus.
 
 Kasdienio patvirtinimo timestamp žymi pirmą patikrą, per kurią visas komplektas jau rastas DC, o ne tikslų paskutinio komponento atvykimo momentą. Todėl MQ-001 analizės laiko skiriamoji geba yra maždaug viena darbo diena; sistema neturi rodyti šio timestamp kaip tikslaus fizinio gavimo laiko.
 
@@ -183,11 +183,10 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Kuriuo pastoviu darbo dienos metu atliekama READY patikra, kad dienų palyginimas būtų nuoseklus?
-2. Kaip READY būsena koreguojama, jei DC esantis komponentas vėliau pripažįstamas netinkamu surinkimui?
-3. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
-4. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
-5. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
+1. Kaip READY būsena koreguojama, jei DC esantis komponentas vėliau pripažįstamas netinkamu surinkimui?
+2. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
+3. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
+4. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
 
 ## Kitas specifikacijos etapas
 
