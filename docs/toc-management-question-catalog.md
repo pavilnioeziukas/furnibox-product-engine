@@ -76,7 +76,7 @@ užsakymo poreikis → upstream prieinamumas → READY FOR ASSEMBLY
                   → Assembly → tolesnis vykdymas → Shipped
 ```
 
-`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir kliento tiekiamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas. Kadangi Furnibox Odoo nenaudoja pilno BOM ir jame neregistruojamas kliento fasadų bei stalčių fizinis gavimas, READY momento negalima patikimai apskaičiuoti vien iš dabartinių Odoo duomenų.
+`READY FOR ASSEMBLY` reiškia pirmą momentą, kai visi konkrečiam Assembly MO būtini komponentai fiziškai yra DC, įskaitant Furnix detales ir subrangovų atvežamus fasadus bei stalčius. Komponentai neprivalo būti iš anksto surūšiuoti, sukomplektuoti ar pristatyti į Assembly darbo vietą: nuo šio momento tokių vidinių veiksmų sukeltas laukimas jau priskiriamas procesui po READY. Vien Odoo rezervacija ar planuojamas pristatymas nėra fizinio buvimo DC įrodymas. Kadangi Furnibox Odoo nenaudoja pilno BOM ir jame neregistruojamas subrangovų fasadų bei stalčių fizinis gavimas, READY momento negalima patikimai apskaičiuoti vien iš dabartinių Odoo duomenų. Šiandien darbuotojai komponentų buvimą nustato vizualiai, kai fasadai ir stalčiai fiziškai atvežami į DC; todėl pradinis patikimas READY šaltinis turi būti rankinis patvirtinimas po fizinės patikros.
 
 #### 3.2. Diagnostikos signalai
 
@@ -146,7 +146,7 @@ Prieš implementaciją visi laukai turi būti patikrinti prieš faktinę Furnibo
 #### Kritiškai trūkstami duomenys
 
 - patikimas istorinis ir nuo šiol registruojamas `READY FOR ASSEMBLY` timestamp;
-- atskiras `READY FOR ASSEMBLY` patvirtinimo įvykis, nes dabartinis Odoo neturi pilno BOM ir neregistruoja kliento fasadų bei stalčių fizinio gavimo DC;
+- atskiras rankinis `READY FOR ASSEMBLY` patvirtinimo įvykis po vizualios komponentų patikros, nes dabartinis Odoo neturi pilno BOM ir neregistruoja subrangovų fasadų bei stalčių fizinio gavimo DC;
 - patikimas šio įvykio timestamp, užsakymo / Assembly MO identifikatorius ir patvirtinęs asmuo arba šaltinis;
 - READY būsenos atšaukimo įvykis, kai darbas po pažymėjimo vėl tampa neprieinamas;
 - patvirtintas darbo svorio matas, leidžiantis palyginti nevienodo dydžio darbus.
@@ -181,7 +181,7 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Kaip darbuotojai šiandien nustato, kad visi konkretaus užsakymo komponentai, įskaitant kliento fasadus ir stalčius, jau fiziškai yra DC?
+1. Kuri konkreti DC rolė turi teisę ir atsakomybę po vizualios patikros patvirtinti `READY FOR ASSEMBLY`?
 2. Kaip READY būsena koreguojama, jei DC esantis komponentas vėliau pripažįstamas netinkamu surinkimui?
 3. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
 4. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
