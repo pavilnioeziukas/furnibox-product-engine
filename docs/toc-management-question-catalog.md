@@ -99,6 +99,12 @@ Sprendimo procedūra turi vertinti ne vieną tašką, o eilių dydžio, senėjim
 
 Constraint klasifikacija laikoma pakankama vadybiniam sprendimui tik tada, kai signalas kartojasi per sutartą langą ir alternatyvi hipotezė nėra geriau paaiškinama trūkstamu READY įvykiu. Pradinės kiekybinės ribos (pvz., eilės dienos, stebėjimų dalis, seniausio darbo amžius) turi būti kalibruojamos iš pirmųjų 3–4 savaičių patikimų duomenų; jų negalima iš anksto pateikti kaip empirinio fakto.
 
+Vadybinis ritmas:
+
+- kiekvienos darbo dienos pradžioje atliekama READY patikra, sudaroma Assembly prioritetų eilė ir peržiūrimi blokuoti WO;
+- kartą per savaitę vertinama, ar surenkamų užsakymų vėlavimą daugiausia lemia per vėlai paruošiami užsakymai, ar Assembly pajėgumas;
+- pirmoji MQ-001 išvada formuluojama sukaupus 3–4 savaites patikimų READY ir Assembly operacijų duomenų; iki tol rezultatas žymimas kaip preliminarus.
+
 #### 3.3. Apsaugos nuo klaidingos išvados
 
 - Assembly užsakymų vėlavimas pats savaime neįrodo, kad Assembly yra constraint.
@@ -188,13 +194,13 @@ Numatomos, bet dar neprojektuojamos produkto architektūros dalys:
 5. **Decision Output** — išvada, paaiškinimas ir konkretus veiksmas vadovui.
 6. **What-if** (vėlesnis etapas) — poveikio modeliavimas pakeitus Assembly pajėgumą arba upstream paruošimo patikimumą.
 
-Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 sprendimo logiką bei READY būsenų verslo apibrėžimus.
+MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patvirtinti. Modulio projektavimas vis dar nepradedamas, kol katalogo klausimai nėra nuosekliai formalizuoti ir bendras duomenų bei sprendimų kontraktas neparodo būsimos architektūros ribų.
 
-## Atviri patvirtinimo klausimai
+## MQ-001 likusios kalibravimo užduotys
 
-1. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
-2. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
+1. Iš pirmųjų 3–4 savaičių duomenų nustatyti signalų stabilumo ribas, reikalingas prieš priimant pajėgumo investicijos sprendimą.
+2. Patikrinti, ar sutartos WO `PAUSED` ir `BLOCKED` naudojimo taisyklės praktiškai taikomos nuosekliai.
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti MQ-001 sprendimo logiką ir `READY FOR ASSEMBLY` verslo apibrėžimą. Tada ta pačia pilna struktūra formalizuoti MQ-002, nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+Ta pačia pilna struktūra formalizuoti MQ-002 — „Ar Assembly darbo metu nuolat turi pakankamą prioritetizuotą `READY FOR ASSEMBLY` eilę?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
