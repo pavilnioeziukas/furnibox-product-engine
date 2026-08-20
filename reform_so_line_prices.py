@@ -444,14 +444,17 @@ def load_target_dataset_graph(
     return dataset, graph
 
 
-def generated_manufacture_pricing_products(dataset):
-    """Generated MANUFACTURE BOM children contribute cost, not extra add-ons."""
+def component_cost_only_manufacture_products(dataset):
+    """Internal MANUFACTURE BOM children contribute cost, not extra add-ons."""
     return {
         key(product.get("sku"))
         for product in dataset.get("products") or []
-        if text(product.get("generated_from"))
-        and text(product.get("bom_type")).upper() == "MANUFACTURE"
+        if text(product.get("bom_type")).upper() == "MANUFACTURE"
         and text(product.get("sku"))
+        and (
+            text(product.get("generated_from"))
+            or text(product.get("sku")).upper().endswith("-PP")
+        )
     }
 
 
@@ -2907,7 +2910,7 @@ def build_from_application_config(
             target_dataset,
         )
         component_cost_only_tops = (
-            generated_manufacture_pricing_products(
+            component_cost_only_manufacture_products(
                 target_dataset
             )
         )

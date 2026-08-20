@@ -18,7 +18,7 @@ from reform_so_line_prices import (
     build_from_application_config,
     build_reform_so_line_prices,
     calculate_boms,
-    generated_manufacture_pricing_products,
+    component_cost_only_manufacture_products,
     inherit_generated_apack_rules,
     key,
     load_target_dataset_graph,
@@ -98,11 +98,24 @@ class ReformSoLinePriceTests(unittest.TestCase):
         source = PricingRule(
             fpack, "8", "FPACK", "", 5, 0.2, 0, 0, 0, 0
         )
+        shelf_pp = "EUB-PACK-CAB01-SLF301-PP"
         dataset = {
             "products": [{
                 "sku": apack,
                 "generated_from": fpack,
                 "bom_type": "MANUFACTURE",
+            }, {
+                "sku": shelf_pp,
+                "generated_from": "",
+                "bom_type": "MANUFACTURE",
+            }, {
+                "sku": "FPACK-EU-CAB01-BNF002",
+                "generated_from": "",
+                "bom_type": "MANUFACTURE",
+            }, {
+                "sku": "EUB-C-CAB01-BNF002-A",
+                "generated_from": "EUB-C-CAB01-BNF002",
+                "bom_type": "KIT",
             }],
         }
 
@@ -114,8 +127,8 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(rules[key(apack)].sku, apack)
         self.assertEqual(rules[key(apack)].addons, source.addons)
         self.assertEqual(
-            generated_manufacture_pricing_products(dataset),
-            {key(apack)},
+            component_cost_only_manufacture_products(dataset),
+            {key(apack), key(shelf_pp)},
         )
 
     def test_pricing_uses_full_target_dataset_for_shelf_pp(self):
