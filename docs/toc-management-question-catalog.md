@@ -80,6 +80,8 @@ užsakymo poreikis → upstream prieinamumas → READY FOR ASSEMBLY
 
 Kasdienio patvirtinimo timestamp žymi pirmą patikrą, per kurią visas komplektas jau rastas DC, o ne tikslų paskutinio komponento atvykimo momentą. Todėl MQ-001 analizės laiko skiriamoji geba yra maždaug viena darbo diena; sistema neturi rodyti šio timestamp kaip tikslaus fizinio gavimo laiko.
 
+Jei netinkamas komponentas nustatomas per rytinę patikrą iki Assembly pradžios, užsakymas nelaikomas READY, nes tinkamo komponento fiziškai nėra. Jei brokas ar kitas komponento netinkamumas nustatomas jau pradėjus Assembly, istorinis READY timestamp nekeičiamas: užsakymas yra WIP ir registruojamas kaip `ASSEMBLY BLOCKED` nuo sutrikimo pradžios iki jo pašalinimo. Šis praradimas analizuojamas MQ-006, o ne priskiriamas per vėlam pasiruošimui iki Assembly.
+
 #### 3.2. Diagnostikos signalai
 
 Sprendimo procedūra turi vertinti ne vieną tašką, o eilių dydžio, senėjimo ir užbaigimo dinamiką per pasirinktą laiko langą.
@@ -114,7 +116,8 @@ Minimalus sprendimo procedūros duomenų rinkinys vienam užsakymui / darbui:
 | Assembly pradžios ir užbaigimo timestamp | Matuoti laukimą po READY, užbaigimo tempą ir darbų išėjimą. |
 | Packed / shipped timestamp | Susieti operacinį srautą su laiku realizuotu išsiuntimu. |
 | Kiekis ir vienodas darbo / srauto svorio matas | Neleisti skirtingo dydžio darbų klaidingai lyginti vien pagal MO skaičių. Pradinis matas turi būti patvirtintas. |
-| READY būsenos atšaukimas ir priežastis, jei vėliau paaiškėja blokatorius | Išlaikyti teisingą eilės istoriją ir duomenų auditą. |
+| READY būsenos atšaukimas ir priežastis, jei iki Assembly pradžios nustatomas klaidingas patvirtinimas | Išlaikyti teisingą eilės istoriją ir duomenų auditą neperrašant pradinio įvykio. |
+| `ASSEMBLY BLOCKED` pradžios, pabaigos ir priežasties įvykiai | Atskirti po Assembly pradžios užblokuotą WIP nuo vėlavimo iki READY. |
 | Snapshot / event timestamp | Atkurti eilės dydį ir amžių bet kuriuo stebėjimo momentu. |
 
 Papildomi, bet ne pradinės klasifikacijos būtini duomenys:
@@ -150,7 +153,7 @@ Prieš implementaciją visi laukai turi būti patikrinti prieš faktinę Furnibo
 - patikimas istorinis ir nuo šiol registruojamas `READY FOR ASSEMBLY` timestamp;
 - atskiras rankinis `READY FOR ASSEMBLY` patvirtinimo įvykis po vizualios komponentų patikros, nes dabartinis Odoo neturi pilno BOM ir neregistruoja subrangovų fasadų bei stalčių fizinio gavimo DC;
 - patikimas šio įvykio timestamp, užsakymo / Assembly MO identifikatorius ir patvirtinęs asmuo arba šaltinis;
-- READY būsenos atšaukimo įvykis, kai darbas po pažymėjimo vėl tampa neprieinamas;
+- `ASSEMBLY BLOCKED` įvykis darbui, kuris po Assembly pradžios tampa nebetęsiamas; tokiu atveju istorinis READY įvykis neatšaukiamas;
 - patvirtintas darbo svorio matas, leidžiantis palyginti nevienodo dydžio darbus.
 
 **Duomenų spraga, dėl kurios šiandien negalimas patikimas retrospektyvus atsakymas:** Furnibox Odoo nenaudojamas pilnas BOM, o kliento fasadų ir stalčių fizinis gavimas DC jame neregistruojamas. Todėl iš Odoo negalima nustatyti pirmo momento, kai konkrečiam Assembly MO vienu metu fiziškai buvo prieinami visi reikalingi komponentai. Istoriniai vėlavimai negali patikimai atskirti Assembly pajėgumo trūkumo nuo Assembly badavimo dėl upstream prieinamumo.
@@ -183,10 +186,9 @@ Modulio projektavimas ir implementavimas pradedamas tik patvirtinus MQ-001 spren
 
 ## Atviri patvirtinimo klausimai
 
-1. Kaip READY būsena koreguojama, jei DC esantis komponentas vėliau pripažįstamas netinkamu surinkimui?
-2. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
-3. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
-4. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
+1. Koks pradinis darbo svorio matas tinkamiausias eilių palyginimui: standartinės darbo minutės, vienetai, užsakymų pozicijos ar kitas matas?
+2. Koks vadybinio sprendimo ritmas: kasdienė kontrolė, savaitinė constraint peržiūra ar abu?
+3. Kiek savaičių duomenų ir kokio signalo stabilumo reikia prieš priimant pajėgumo investicijos sprendimą?
 
 ## Kitas specifikacijos etapas
 
