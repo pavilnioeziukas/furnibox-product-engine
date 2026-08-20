@@ -367,7 +367,7 @@ Prioritetas priežasčiai suteikiamas ne vien pagal atvejų skaičių. Aukščia
 
 - užsakymo ir Assembly MO identifikatoriai;
 - BOM Assembly operacijų norminės valandos;
-- kiekviename Sales Order esantis `Delivery Date`; jo tiksli verslo semantika dar turi būti patvirtinta;
+- kiekviename Sales Order esantis `Delivery Date`, reiškiantis datą, kada užsakymas turi būti išsiųstas iš Furnibox;
 - kasdienė gamybos vadovės READY patikra.
 
 #### Išvedami
