@@ -201,6 +201,99 @@ MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patv
 1. Iš pirmųjų 3–4 savaičių duomenų nustatyti signalų stabilumo ribas, reikalingas prieš priimant pajėgumo investicijos sprendimą.
 2. Patikrinti, ar sutartos WO `PAUSED` ir `BLOCKED` naudojimo taisyklės praktiškai taikomos nuosekliai.
 
+---
+
+## MQ-002 — Ar Assembly turi pakankamą READY eilę?
+
+### 1. Vadybinis klausimas
+
+**Ar Assembly darbo metu nuolat turi pakankamą prioritetizuotą `READY FOR ASSEMBLY` eilę?**
+
+„Pakankama“ reiškia ne kuo didesnę eilę, o mažiausią paruošto darbo bufferį, kuris apsaugo Assembly nuo badavimo dėl normalių kasdienių komponentų gavimo ir užsakymų paruošimo svyravimų.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+| Atsakymas | Keičiamas vadybinis sprendimas ir veiksmas |
+|---|---|
+| **Bufferis raudonoje zonoje** | Skubiai ruošti ir patvirtinti kitus artimiausio prioriteto užsakymus; eskaluoti komponentų prieinamumo kliūtis, galinčias palikti Assembly be darbo. |
+| **Bufferis geltonoje zonoje** | Tą pačią dieną valdyti artimiausių užsakymų paruošimą, kad bufferis nepasiektų raudonos zonos. |
+| **Bufferis žalioje zonoje** | Assembly artimiausiam laikotarpiui apsaugotas; nevykdyti papildomo skubinimo vien bufferio didinimo tikslu. |
+| **Bufferis nuolat gerokai viršija tikslą ir sensta** | Nevertinti to kaip automatiškai gero rezultato. Tikrinti Assembly pajėgumą, prioritetų kokybę ir per anksti READY pažymėtų darbų kaupimąsi. |
+
+### 3. Sprendimo logika
+
+Pradinis tikslinis READY bufferis yra **2 Assembly darbo dienos**, išreikštos standartinėmis BOM Assembly operacijų valandomis.
+
+Jei planuojamas arba patikimai demonstruojamas Assembly dienos pajėgumas yra `C` standartinių valandų, pradinis zonų modelis yra:
+
+| Zona | READY, NOT STARTED standartinės valandos | Interpretacija |
+|---|---:|---|
+| **Raudona** | `< 1 × C` | Mažiau nei viena darbo diena; reikšminga Assembly badavimo rizika. |
+| **Geltona** | `≥ 1 × C` ir `< 2 × C` | Viena–dvi darbo dienos; reikia aktyviai užtikrinti kitų darbų paruošimą. |
+| **Žalia** | `≥ 2 × C` | Bent dvi darbo dienos; Assembly apsaugotas nuo artimiausių normalių svyravimų. |
+
+Pavyzdys: jei Assembly dienos pajėgumas yra 24 standartinės valandos, pradinis tikslas yra 48 READY valandos; raudona zona yra mažiau nei 24 val., geltona – 24–48 val., žalia – bent 48 val.
+
+Į bufferį įtraukiami tik `READY, NOT STARTED` darbai. `ASSEMBLY WIP ACTIVE`, `PAUSED` ir `BLOCKED` rodomi atskirai ir nedidina apsaugos nuo naujo darbo trūkumo. Eilė turi būti prioritetizuota pagal patvirtintą dienos seką; vien valandų suma be vykdomos prioritetų tvarkos nelaikoma pakankama apsauga.
+
+Pradinis 2 dienų bufferis nėra nuolatinė norma. Jis kalibruojamas po 3–4 savaičių:
+
+- jei Assembly pritrūksta READY darbo, reikia didinti apsaugą arba gerinti upstream paruošimo patikimumą;
+- jei READY eilė nuolat gerokai viršija 2 dienas ir darbai sensta, tikslas arba darbų paleidimo taisyklė gali būti per dideli, arba Assembly pajėgumas yra pagrindinis srauto apribojimas;
+- jei bufferis dažniausiai laikosi tarp 1 ir 2 dienų ir Assembly nebadauja, pradinis dydis laikomas tinkamu;
+- bufferio dydis keičiamas tik pagal pasikartojantį signalą, o ne dėl vienos neįprastos dienos.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| Kasdienio READY patvirtinimo timestamp | Nustatyti, kurie darbai patenka į rytinį bufferį. |
+| Assembly operacijos pradžios timestamp | Pašalinti pradėtą darbą iš `READY, NOT STARTED` bufferio. |
+| Kiekvieno READY darbo standartinės BOM Assembly valandos | Susumuoti nevienodo dydžio darbų bufferį. |
+| Assembly dienos pajėgumas standartinėmis valandomis | READY valandas paversti darbo dienų apsauga ir nustatyti zonų ribas. |
+| Dienos Assembly prioritetų seka | Patikrinti, ar bufferį sudaro realiai vykdytini ir tinkama tvarka sudėti darbai. |
+| Assembly badavimo įvykis arba laikotarpis | Patikrinti, ar nustatytas bufferio dydis realiai apsaugo srautą. |
+| READY darbo amžius | Aptikti per didelę arba senstančią eilę. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba jau sutarti
+
+- BOM Assembly operacijų norminiai laikai;
+- Odoo Assembly operacijos pradžios ir pabaigos momentai;
+- kartą per dieną gamybos vadovės patvirtinamas `READY FOR ASSEMBLY` įvykis;
+- WO `PAUSED` ir `BLOCKED` būsenos.
+
+#### Išvedami
+
+- `READY, NOT STARTED` standartinių valandų suma;
+- READY bufferio padėtis raudonoje, geltonoje arba žalioje zonoje;
+- bufferio dydis Assembly darbo dienomis;
+- READY eilės seniausio darbo amžius ir bufferio dinamika;
+- Assembly badavimo dažnis, jei badavimo taisyklė formalizuota.
+
+#### Trūkstami arba kalibruotini
+
+- pradinis patikimas Assembly dienos pajėgumas `C` standartinėmis valandomis;
+- aiški Assembly badavimo įvykio registravimo arba išvedimo taisyklė;
+- MQ-005 formalizuojama dienos prioritetų sudarymo taisyklė;
+- po 3–4 savaičių patvirtintos galutinės bufferio zonų ribos.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-002 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **Assembly Ready Buffer Control**. Ji turės pateikti:
+
+```text
+Assembly dienos pajėgumas: C standartinių valandų
+READY, NOT STARTED: X standartinių valandų / Y darbo dienų
+Bufferio zona: RED / YELLOW / GREEN
+Seniausias READY darbas: ...
+Artimiausia badavimo rizika: ...
+Rekomenduojamas veiksmas šiandien: ...
+```
+
+Modulis neturi skatinti kaupti kuo daugiau READY darbo. Jo paskirtis – palaikyti mažiausią bufferį, kuris apsaugo Assembly, ir iš anksto signalizuoti apie badavimo riziką.
+
 ## Kitas specifikacijos etapas
 
-Ta pačia pilna struktūra formalizuoti MQ-002 — „Ar Assembly darbo metu nuolat turi pakankamą prioritetizuotą `READY FOR ASSEMBLY` eilę?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+Patvirtinti MQ-002 naudojamą Assembly dienos pajėgumo skaičiavimo taisyklę. Tada ta pačia pilna struktūra formalizuoti MQ-003 — „Kas ir kiek laiko neleidžia užsakymams tapti `READY FOR ASSEMBLY`?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
