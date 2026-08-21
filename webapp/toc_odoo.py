@@ -146,25 +146,6 @@ def load_assembly_candidates(reader: OdooReader) -> CandidateResult:
                 str(move.get("state") or "")
             )
 
-    sale_ids = [int(item["id"]) for item in sales]
-    pickings = reader.search_read(
-        "stock.picking",
-        ["|", ["sale_id", "in", sale_ids], ["origin", "in", so_names]],
-        ["name", "origin", "sale_id", "state"], limit=10000,
-    ) if sale_ids else []
-    picking_states_by_so: dict[str, list[tuple[str, str]]] = {}
-    sale_name_by_id = {int(item["id"]): str(item["name"]) for item in sales}
-    for picking in pickings:
-        name = str(picking.get("name") or "")
-        if not any(stage in name.upper() for stage in ("PICK", "PACK", "OUT")):
-            continue
-        so_name = sale_name_by_id.get(_relation_id(picking.get("sale_id")) or -1)
-        so_name = so_name or str(picking.get("origin") or "").strip()
-        if so_name in sales_by_name:
-            picking_states_by_so.setdefault(so_name, []).append(
-                (name, str(picking.get("state") or ""))
-            )
-
     aggregates: dict[str, dict[str, Any]] = {}
     excluded = 0
     for workorder in workorders:
@@ -192,13 +173,6 @@ def load_assembly_candidates(reader: OdooReader) -> CandidateResult:
         ]
         if missing_mo_reservations:
             blockers.append(f"MO komponentai nerezervuoti: {len(missing_mo_reservations)} MO")
-        picking_states = picking_states_by_so.get(so_name, [])
-        unavailable_pickings = [name for name, state in picking_states if state not in {"assigned", "done", "cancel"}]
-        if not picking_states:
-            blockers.append("Nerasta Pick / Pack / WH/OUT rezervacijos")
-        elif unavailable_pickings:
-            blockers.append("Nerezervuota: " + ", ".join(unavailable_pickings))
-
         candidates.append(AssemblyCandidate(
             so_reference=so_name,
             delivery_date=_parse_date(values["sale"].get("commitment_date")),

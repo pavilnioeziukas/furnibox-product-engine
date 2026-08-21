@@ -28,11 +28,6 @@ class FakeReader:
                 {"id": 302, "raw_material_production_id": [102, "MO2"], "state": "assigned"},
                 {"id": 303, "raw_material_production_id": [103, "MO3"], "state": "assigned"},
             ],
-            "stock.picking": [
-                {"id": 401, "name": "WH/PICK/1", "origin": "S002", "sale_id": [201, "S002"], "state": "assigned"},
-                {"id": 402, "name": "WH/PACK/1", "origin": "S002", "sale_id": [201, "S002"], "state": "assigned"},
-                {"id": 403, "name": "WH/OUT/1", "origin": "S002", "sale_id": [201, "S002"], "state": "assigned"},
-            ],
         }[model]
 
 
@@ -51,23 +46,27 @@ def test_candidates_aggregate_pending_assembly_hours_at_so_level():
     assert result.excluded_without_exact_so == 1
 
 
-def test_candidate_is_not_system_ready_when_mo_or_picking_is_not_reserved():
+def test_candidate_is_not_system_ready_when_mo_components_are_not_reserved():
     class BlockedReader(FakeReader):
         def search_read(self, model, domain, fields, *, order="id asc", limit=5000):
             rows = super().search_read(model, domain, fields, order=order, limit=limit)
             if model == "stock.move":
                 rows = [dict(item, state="confirmed") if item["id"] == 301 else item for item in rows]
-            if model == "stock.picking":
-                rows = [dict(item, state="waiting") if item["id"] == 402 else item for item in rows]
             return rows
 
     candidate = load_assembly_candidates(BlockedReader()).candidates[0]
 
     assert candidate.system_ready is False
-    assert candidate.system_blockers == (
-        "MO komponentai nerezervuoti: 1 MO",
-        "Nerezervuota: WH/PACK/1",
-    )
+    assert candidate.system_blockers == ("MO komponentai nerezervuoti: 1 MO",)
+
+
+def test_downstream_delivery_pickings_are_not_read_for_assembly_readiness():
+    class NoPickingReader(FakeReader):
+        def search_read(self, model, domain, fields, *, order="id asc", limit=5000):
+            assert model != "stock.picking"
+            return super().search_read(model, domain, fields, order=order, limit=limit)
+
+    assert load_assembly_candidates(NoPickingReader()).candidates[0].system_ready is True
 
 
 def test_reader_denies_unapproved_odoo_methods():
