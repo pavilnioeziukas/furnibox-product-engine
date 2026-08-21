@@ -805,7 +805,7 @@ Priežastis priskiriama pagal tuo metu buvusią informaciją ir pajėgumą, ne p
 | SO line pardavimo vertė | Throughput skaičiavimo bazė. |
 | SO line medžiagų ir subrangovų sąnaudos | Visiškai kintamoms sąnaudoms atimti. |
 | Požymis, kurioms SO line reikalingas Assembly | Ekonominę vertę susieti su analizuojamu srautu. |
-| SO–MO–WO–SO line sąsajos | Priskirti READY, Assembly ir vėlavimo įvykius ekonominei vertei. |
+| SO–MO–WO sąsaja per tikslų MO `origin` ir SO line ekonomikos agregavimas į SO | Priskirti READY, Assembly ir vėlavimo priežastį SO ekonominei vertei, neapsimetant, kad egzistuoja tiesioginis SO line–MO ryšys. |
 | SO `Delivery Date` ir faktinis išsiuntimo timestamp | Nustatyti vėlavimo faktą ir trukmę. |
 | READY timestamp bei NOT READY priežasčių intervalai | Nustatyti upstream indėlį. |
 | BOM norminės Assembly valandos | Apskaičiuoti, kada darbas galėjo būti užbaigtas. |
@@ -833,7 +833,7 @@ Priežastis priskiriama pagal tuo metu buvusią informaciją ir pajėgumą, ne p
 #### Trūkstami arba validuotini
 
 - patikimas faktinis išsiuntimo timestamp ir SO line kiekių susiejimas dalinių išsiuntimų atveju;
-- techninė SO line–MO–WO sąsajos validacija;
+- tiesioginio SO line–MO ryšio nėra; validuota SO lygio `mrp.production.origin` sąsaja, todėl priežasties priskyrimo grūdas yra SO;
 - patikra, kaip SO line savikainoje atvaizduojamos tiesiogiai dėl konkretaus pardavimo patiriamos subrangovų sąnaudos, jei jos nėra medžiagų savikainos dalis;
 - kontrafaktinio „galėjo būti užbaigtas iki Delivery Date“ algoritmo validacija su realiais atvejais;
 - dalinio vėlavimo taisyklė, jei vieno SO dalis išsiunčiama laiku, o dalis vėliau.

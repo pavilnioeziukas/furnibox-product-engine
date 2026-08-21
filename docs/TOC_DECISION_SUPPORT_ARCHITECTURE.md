@@ -2,7 +2,10 @@
 
 Statusas: architektūros specifikacija prieš implementaciją.
 
-Šaltinis: [`toc-management-question-catalog.md`](toc-management-question-catalog.md), MQ-001–MQ-008.
+Šaltiniai:
+
+- [`toc-management-question-catalog.md`](toc-management-question-catalog.md), MQ-001–MQ-008;
+- [`TOC_ODOO_DATA_CONTRACT_VALIDATION_2026-08-21.md`](TOC_ODOO_DATA_CONTRACT_VALIDATION_2026-08-21.md), Production read-only kontrakto validacija.
 
 ## 1. Tikslas
 
@@ -166,9 +169,9 @@ WHAT-IF negali rodyti papildomo bendro Throughput, kai nėra papildomos paklauso
 | `ManufacturingOrder` | id, source SO / lines, product, qty, state | SO–MO ryšį būtina validuoti. |
 | `WorkOrder` | id, MO id, operation, state, planned duration | Assembly operacijos gyvenimo ciklas. |
 | `WorkLog` | WO id, employee, start, stop | Darbuotojo aktyvaus laiko ir persijungimo šaltinis. |
-| `WorkOrderBlock` | WO id, reason, start, end | Priežasčių reikšmes būtina suderinti su MQ-006. |
+| `WorkOrderLoss` | WO id, generic loss, start, end | Odoo turi bendras productivity loss kategorijas; jos nepakeičia detalaus MQ-006 priežasčių katalogo. |
 | `BomOperation` | product / BOM, Assembly duration | 1 norminė valanda = 1 žmogaus valanda. |
-| `Shipment` | SO / lines, actual shipped timestamp, qty | Dalinių išsiuntimų semantiką būtina validuoti. |
+| `Shipment` | SO / lines, actual shipped timestamp, qty | Validuota per `stock.move.sale_line_id` → `stock.picking.date_done`; daliniai išsiuntimai dažni. |
 
 ### 6.2. Product Engine valdomi įvykiai
 
@@ -180,6 +183,8 @@ WHAT-IF negali rodyti papildomo bendro Throughput, kai nėra papildomos paklauso
 | `ReadinessRevokedBeforeStart` | SO / MO, reason, actor, timestamp, previous event id |
 | `ReadinessBlockerOpened` | SO / MO, reason code, actor, timestamp, optional comment |
 | `ReadinessBlockerClosed` | blocker id, actor, timestamp |
+| `AssemblyBlockerOpened` | WO, MQ-006 reason code, actor, timestamp, optional comment, Odoo loss reference |
+| `AssemblyBlockerClosed` | blocker id, actor, timestamp |
 | `DailyPriorityPlanGenerated` | business date, source snapshot id, rule version |
 | `DailyPriorityPlanApproved` | plan id, actor, timestamp |
 | `PriorityOverrideRecorded` | plan id, SO / MO, old/new position, reason, actor, timestamp |
@@ -212,7 +217,7 @@ SHIPPED
 | `AssemblyPaceEngine` | MQ-004 | Delivery Date, C, READY, užbaigimai | adequate / capacity / execution / starvation / priority |
 | `PriorityEngine` | MQ-005 | READY, overdue, SKUBUS, Delivery Date, READY time | paaiškinama dienos seka |
 | `AssemblyLossEngine` | MQ-006 | blocks, work logs, kitas WO, grafikas | block duration ir lost person-hours |
-| `ThroughputDelayEngine` | MQ-007 | SO line T, shipment, priežasties klasė | T at risk, delayed T, T delay-days |
+| `ThroughputDelayEngine` | MQ-007 | SO line T agreguotas į SO, shipment, SO priežasties klasė | T at risk, delayed T, T delay-days |
 | `WhatIfEngine` | MQ-008 | MQ-001–007 rezultatai, OE / investicija | alternatyvų palyginimas ir pilotas |
 
 Kiekvienas variklis turi būti gryna domeno logika, nepriklausoma nuo HTTP, HTML ir tiesioginio Odoo kliento. Adapteriai paruošia kanoninius duomenis; varikliai grąžina versijuojamus rezultatus.
@@ -280,6 +285,8 @@ Reikalavimai:
 - pakartotinis to paties lango skaitymas turi būti idempotentiškas;
 - Odoo duomenų dingimas ar schemos pokytis negali tyliai ištrinti ankstesnės audito istorijos;
 - nei vienas Odoo adapterio metodas negali turėti create/write/unlink operacijos.
+
+2026-08-21 Production validacija patvirtino, kad tiesioginio SO line–MO ryšio nėra nei modelio lauke, nei per `stock.move` / procurement group. Patikimas gamybos ryšys yra SO lygio `mrp.production.origin`; todėl priežastis priskiriama SO. Negalima automatiškai teigti, kuri konkreti SO line sukūrė konkretų MO. Faktinis išsiuntimas ir jo ekonominė vertė skaidomi SO line lygiu per `stock.move.sale_line_id` → `stock.picking.date_done`, tada agreguojami pagal SO priežasties klasę.
 
 ### 9.2. Rytinė patikra
 
@@ -363,7 +370,7 @@ Pasitikėjimą mažina:
 - trūkstamas rytinis READY patvirtinimas;
 - NOT READY be priežasties;
 - BLOCKED be priežasties;
-- SO–MO–WO–SO line ryšio spraga;
+- SO–MO–WO ryšio spraga arba nepatikimas SO line ekonomikos agregavimas į SO;
 - trūkstamas BOM operacijos laikas;
 - trūkstamas faktinis išsiuntimas;
 - nepatvirtintas dienos darbuotojų skaičius;
@@ -386,6 +393,8 @@ Minimalios rolės:
 
 Product Engine negali išsaugoti Production Odoo rašymo kredencialų šiame modulyje.
 
+Dabartinė Product Engine autentifikacija naudoja vieną bendrą slaptažodį ir sesijoje saugo tik `authenticated = true`; individualaus naudotojo identiteto nėra. Tai nepakankama READY, dienos pajėgumo, prioritetų išimčių ir scenarijų auditui. Prieš Manual Decision Event Foundation būtina įdiegti individualų arba patikimai pasirenkamą ir audituojamą aktoriaus identitetą.
+
 ## 14. Gedimų elgsena
 
 - Jei Odoo nepasiekiamas, rodomas paskutinio sėkmingo snapshot laikas; nauja išvada nežymima kaip aktuali.
@@ -401,7 +410,7 @@ Product Engine negali išsaugoti Production Odoo rašymo kredencialų šiame mod
 
 ### Etapas A – Data contract validation
 
-- read-only validuoti SO–MO–WO–SO line ryšius;
+- read-only validuoti SO–MO–WO ryšius ir SO line ekonomikos agregavimą į SO;
 - validuoti `Delivery Date`, `SKUBUS`, BOM laikus, work logs, blocks ir shipment timestamp;
 - patvirtinti dalinių išsiuntimų semantiką;
 - parengti kanoninių modelių testinius pavyzdžius be Odoo rašymo.
@@ -446,7 +455,7 @@ Product Engine negali išsaugoti Production Odoo rašymo kredencialų šiame mod
 Architektūra laikoma parengta implementacijos planavimui, kai patvirtinta:
 
 1. Production Odoo read-only riba;
-2. SO–MO–WO–SO line atsekamumas;
+2. SO–MO–WO atsekamumas ir SO line ekonomikos agregavimas į SO;
 3. Product Engine įvykių saugyklos technologija;
 4. rytinės patikros ir dienos plano UX;
 5. taisyklių bei audito versijavimas;
@@ -458,13 +467,10 @@ Architektūra laikoma parengta implementacijos planavimui, kai patvirtinta:
 
 ## 17. Atviri techninės validacijos klausimai
 
-1. Kaip tiksliai Odoo susieti SO line su konkrečiais MO ir Assembly WO?
-2. Kuris laukas yra patikimas faktinio išsiuntimo timestamp, ypač daliniams išsiuntimams?
-3. Ar Odoo block reason ir work log istorija pateikia visas MQ-006 reikalingas pradžios / pabaigos reikšmes?
-4. Ar `SKUBUS` tago pakeitimo auditą galima perskaityti, ar Product Engine turi saugoti tik snapshot pokytį?
-5. Kaip SO line medžiagų savikainoje atvaizduojamos subrangovų sąnaudos?
-6. Ar Product Engine esama autentifikacija pakankama rolei „gamybos vadovė“, ar reikalingas individualus naudotojo identitetas?
-7. Kuri patvari DB technologija ir migracijų mechanizmas bus standartas šiame Railway diegime?
+1. Ar Odoo block reason ir work log istorija pateikia visas MQ-006 reikalingas pradžios / pabaigos reikšmes, ar detalūs intervalai visiškai priklausys Product Engine įvykiams?
+2. Ar `SKUBUS` tago pakeitimo auditą galima perskaityti, ar Product Engine turi saugoti tik snapshot pokytį?
+3. Kaip SO line medžiagų savikainoje atvaizduojamos subrangovų sąnaudos?
+4. Kuri patvari DB technologija ir migracijų mechanizmas bus standartas šiame Railway diegime?
 
 ## 18. Sprendimo santrauka
 
