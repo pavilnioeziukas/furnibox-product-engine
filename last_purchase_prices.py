@@ -25,6 +25,8 @@ SHARED_DATA_DIR = Path(
     )
 ).resolve()
 PURCHASE_PRICE_ADJUSTMENTS_PATH = SHARED_DATA_DIR / "purchase_price_adjustments.json"
+REFORM_VENDOR_NAME = "Reform Supply & Logistics, UAB"
+REFORM_VENDOR_MARKUP_FACTOR = 1.05
 
 EXPORT_COLUMNS = [
     "Internal Reference",
@@ -57,6 +59,12 @@ def relation_id(value):
 
 def relation_name(value):
     return value[1] if isinstance(value, list) and len(value) >= 2 else ""
+
+
+def reform_markup_factor(vendor):
+    if str(vendor or "").strip().casefold() == REFORM_VENDOR_NAME.casefold():
+        return REFORM_VENDOR_MARKUP_FACTOR
+    return 1.0
 
 
 def build_last_purchase_prices(purchase_lines, products):
@@ -215,9 +223,11 @@ def write_purchase_prices(
             + [None, None, None]
         )
         prices.cell(row_number, 9).value = f"='{ADJUSTMENT_SHEET}'!B{row_number}"
-        prices.cell(row_number, 10).value = 1.0
+        prices.cell(row_number, 10).value = reform_markup_factor(
+            row.get("Vendor")
+        )
         prices.cell(row_number, 11).value = (
-            f'=IF(I{row_number}="",G{row_number},I{row_number})'
+            f'=IF(I{row_number}="",G{row_number},I{row_number})*J{row_number}'
         )
 
     for cell in prices[1]:
@@ -263,11 +273,12 @@ def write_purchase_prices(
     ])
     note.append([
         "Markup Factor",
-        "Legacy compatibility field; always 1.00.",
+        f"{REFORM_VENDOR_MARKUP_FACTOR:.2f} only when Vendor is exactly "
+        f"'{REFORM_VENDOR_NAME}'; otherwise 1.00.",
     ])
     note.append([
         "Reform Price",
-        "Equals Adjusted Purchase Price (New Purchase Price).",
+        "Adjusted Purchase Price multiplied by Markup Factor.",
     ])
     note.append([
         "Non-BOM pricing",
@@ -282,6 +293,8 @@ def write_purchase_prices(
     note.freeze_panes = "A2"
 
     info.append(("Purchase price adjustments applied", applied_adjustments))
+    info.append(("Reform vendor", REFORM_VENDOR_NAME))
+    info.append(("Reform vendor markup factor", REFORM_VENDOR_MARKUP_FACTOR))
 
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True

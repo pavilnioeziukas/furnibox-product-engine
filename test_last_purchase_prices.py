@@ -80,7 +80,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
                     2,
                     headers["Reform Price"],
                 ).value,
-                '=IF(I2="",G2,I2)',
+                '=IF(I2="",G2,I2)*J2',
             )
 
             adjustments = workbook["PURCHASE PRICE ADJUSTMENTS"]
@@ -145,7 +145,11 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
             )
             self.assertEqual(
                 regenerated["COMPONENT PRICES"]["J2"].value,
-                1.0,
+                1.05,
+            )
+            self.assertEqual(
+                regenerated["COMPONENT PRICES"]["K2"].value,
+                '=IF(I2="",G2,I2)*J2',
             )
 
 
