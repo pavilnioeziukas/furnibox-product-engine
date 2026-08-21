@@ -865,3 +865,133 @@ Modulis neturi pavėluoto Throughput vadinti prarastu pelnu. Jo paskirtis – pa
 ## Kitas specifikacijos etapas
 
 MQ-007 ekonominio matavimo taisyklės patvirtintos: Odoo SO line savikaina apima medžiagas, bet ne Assembly darbo užmokestį, todėl darbo užmokestis lieka Operating Expense. Toliau ta pačia pilna struktūra formalizuoti MQ-008 — „Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+
+---
+
+## MQ-008 — Koks mažiausias pakeitimas duotų didžiausią poveikį?
+
+### 1. Vadybinis klausimas
+
+**Koks mažiausias konkretus pakeitimas greičiausiai labiausiai padidintų laiku realizuojamą surenkamų užsakymų Throughput: patikimesnis komponentų prieinamumas, griežtesnė READY ir prioritetų tvarka, didžiausio Assembly blokatoriaus pašalinimas ar papildomas Assembly pajėgumas?**
+
+„Mažiausias pakeitimas“ reiškia mažiausios investicijos, mažiausios papildomos Operating Expense ir trumpiausio įgyvendinimo laiko pakeitimą, kuris duoda didžiausią pamatuojamą laiku realizuojamo Throughput pagerėjimą.
+
+Kadangi Furnibox pavėluotus SO visada vėliau išsiunčia, greitesnis esamų SO išsiuntimas pirmiausia mažina atidėtą Throughput ir gerina pristatymo patikimumą. Tikras bendro Throughput padidėjimas atsiranda tik tada, kai atlaisvintas pajėgumas leidžia per tą patį laikotarpį išsiųsti papildomą paklausą, kuri kitu atveju būtų laukusi, nepriimta ar perkelta į vėlesnį laikotarpį.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+| Geriausia alternatyva | Keičiamas vadybinis sprendimas ir veiksmas |
+|---|---|
+| **Komponentų prieinamumas** | Pirmiausia įgyvendinti MQ-003 dominuojančio readiness blokatoriaus mažinimo veiksmą; nedidinti Assembly pajėgumo, kol jis badauja. |
+| **READY ir prioritetų disciplina** | Įdiegti kasdienį READY patvirtinimą bei MQ-005 seką prieš investuojant į žmones ar įrangą. |
+| **Didžiausio Assembly blokatoriaus pašalinimas** | Nukreipti mažą tikslinę investiciją į MQ-006 priežastį, prarandančią daugiausia Assembly žmogaus valandų ir atidedančią daugiausia Throughput. |
+| **Papildomas Assembly pajėgumas** | Didinti darbuotojų skaičių ar papildomas valandas tik jei READY bufferis pakankamas, esamas pajėgumas išnaudojamas, o reikiamas tempas sistemingai viršija `C`. |
+| **Nė viena alternatyva nepatikima** | Nepriimti investicijos sprendimo; tęsti duomenų rinkimą arba vykdyti mažą grįžtamą pilotą su aiškiu sėkmės kriterijumi. |
+
+### 3. Sprendimo logika
+
+#### 3.1. Vertinamos alternatyvos
+
+1. **Patikimesnis komponentų prieinamumas** – sumažinti vienos ar kelių MQ-003 priežasčių trukmę ir padidinti READY bufferio stabilumą.
+2. **READY ir dienos prioritetų tvarka** – taikyti rytinį READY patvirtinimą, dviejų dienų bufferį ir MQ-005 seką vietoje žodinių skubinimų.
+3. **Didžiausio Assembly blokatoriaus pašalinimas** – sumažinti MQ-006 priežastį, prarandančią daugiausia realių žmogaus valandų arba blokuojančią didžiausią Throughput.
+4. **Papildomas Assembly darbuotojas / valandos** – padidinti dienos `C` ir perskaičiuoti, kiek SO galėtų būti užbaigta iki `Delivery Date`.
+
+#### 3.2. Vienodas alternatyvos kontraktas
+
+Kiekvienai alternatyvai pateikiama:
+
+| Vertinimas | Reikšmė |
+|---|---|
+| **Poveikio hipotezė** | Kurį MQ-001–MQ-007 signalą pakeitimas veikia ir kodėl. |
+| **Tikėtinas laiku realizuoto Throughput pagerėjimas** | Sumažintas `Throughput at risk`, pavėluotas Throughput ir `Throughput delay-days`. |
+| **Tikėtinas papildomas bendras Throughput** | Tik jei yra papildoma paklausa, kuri gali naudoti atlaisvintą pajėgumą. |
+| **Papildoma Operating Expense** | Pasikartojančios darbo, viršvalandžių, priežiūros ar kitos sąnaudos. |
+| **Vienkartinė investicija** | Įrankiai, įranga, sistema, proceso pakeitimo kaštas. |
+| **Laikas iki poveikio** | Kada realiai galima tikėtis rezultato. |
+| **Pasitikėjimas** | Duomenų kokybė, pasikartojimų skaičius ir prielaidų stiprumas. |
+| **Constraint perkėlimo rizika** | Ar pagerinus vieną vietą kita proceso dalis taps nauju apribojimu. |
+
+#### 3.3. Scenarijų skaičiavimas
+
+Alternatyvos lyginamos su bazine faktine situacija tame pačiame 3–4 savaičių ar ilgesniame duomenų lange:
+
+- **Komponentų scenarijus:** sutrumpinami pasirinktos MQ-003 priežasties intervalai iki pagrįsto piloto tikslo ir perskaičiuojami READY momentai bei vėlavimai.
+- **Prioritetų scenarijus:** faktiniai READY darbai perrikiuojami pagal MQ-005 taisyklę, nekeičiant faktinio `C`, ir perskaičiuojami SO užbaigimo terminai.
+- **Blokatoriaus scenarijus:** grąžinama pagrįsta dalis MQ-006 realiai prarastų žmogaus valandų, o ne visa WO kalendorinė blokavimo trukmė.
+- **Pajėgumo scenarijus:** prie kiekvienos pasirinkto laikotarpio dienos `C` pridedamas konkretus valandų skaičius, pavyzdžiui, `+8 val.` už vieną papildomą darbuotoją, jei READY darbo pakanka.
+
+Scenarijus negali pašalinti 100 % svyravimo be empirinio pagrindo. Nežinomos prielaidos rodomos atvirai ir mažina pasitikėjimo lygį.
+
+#### 3.4. Pasirinkimo taisyklė
+
+Rekomenduojamas pakeitimas turi:
+
+1. veikti patvirtintą dominuojančią priežastį;
+2. turėti pamatuojamą poveikį laiku realizuojamam Throughput;
+3. būti mažesnės papildomos OE / investicijos ir greitesnis už panašaus poveikio alternatyvas;
+4. nesiremti Assembly pajėgumo didinimu, jei READY bufferis sistemingai badauja;
+5. būti įgyvendinamas kaip grįžtamas pilotas, kai pasitikėjimas dar neaukštas.
+
+Rezultatas nėra automatinis sprendimas. Product Engine pateikia palyginimą ir rekomendaciją, o galutinį pakeitimą patvirtina vadovybė.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| MQ-001 constraint / priežasties klasifikacija | Neoptimizuoti neapribojančios vietos. |
+| MQ-002 READY bufferio istorija | Nustatyti Assembly badavimo dažnį ir pajėgumo scenarijaus tinkamumą. |
+| MQ-003 readiness priežasčių intervalai | Modeliuoti komponentų prieinamumo pagerinimą. |
+| MQ-004 pajėgumas, poreikis ir užbaigimo tempas | Modeliuoti tempo bei pajėgumo pakeitimus. |
+| MQ-005 faktinė ir rekomenduota prioritetų seka | Modeliuoti policy pakeitimą. |
+| MQ-006 realiai prarastos žmogaus valandos pagal priežastį | Modeliuoti konkretaus blokatoriaus pašalinimą. |
+| MQ-007 SO line Throughput ir vėlavimo priskyrimas | Išreikšti poveikį ekonomine verte. |
+| Alternatyvos OE, investicija ir įgyvendinimo trukmė | Palyginti pakeitimo dydį ir atsipirkimo logiką. |
+| Papildomos paklausos / nepriimtų užsakymų duomenys | Atskirti greitesnį esamų SO išsiuntimą nuo tikro papildomo Throughput. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba atsirasiantys iš ankstesnių klausimų
+
+- visi MQ-001–MQ-007 sutarti įvykiai, būsenos ir išvedami rodikliai;
+- SO line pardavimo vertė ir medžiagų savikaina;
+- BOM norminės Assembly valandos;
+- dienos `C`, READY bufferis, WO būsenos ir `Delivery Date`.
+
+#### Išvedami
+
+- kiekvienos alternatyvos sumažinamas `Throughput at risk` ir `Throughput delay-days`;
+- papildomai laiku išsiunčiamų SO skaičius;
+- galimas papildomas bendras Throughput, jei egzistuoja papildoma paklausa;
+- poveikio, OE / investicijos, įgyvendinimo laiko ir pasitikėjimo palyginimas;
+- rekomenduojamas mažiausias pakeitimas ir jį pagrindžiantys signalai.
+
+#### Trūkstami arba įvedami sprendimo metu
+
+- konkrečių alternatyvų papildoma OE ir vienkartinė investicija;
+- įgyvendinimo trukmė bei piloto apimtis;
+- realistiškas numatomas priežasties sumažinimo procentas;
+- papildomos paklausos arba dėl pajėgumo nepriimamų / atidedamų užsakymų duomenys;
+- vadovybės pasirinktas sėkmės kriterijus ir piloto stabdymo taisyklė.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-008 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **TOC What-if Advisor**. Ji turės pateikti:
+
+```text
+Dominuojanti priežastis: ...
+Alternatyva A – komponentų prieinamumas: poveikis / OE / investicija / laikas / pasitikėjimas
+Alternatyva B – READY ir prioritetų disciplina: ...
+Alternatyva C – didžiausias Assembly blokatorius: ...
+Alternatyva D – papildomas Assembly pajėgumas: ...
+Rekomenduojamas mažiausias pakeitimas: ...
+Kodėl: ...
+Constraint perkėlimo rizika: ...
+Siūlomas pilotas ir sėkmės kriterijus: ...
+```
+
+Modulis neturi rekomenduoti papildomo žmogaus vien todėl, kad užsakymai vėluoja. Jis pirmiausia turi patikrinti, ar Assembly turi READY darbo, ar esamas pajėgumas išnaudojamas ir ar papildomas pajėgumas turėtų paklausą, kurią galima paversti papildomu Throughput.
+
+## Kitas specifikacijos etapas
+
+Patvirtinti, ar Furnibox šiandien turi dėl Assembly pajėgumo nepriimamų arba sąmoningai į vėlesnį laikotarpį nukeliamų užsakymų. Tada užbaigti MQ-008, atlikti viso katalogo nuoseklumo peržiūrą ir tik po jos formuluoti Product Engine sprendimų palaikymo architektūrą.
