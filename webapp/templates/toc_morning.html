@@ -81,6 +81,32 @@
   {% endif %}
 </section>
 
+<section class="panel daily-plan">
+  <div class="plan-head">
+    <div><p class="eyebrow">4 žingsnis</p><h2>Dienos Assembly eilė</h2><p class="muted">Tik READY darbai, surikiuoti pagal patvirtintą MQ-005 taisyklę.</p></div>
+    {% if current_actor.role in ['production_manager', 'administrator'] %}
+    <form method="post" action="{{ url_for('toc_generate_plan') }}">
+      <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}">
+      <button class="secondary">Generuoti naują plano versiją</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if latest_plan %}
+    {% set is_approved = latest_plan.id in approved_plan_ids %}
+    <div class="plan-meta"><span class="state {{ 'pass' if is_approved else 'waiting' }}">{{ 'PATVIRTINTA' if is_approved else 'LAUKIA PATVIRTINIMO' }}</span><span>C = {{ latest_plan.payload.capacity_hours }} val.</span><span>Taisyklė {{ latest_plan.rule_version }}</span><span>Odoo {{ latest_plan.payload.source_read_at[:16].replace('T', ' ') }} UTC</span></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>SO</th><th>Prioritetas</th><th>Delivery Date</th><th>READY nuo</th><th>Valandos</th><th>Planas</th></tr></thead>
+      <tbody>{% for entry in latest_plan.payload.entries %}<tr class="{{ '' if entry.planned_today else 'plan-later' }}"><td>{{ entry.rank }}</td><td><strong>{{ entry.so_reference }}</strong>{% if entry.urgent %} · SKUBUS{% endif %}</td><td>{{ entry.priority_label }}</td><td>{{ entry.delivery_date or 'Nenurodyta' }}</td><td>{{ entry.readiness_date }}</td><td>{{ entry.assembly_hours }} / Σ {{ entry.cumulative_hours }}</td><td>{{ 'Šiandien' if entry.planned_today else 'Po šiandienos C' }}</td></tr>{% else %}<tr><td colspan="7" class="empty">Patvirtintų READY darbų nėra.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if current_actor.role in ['production_manager', 'administrator'] and not is_approved %}
+    <form method="post" action="{{ url_for('toc_approve_plan') }}" class="approve-plan">
+      <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}"><input type="hidden" name="plan_event_id" value="{{ latest_plan.id }}">
+      <button class="primary">Patvirtinti šią dienos eilę</button>
+    </form>
+    {% endif %}
+  {% else %}<p class="empty">Dienos plano versija dar nesugeneruota.</p>{% endif %}
+</section>
+
 <section class="section-head"><div><p class="eyebrow">Auditas</p><h2>Šios dienos įvykiai</h2></div></section>
 <div class="table-wrap"><table>
   <thead><tr><th>Laikas UTC</th><th>Naudotojas</th><th>Įvykis</th><th>Užsakymas / duomenys</th></tr></thead>

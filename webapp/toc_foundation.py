@@ -185,8 +185,22 @@ class TocStore:
                     state["reasons"].pop(blocker_id, None)
                     state["status"] = "not_ready" if state["reasons"] else "unchecked"
             elif item.event_type == "ReadinessConfirmed" and so_reference:
-                states[so_reference] = {"status": "ready", "reasons": {}}
+                states[so_reference] = {
+                    "status": "ready", "reasons": {},
+                    "readiness_date": item.business_date,
+                }
         return states
+
+    def get_event(self, event_id: str) -> DecisionEvent | None:
+        with self.sessions() as db:
+            item = db.scalar(
+                select(DecisionEvent)
+                .options(joinedload(DecisionEvent.actor))
+                .where(DecisionEvent.id == event_id)
+            )
+            if item:
+                db.expunge(item)
+            return item
 
     def record_readiness(
         self, *, so_reference: str, business_date: date, actor_id: str,

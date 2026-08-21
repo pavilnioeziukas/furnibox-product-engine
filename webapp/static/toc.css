@@ -9,7 +9,13 @@
 .candidate-actions summary { color: var(--red); cursor: pointer; font-weight: 800; padding: 9px 0; }
 .blocker-form { background: var(--paper); border-radius: 10px; margin-top: 8px; padding: 14px; }
 .blocker-form .danger { margin-top: 0; }
+.daily-plan { margin-top: 18px; }
+.plan-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.plan-meta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 18px 0; color: var(--muted); }
+.plan-later { color: var(--muted); background: #f8f9f7; }
+.approve-plan { margin-top: 16px; }
 @media (max-width: 850px) {
   .candidate-summary { grid-template-columns: 1fr 1fr; }
   .candidate-actions { flex-direction: column; }
+  .plan-head { flex-direction: column; }
 }

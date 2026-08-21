@@ -50,6 +50,7 @@ from purchase_price_adjustments_import import (
 from webapp.product_engine import ProductEngineSettings, load_actions
 from webapp.toc_foundation import READINESS_BLOCKER_REASONS, TocStore
 from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates
+from webapp.toc_schedule import PRIORITY_RULE_VERSION, generate_daily_plan, serialize_plan
 
 
 SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
@@ -489,6 +490,8 @@ TOC_EVENT_LABELS = {
     "ReadinessConfirmed": "Užsakymas patvirtintas READY",
     "ReadinessBlockerOpened": "Užregistruota NOT READY priežastis",
     "ReadinessBlockerClosed": "Pašalinta NOT READY priežastis",
+    "DailyPriorityPlanGenerated": "Sugeneruota dienos darbų eilė",
+    "DailyPriorityPlanApproved": "Patvirtinta dienos darbų eilė",
 }
 
 
@@ -496,6 +499,11 @@ def toc_event_description(item) -> str:
     payload = item.payload
     if item.event_type == "DailyAssemblyCapacityConfirmed":
         return f"{payload['employee_count']} darbuotojai · {payload['capacity_hours']} val."
+    if item.event_type == "DailyPriorityPlanGenerated":
+        today_count = sum(bool(entry.get("planned_today")) for entry in payload.get("entries", []))
+        return f"{today_count} darbai šiandien · C {payload.get('capacity_hours', 0)} val."
+    if item.event_type == "DailyPriorityPlanApproved":
+        return "Patvirtinta sugeneruota plano versija"
     so_reference = payload.get("so_reference", "")
     reason = READINESS_BLOCKER_REASONS.get(payload.get("reason_code"), "")
     return " · ".join(value for value in (so_reference, reason, payload.get("comment", "")) if value)
@@ -511,6 +519,8 @@ def toc_morning():
         abort(400, "Neteisinga darbo data.")
     events = TOC_STORE.list_events(selected_date)
     capacity_events = [item for item in events if item.event_type == "DailyAssemblyCapacityConfirmed"]
+    plan_events = [item for item in events if item.event_type == "DailyPriorityPlanGenerated"]
+    approval_events = [item for item in events if item.event_type == "DailyPriorityPlanApproved"]
     candidate_result = None
     candidate_error = None
     try:
@@ -528,6 +538,8 @@ def toc_morning():
         candidate_result=candidate_result,
         candidate_error=candidate_error,
         readiness_states=TOC_STORE.readiness_states(),
+        latest_plan=plan_events[-1] if plan_events else None,
+        approved_plan_ids={item.payload.get("plan_event_id") for item in approval_events},
     )
 
 
@@ -578,6 +590,63 @@ def toc_record_readiness():
     except ValueError as exc:
         abort(400, str(exc))
     flash("Užsakymas pažymėtas READY." if ready else f"NOT READY priežastys užregistruotos: {len(written)}.")
+    return redirect(url_for("toc_morning", date=business_date.isoformat()))
+
+
+@app.post("/toc/morning/generate-plan")
+def toc_generate_plan():
+    actor = require_toc_actor("production_manager", "administrator")
+    business_date = requested_business_date()
+    events = TOC_STORE.list_events(business_date)
+    capacities = [item for item in events if item.event_type == "DailyAssemblyCapacityConfirmed"]
+    if not capacities:
+        abort(400, "Prieš generuojant planą patvirtinkite dienos pajėgumą.")
+    capacity = capacities[-1]
+    try:
+        source = load_assembly_candidates(ReadOnlyOdooReader.from_env())
+    except Exception as exc:
+        abort(503, f"Nepavyko nuskaityti Odoo kandidatų: {exc}")
+    entries = generate_daily_plan(
+        source.candidates, TOC_STORE.readiness_states(), business_date=business_date,
+        capacity_hours=float(capacity.payload["capacity_hours"]),
+    )
+    TOC_STORE.append_event(
+        event_type="DailyPriorityPlanGenerated", business_date=business_date,
+        actor_id=actor.id, rule_version=PRIORITY_RULE_VERSION,
+        payload={
+            "source_read_at": source.read_at,
+            "capacity_event_id": capacity.id,
+            "capacity_hours": capacity.payload["capacity_hours"],
+            "excluded_without_exact_so": source.excluded_without_exact_so,
+            "entries": serialize_plan(entries),
+        },
+    )
+    flash(f"Dienos eilė sugeneruota: {len(entries)} READY užsakymai.")
+    return redirect(url_for("toc_morning", date=business_date.isoformat()))
+
+
+@app.post("/toc/morning/approve-plan")
+def toc_approve_plan():
+    actor = require_toc_actor("production_manager", "administrator")
+    business_date = requested_business_date()
+    plan_event_id = request.form.get("plan_event_id", "")
+    plan = TOC_STORE.get_event(plan_event_id)
+    if not plan or plan.event_type != "DailyPriorityPlanGenerated" or plan.business_date != business_date:
+        abort(400, "Nurodyta dienos plano versija neegzistuoja.")
+    already_approved = any(
+        item.event_type == "DailyPriorityPlanApproved"
+        and item.payload.get("plan_event_id") == plan.id
+        for item in TOC_STORE.list_events(business_date)
+    )
+    if already_approved:
+        flash("Ši dienos plano versija jau patvirtinta.")
+        return redirect(url_for("toc_morning", date=business_date.isoformat()))
+    TOC_STORE.append_event(
+        event_type="DailyPriorityPlanApproved", business_date=business_date,
+        actor_id=actor.id, rule_version=plan.rule_version,
+        payload={"plan_event_id": plan.id},
+    )
+    flash("Dienos darbų eilė patvirtinta.")
     return redirect(url_for("toc_morning", date=business_date.isoformat()))
 
 

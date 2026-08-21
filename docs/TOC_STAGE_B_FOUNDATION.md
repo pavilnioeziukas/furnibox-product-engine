@@ -53,11 +53,22 @@ Parengtas pirmasis ekranas **Rytinė kontrolė** leidžia gamybos vadovei:
 
 2026-08-21 automatinė kandidatų atranka patikrinta Production Odoo tik skaitymo režimu. Ji rado 91 tikrintiną surenkamą SO, 619,09 standartinės Assembly valandos, vieną `SKUBUS` ir nė vieno WO be tikslaus SO ryšio. Visos 91 `Delivery Date` reikšmės buvo užpildytos. Šie skaičiai yra konkretaus nuskaitymo momentinė būsena, ne pastovus proceso dydis.
 
+Parengtas ir dienos plano snapshot bei patvirtinimas:
+
+- į planą patenka tik Product Engine įvykiu patvirtinti READY kandidatai;
+- 1 prioritetas – vėluojantys READY, nuo seniausios `Delivery Date`;
+- 2 prioritetas – nevėluojantys `READY + SKUBUS`, nuo artimiausios `Delivery Date`;
+- 3 prioritetas – kiti READY, nuo artimiausios `Delivery Date`;
+- vienodos datos sprendžiamos pagal ankstesnę READY darbo datą;
+- darbas žymimas šiandienos planu, jei jo pradžios momentu kumuliacinės valandos dar nepasiekė `C`; todėl paskutinis nedalomas darbas gali persikelti už C ribos;
+- snapshot išsaugo visą eilę, Odoo nuskaitymo laiką, pajėgumo įvykio nuorodą, taisyklės versiją ir kiekvieno darbo paaiškinimą;
+- gamybos vadovė patvirtina konkrečią nekintamą snapshot versiją; vėliau sugeneruota versija vėl reikalauja atskiro patvirtinimo.
+
 ### Likusi B etapo dalis
 
 Ant šio pagrindo kuriamas vienas rytinis darbo srautas:
 
-1. dienos plano snapshot;
-2. plano patvirtinimas ir audituojamos eilės išimtys.
+1. audituojamos rankinės eilės išimtys;
+2. vieno darbuotojo aktyvaus darbo apsauga, kad dieną atsiradęs `SKUBUS` būtų pirmas tik po jo.
 
 Odoo šiame sraute lieka tik skaitomas faktų šaltinis.
