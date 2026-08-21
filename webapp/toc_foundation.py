@@ -167,6 +167,27 @@ class TocStore:
             and item.id not in closed_ids
         ]
 
+    def readiness_states(self) -> dict[str, dict[str, Any]]:
+        states: dict[str, dict[str, Any]] = {}
+        blocker_to_so: dict[str, str] = {}
+        for item in self.list_events():
+            so_reference = str(item.payload.get("so_reference") or "")
+            if item.event_type == "ReadinessBlockerOpened" and so_reference:
+                state = states.setdefault(so_reference, {"status": "unchecked", "reasons": {}})
+                state["reasons"][item.id] = item.payload.get("reason_code")
+                state["status"] = "not_ready"
+                blocker_to_so[item.id] = so_reference
+            elif item.event_type == "ReadinessBlockerClosed":
+                blocker_id = str(item.payload.get("blocker_id") or "")
+                blocked_so = blocker_to_so.get(blocker_id, so_reference)
+                state = states.get(blocked_so)
+                if state:
+                    state["reasons"].pop(blocker_id, None)
+                    state["status"] = "not_ready" if state["reasons"] else "unchecked"
+            elif item.event_type == "ReadinessConfirmed" and so_reference:
+                states[so_reference] = {"status": "ready", "reasons": {}}
+        return states
+
     def record_readiness(
         self, *, so_reference: str, business_date: date, actor_id: str,
         ready: bool, reason_codes: list[str] | None = None, comment: str = "",

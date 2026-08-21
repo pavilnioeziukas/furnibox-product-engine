@@ -41,28 +41,45 @@
   </section>
 </div>
 
-{% if current_actor.role in ['production_manager', 'administrator'] %}
 <section class="panel toc-decision">
-  <p class="eyebrow">3 žingsnis</p><h2>Užsakymo pasirengimas</h2>
-  <form method="post" action="{{ url_for('toc_record_readiness') }}" class="stack">
-    <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}">
-    <label>Sales Order numeris<input name="so_reference" placeholder="pvz. S01234" required></label>
-    <fieldset>
-      <legend>Jei NOT READY, pažymėkite visas galiojančias priežastis</legend>
-      <div class="reason-grid">
-      {% for code, label in readiness_reasons.items() %}
-        <label class="check-row"><input type="checkbox" name="reason_code" value="{{ code }}"> {{ label }}</label>
-      {% endfor %}
-      </div>
-    </fieldset>
-    <label>Komentaras kategorijai „Kita“<input name="comment"></label>
-    <div class="decision-buttons">
-      <button class="primary" name="decision" value="ready">READY</button>
-      <button class="danger" name="decision" value="not_ready">NOT READY</button>
+  <p class="eyebrow">3 žingsnis</p><h2>Tikrintini surenkami užsakymai</h2>
+  {% if candidate_error %}
+    <p class="error">Nepavyko nuskaityti Odoo kandidatų: {{ candidate_error }}</p>
+  {% else %}
+    <p class="muted">Rasta {{ candidates|length }} SO su dar nepradėta Assembly operacija. Odoo nuskaitytas {{ candidate_result.read_at[:16].replace('T', ' ') }} UTC.</p>
+    {% if candidate_result.excluded_without_exact_so %}<p class="muted">{{ candidate_result.excluded_without_exact_so }} WO nerodomi, nes neturi tikslaus SO ryšio.</p>{% endif %}
+    <div class="candidate-list">
+    {% for candidate in candidates %}
+      {% set readiness = readiness_states.get(candidate.so_reference, {'status': 'unchecked', 'reasons': {}}) %}
+      <article class="candidate-card">
+        <div class="candidate-summary">
+          <div><strong>{{ candidate.so_reference }}</strong>{% if candidate.urgent %}<span class="state waiting">SKUBUS</span>{% endif %}</div>
+          <div><small>Išsiųsti iki</small><strong>{{ candidate.delivery_date or 'Nenurodyta' }}</strong></div>
+          <div><small>Assembly</small><strong>{{ candidate.assembly_hours }} val. · {{ candidate.manufacturing_order_count }} MO</strong></div>
+          <span class="state {{ 'ready' if readiness.status == 'ready' else ('fail' if readiness.status == 'not_ready' else '') }}">{{ 'READY' if readiness.status == 'ready' else ('NOT READY' if readiness.status == 'not_ready' else 'NEPATIKRINTA') }}</span>
+        </div>
+        {% if readiness.status == 'not_ready' %}<p class="active-reasons">Aktyvu: {% for reason in readiness.reasons.values() %}{{ readiness_reasons.get(reason, reason) }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+        {% if current_actor.role in ['production_manager', 'administrator'] %}
+        <div class="candidate-actions">
+          <form method="post" action="{{ url_for('toc_record_readiness') }}">
+            <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}"><input type="hidden" name="so_reference" value="{{ candidate.so_reference }}">
+            <button class="primary" name="decision" value="ready" {% if readiness.status == 'ready' %}disabled{% endif %}>{{ 'READY patvirtinta' if readiness.status == 'ready' else 'Patvirtinti READY' }}</button>
+          </form>
+          <details><summary>Pažymėti NOT READY</summary>
+            <form method="post" action="{{ url_for('toc_record_readiness') }}" class="stack blocker-form">
+              <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}"><input type="hidden" name="so_reference" value="{{ candidate.so_reference }}">
+              <div class="reason-grid">{% for code, label in readiness_reasons.items() %}<label class="check-row"><input type="checkbox" name="reason_code" value="{{ code }}"> {{ label }}</label>{% endfor %}</div>
+              <label>Komentaras kategorijai „Kita“<input name="comment"></label>
+              <button class="danger" name="decision" value="not_ready">Išsaugoti NOT READY</button>
+            </form>
+          </details>
+        </div>
+        {% endif %}
+      </article>
+    {% else %}<p class="empty">Nepradėtų Assembly užsakymų šiuo metu nėra.</p>{% endfor %}
     </div>
-  </form>
+  {% endif %}
 </section>
-{% endif %}
 
 <section class="section-head"><div><p class="eyebrow">Auditas</p><h2>Šios dienos įvykiai</h2></div></section>
 <div class="table-wrap"><table>

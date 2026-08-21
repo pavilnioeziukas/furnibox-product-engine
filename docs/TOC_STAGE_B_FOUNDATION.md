@@ -51,12 +51,13 @@ Parengtas pirmasis ekranas **Rytinė kontrolė** leidžia gamybos vadovei:
 - patvirtinus READY uždaryti visas aktyvias to SO NOT READY priežastis;
 - matyti tos dienos veiksmų auditą suprantamais pavadinimais.
 
+2026-08-21 automatinė kandidatų atranka patikrinta Production Odoo tik skaitymo režimu. Ji rado 91 tikrintiną surenkamą SO, 619,09 standartinės Assembly valandos, vieną `SKUBUS` ir nė vieno WO be tikslaus SO ryšio. Visos 91 `Delivery Date` reikšmės buvo užpildytos. Šie skaičiai yra konkretaus nuskaitymo momentinė būsena, ne pastovus proceso dydis.
+
 ### Likusi B etapo dalis
 
 Ant šio pagrindo kuriamas vienas rytinis darbo srautas:
 
-1. kandidatiniai SO į ekraną pateikiami automatiškai iš read-only Odoo adapterio;
-2. dienos plano snapshot;
-3. plano patvirtinimas ir audituojamos eilės išimtys.
+1. dienos plano snapshot;
+2. plano patvirtinimas ir audituojamos eilės išimtys.
 
 Odoo šiame sraute lieka tik skaitomas faktų šaltinis.

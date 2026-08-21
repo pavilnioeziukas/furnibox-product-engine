@@ -1,0 +1,15 @@
+.candidate-list { display: grid; gap: 12px; margin-top: 18px; }
+.candidate-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.candidate-summary { display: grid; grid-template-columns: 1fr 1fr 1.3fr auto; gap: 18px; align-items: center; }
+.candidate-summary > div { display: grid; gap: 3px; }
+.candidate-summary small { color: var(--muted); }
+.candidate-summary .state { margin-left: 8px; }
+.candidate-actions { display: flex; align-items: flex-start; gap: 12px; margin-top: 14px; }
+.active-reasons { background: #fee9e7; border-radius: 8px; color: var(--red); margin: 12px 0 0; padding: 9px 12px; }
+.candidate-actions summary { color: var(--red); cursor: pointer; font-weight: 800; padding: 9px 0; }
+.blocker-form { background: var(--paper); border-radius: 10px; margin-top: 8px; padding: 14px; }
+.blocker-form .danger { margin-top: 0; }
+@media (max-width: 850px) {
+  .candidate-summary { grid-template-columns: 1fr 1fr; }
+  .candidate-actions { flex-direction: column; }
+}

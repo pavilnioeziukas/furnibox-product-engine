@@ -49,6 +49,7 @@ from purchase_price_adjustments_import import (
 )
 from webapp.product_engine import ProductEngineSettings, load_actions
 from webapp.toc_foundation import READINESS_BLOCKER_REASONS, TocStore
+from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates
 
 
 SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
@@ -510,6 +511,12 @@ def toc_morning():
         abort(400, "Neteisinga darbo data.")
     events = TOC_STORE.list_events(selected_date)
     capacity_events = [item for item in events if item.event_type == "DailyAssemblyCapacityConfirmed"]
+    candidate_result = None
+    candidate_error = None
+    try:
+        candidate_result = load_assembly_candidates(ReadOnlyOdooReader.from_env())
+    except Exception as exc:
+        candidate_error = str(exc)
     return render_template(
         "toc_morning.html", business_date=selected_date,
         events=list(reversed(events)),
@@ -517,6 +524,10 @@ def toc_morning():
         readiness_reasons=READINESS_BLOCKER_REASONS,
         event_labels=TOC_EVENT_LABELS,
         event_description=toc_event_description,
+        candidates=candidate_result.candidates if candidate_result else (),
+        candidate_result=candidate_result,
+        candidate_error=candidate_error,
+        readiness_states=TOC_STORE.readiness_states(),
     )
 
 
