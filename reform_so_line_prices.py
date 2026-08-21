@@ -460,6 +460,7 @@ def component_cost_only_manufacture_products(dataset):
         and text(product.get("sku"))
         and (
             text(product.get("generated_from"))
+            or text(product.get("sku")).upper().startswith("FPACK-")
             or text(product.get("sku")).upper().endswith("-PP")
         )
     }
@@ -1118,6 +1119,7 @@ def resolve_component_cost(
     graph,
     trail=None,
     cache=None,
+    bom_cost_skus=None,
 ):
     """
     Resolve one SKU unit cost.
@@ -1156,15 +1158,42 @@ def resolve_component_cost(
     if cache is None:
         cache = {}
 
+    if bom_cost_skus is None:
+        bom_cost_skus = set()
+    elif not isinstance(bom_cost_skus, set):
+        bom_cost_skus = {
+            key(value)
+            for value in bom_cost_skus
+        }
+
     if sku_key in cache:
         return cache[sku_key]
 
     # Priority 1:
     # prepared direct purchase / transfer price.
-    if sku_key in prices:
+    if sku_key in prices and sku_key not in bom_cost_skus:
         unit_price = float(
             prices[sku_key][1]
         )
+
+        if unit_price <= 0:
+            result = {
+                "cost": None,
+                "source": "NON-POSITIVE DIRECT PRICE",
+                "issues": [
+                    f"Non-positive component price: {sku} ({unit_price:g})"
+                ],
+                "leaves": [
+                    {
+                        "sku": sku,
+                        "qty": 1.0,
+                        "unit_price": None,
+                        "source": "NON-POSITIVE DIRECT PRICE",
+                    }
+                ],
+            }
+            cache[sku_key] = result
+            return result
 
         price_source = (
             get_price_source(
@@ -1269,6 +1298,7 @@ def resolve_component_cost(
                 graph,
                 trail=next_trail,
                 cache=cache,
+                bom_cost_skus=bom_cost_skus,
             )
         )
 
@@ -1385,6 +1415,7 @@ def calculate_boms(
             or set()
         )
     }
+    bom_cost_skus = set(component_cost_only_tops)
     authoritative_rule_tops = {
         key(value)
         for value in (
@@ -1408,6 +1439,11 @@ def calculate_boms(
         issues = []
         applied = []
         component_details = []
+
+        if not items:
+            issues.append(
+                f"Target BOM has no components: {top}"
+            )
 
         for item in items:
             if not item.sku:
@@ -1436,6 +1472,7 @@ def calculate_boms(
                     prices,
                     graph,
                     cache=cost_cache,
+                    bom_cost_skus=bom_cost_skus,
                 )
             )
 
