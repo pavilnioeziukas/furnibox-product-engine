@@ -8,10 +8,12 @@ from openpyxl import Workbook, load_workbook
 
 from refresh_reform_pricing import (
     read_pricing_status,
+    read_current_sales_prices,
     refresh,
     write_blocker_report,
     write_complete_only_price_workbook,
     write_furnibox_purchase_prices,
+    write_pricing_chain_audit,
 )
 
 
@@ -50,6 +52,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                     return_value=({"COMPLETE": 1}, []),
                 ),
                 patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
+                patch("refresh_reform_pricing.write_pricing_chain_audit"),
                 patch("refresh_reform_pricing.shutil.copy2"),
             ):
                 self.assertEqual(refresh(bom, output), 0)
@@ -110,13 +113,22 @@ class RefreshReformPricingTests(unittest.TestCase):
                 patch(
                     "refresh_reform_pricing.write_furnibox_purchase_prices"
                 ) as purchase_writer,
+                patch("refresh_reform_pricing.write_pricing_chain_audit"),
                 patch("refresh_reform_pricing.shutil.copy2") as copy_file,
             ):
                 self.assertEqual(refresh(bom, output), 2)
 
             partial_writer.assert_called_once()
             purchase_writer.assert_called_once()
-            copy_file.assert_called_once()
+            self.assertEqual(copy_file.call_count, 2)
+            copied_outputs = {
+                call.args[1].name
+                for call in copy_file.call_args_list
+            }
+            self.assertEqual(copied_outputs, {
+                "Reform_Pricing_Source.xlsx",
+                "Cabinet_Parts_Pricing.xlsx",
+            })
             result = json.loads(
                 (output / "Reform_Pricing_Result.json").read_text(encoding="utf-8")
             )
@@ -127,6 +139,79 @@ class RefreshReformPricingTests(unittest.TestCase):
                 result["partial_file"],
                 "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx",
             )
+
+    def test_pricing_chain_audit_checks_primary_rollup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "pricing.xlsx"
+            cabinet_parts = base / "cabinet_parts.xlsx"
+            output = base / "audit.xlsx"
+
+            workbook = Workbook()
+            prices = workbook.active
+            prices.title = "SO LINE PRICES"
+            prices.append([
+                "SKU", "Product Category", "Component / Purchase Cost",
+                "Pricing Add-ons Total", "Adjustment Amount",
+                "Final Reform SO Unit Price", "Status", "Issues",
+            ])
+            prices.append([
+                "FPACK-EU-CAB01-BAS001", "PREPACK", 10, 1, -0.07,
+                10.93, "COMPLETE", "",
+            ])
+            components = workbook.create_sheet("BOM COMPONENT COSTS")
+            components.append([
+                "Top BOM SKU", "Purchased Component SKU", "Purchase Unit Price",
+                "Component Cost", "Cost Source",
+            ])
+            components.append([
+                "FPACK-EU-CAB01-BAS001", "PART-1", 5, 10,
+                "CABINET PART CALCULATION",
+            ])
+            workbook.save(source)
+
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "CABINET PART PRICES"
+            sheet.append(["Internal Reference", "Furnix Sales Price to Furnibox"])
+            sheet.append(["PART-1", 5])
+            workbook.save(cabinet_parts)
+
+            write_pricing_chain_audit(
+                source,
+                cabinet_parts,
+                output,
+                current_sales_prices={"FPACK-EU-CAB01-BAS001": 0.01},
+            )
+
+            result = load_workbook(output, data_only=True)
+            summary = result["SUMMARY"]
+            self.assertEqual(summary["A2"].value, "CABINET PARTS")
+            self.assertEqual(summary["B2"].value, 1)
+            detail = result["PRIMARY CHAIN"]
+            headers = {cell.value: cell.column for cell in detail[1]}
+            self.assertEqual(detail.cell(2, headers["Audit Status"]).value, "PASS")
+            self.assertEqual(detail.cell(2, headers["Cabinet Part Lines"]).value, 1)
+            self.assertEqual(
+                detail.cell(2, headers["Price Review"]).value,
+                "INTERNAL PLACEHOLDER",
+            )
+
+    def test_current_sales_prices_are_loaded_from_read_only_reconciliation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reconciliation.json"
+            path.write_text(json.dumps({
+                "current_sales_prices": [
+                    {"sku": "CABINET-1", "price": 100.0},
+                    {"sku": "APACK-1", "price": 0.01},
+                    {"sku": "NO-PRICE", "price": None},
+                ],
+            }), encoding="utf-8")
+
+            self.assertEqual(read_current_sales_prices(path), {
+                "CABINET-1": 100.0,
+                "APACK-1": 0.01,
+            })
 
     def make_result(self, path: Path, rows):
         workbook = Workbook()
