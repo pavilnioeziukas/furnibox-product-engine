@@ -558,9 +558,9 @@ MQ-005 atsakymas kiekvienos darbo dienos pradžioje nustato:
 
 #### 3.3. Dienos pajėgumo užpildymas
 
-Rytinės patikros metu gamybos vadovė įveda dirbančių Assembly darbuotojų skaičių, o sistema apskaičiuoja `C = darbuotojų skaičius × 8 val.`. READY darbai pagal patvirtintą seką pridedami į dienos planą iki planinio `C`.
+Rytinės patikros metu gamybos vadovė įveda dirbančių Assembly darbuotojų skaičių, o sistema apskaičiuoja `C = darbuotojų skaičius × 8 val.`. Furnibox darbo kalendorius skaičiuojamas `Europe/Vilnius` laiko zonoje: darbo laikas 07:00–16:00, o 12:00–13:00 pietų pertrauka neįtraukiama į produktyvų pajėgumą.
 
-Kadangi vieną gaminį renka vienas darbuotojas, sistema turi rodyti ne tik bendrą dienos valandų sumą, bet ir konkretų darbų paskirstymą prieinamiems darbuotojams. Jei paskutinis darbas netelpa į likusias dienos valandas, jis gali būti pradėtas tik tada, jei gamybos vadovė sąmoningai priima WIP perkėlimo į kitą dieną sprendimą; sistema neturi apsimesti, kad visa jo norminė trukmė bus užbaigta tą dieną.
+Kadangi dažniausiai vienas darbuotojas renka visus vieno SO gaminius, numatytoji `mq005-v2` taisyklė visą SO priskiria vienam lygiagrečiam darbuotojo takeliui. Kitas SO skiriamas anksčiausiai atsilaisvinančiam takeliui. Jei SO netelpa į darbo dieną, jis lieka tame pačiame takelyje ir tęsiamas kitą darbo dieną; naktis, pietūs ir savaitgaliai neįtraukiami į planinę trukmę. SO skaidymas keliems darbuotojams yra tik gamybos vadovės audituojama išimtis, o ne automatinė taisyklė.
 
 #### 3.4. Išimtys ir auditas
 
@@ -581,6 +581,7 @@ Kadangi vieną gaminį renka vienas darbuotojas, sistema turi rodyti ne tik bend
 | SO–MO–WO sąsajos | Perduoti SO prioritetą konkrečiam Assembly darbui. |
 | BOM norminės Assembly valandos | Užpildyti dienos pajėgumą ir prognozuoti užbaigimą. |
 | Ryte dirbančių Assembly darbuotojų skaičius | Apskaičiuoti dienos `C` ir paskirstyti darbus. |
+| Darbo kalendorius 07:00–16:00 ir pietūs 12:00–13:00 (`Europe/Vilnius`) | Apskaičiuoti realų planinį pradžios ir pabaigos laiką. |
 | Esamas WIP bei WO `PAUSED` / `BLOCKED` būsenos | Neplanuoti to paties darbo kaip naujo ir rezervuoti dėmesį pradėtam darbui. |
 | Rankinio sekos pakeitimo įvykis ir priežastis | Audituoti išimtis bei jų poveikį kitiems SO. |
 
@@ -595,6 +596,8 @@ Kadangi vieną gaminį renka vienas darbuotojas, sistema turi rodyti ne tik bend
 - WO pradžios, pabaigos, pauzės ir blokavimo būsenos;
 - kasdienis gamybos vadovės READY patvirtinimas;
 - gamybos vadovės įvedamas dirbančių darbuotojų skaičius.
+- patvirtintas darbo kalendorius: 07:00–16:00, pietūs 12:00–13:00, 8 produktyvios valandos;
+- numatytoji taisyklė: visas vieno SO Assembly darbas priskiriamas vienam darbuotojo takeliui.
 
 #### Išvedami
 
@@ -610,6 +613,7 @@ Kadangi vieną gaminį renka vienas darbuotojas, sistema turi rodyti ne tik bend
 - patvirtintos leidžiamų išimčių priežasčių kategorijos arba pradinis laisvas komentaras;
 - aiškus dienos plano patvirtinimo momentas;
 - techninė patikra, ar Odoo `SKUBUS` tago pakeitimo istorijoje prieinami kas / kada duomenys.
+- audituojama išimtis, leidžianti gamybos vadovei padalyti vieną SO keliems darbuotojams.
 
 ### 6. Būsimas Product Engine modulis
 

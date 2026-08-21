@@ -663,6 +663,7 @@ def toc_generate_plan():
     entries = generate_daily_plan(
         source.candidates, TOC_STORE.readiness_states(), business_date=business_date,
         capacity_hours=float(capacity.payload["capacity_hours"]),
+        employee_count=int(capacity.payload["employee_count"]),
     )
     daily_signal = diagnose_daily_constraint_signal(
         source.candidates, TOC_STORE.readiness_states(),

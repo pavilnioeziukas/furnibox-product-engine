@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from webapp.toc_odoo import AssemblyCandidate
 from webapp.toc_schedule import generate_daily_plan
@@ -57,6 +57,28 @@ def test_job_that_starts_inside_capacity_is_in_today_plan_even_if_it_spills_over
 
     assert [item.planned_today for item in plan] == [True, True]
     assert plan[-1].cumulative_hours == 10
+    assert plan[0].planned_start.endswith("07:00+03:00")
+    assert plan[0].planned_end.endswith("14:00+03:00")
+    assert plan[1].planned_start.endswith("14:00+03:00")
+    assert plan[1].planned_end.startswith("2026-08-24T09:00")
+    assert plan[1].continues_next_day is True
+
+
+def test_three_workers_receive_parallel_whole_so_lanes():
+    candidates = [candidate("S1", date(2026, 8, 22), hours=11), candidate("S2", date(2026, 8, 23), hours=4), candidate("S3", date(2026, 8, 24), hours=5), candidate("S4", date(2026, 8, 25), hours=2)]
+    states = {item.so_reference: {"status": "ready", "readiness_date": date(2026, 8, 20)} for item in candidates}
+
+    plan = generate_daily_plan(
+        candidates, states, business_date=date(2026, 8, 21),
+        capacity_hours=24, employee_count=3,
+    )
+
+    assert [item.worker_lane for item in plan] == [1, 2, 3, 2]
+    assert [datetime.fromisoformat(item.planned_start).strftime("%H:%M") for item in plan] == [
+        "07:00", "07:00", "07:00", "11:00",
+    ]
+    assert plan[0].planned_end.startswith("2026-08-24T10:00")
+    assert plan[0].continues_next_day is True
 
 
 def test_zero_capacity_places_no_job_in_today_plan():
