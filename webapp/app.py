@@ -129,7 +129,7 @@ TOC_STORE = TocStore(SETTINGS.database_url)
 TOC_STORE.create_schema()
 TOC_STORE.bootstrap_admin(
     SETTINGS.initial_admin_username,
-    SETTINGS.initial_admin_password,
+    SETTINGS.initial_admin_password or SETTINGS.web_password,
 )
 
 
