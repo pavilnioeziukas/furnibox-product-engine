@@ -698,6 +698,7 @@ Kasdien pirmiausia eskaluojami blokatoriai, kurie:
 
 - Odoo WO gali būti blokuojamas nurodant priežastį;
 - WO operacijos gali būti pradėtos, sustabdytos, atnaujintos ir užbaigtos;
+- Odoo darbo įrašuose galima identifikuoti konkretų Assembly darbuotoją ir momentą, kada jis nuo užblokuoto WO pradėjo kitą WO;
 - `PAUSED` naudojamas normalioms pertraukoms bei darbo dienos pabaigai;
 - dienos Assembly pajėgumas apskaičiuojamas iš dirbančių darbuotojų skaičiaus × 8 val.;
 - READY bufferis ir prioritetų eilė apibrėžti MQ-002 bei MQ-005.
@@ -714,7 +715,6 @@ Kasdien pirmiausia eskaluojami blokatoriai, kurie:
 #### Trūkstami arba kalibruotini
 
 - patvirtintos Odoo blokavimo priežasčių reikšmės pagal šį katalogą;
-- patikra, ar darbuotojo ir alternatyvaus WO pradžios įvykių pakanka prarastoms žmogaus valandoms išvesti;
 - taisyklė situacijai, kai vieną WO kartu vykdo ar gali perimti daugiau nei vienas darbuotojas;
 - duomenų kokybės kontrolė, neleidžianti naudoti `BLOCKED` be priežasties;
 - darbo grafiko ribos, reikalingos naktims, savaitgaliams ir normalioms pertraukoms atmesti.
@@ -737,4 +737,4 @@ Modulis neturi WO blokavimo kalendorinės trukmės automatiškai vadinti prarast
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti, ar Odoo darbo įrašuose patikimai matomas konkretus Assembly darbuotojas ir jo perėjimas nuo užblokuoto WO prie kito WO. Tada užbaigti MQ-006 ir ta pačia pilna struktūra formalizuoti MQ-007 — „Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+MQ-006 WO blokavimo ir realiai prarastų Assembly žmogaus valandų atskyrimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-007 — „Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
