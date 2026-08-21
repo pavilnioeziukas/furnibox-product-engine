@@ -13,6 +13,7 @@ from refresh_reform_pricing import (
     write_blocker_report,
     write_complete_only_price_workbook,
     write_furnibox_purchase_prices,
+    write_furnix_parts_price_review,
     write_pricing_chain_audit,
 )
 
@@ -52,6 +53,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                     return_value=({"COMPLETE": 1}, []),
                 ),
                 patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
+                patch("refresh_reform_pricing.write_furnix_parts_price_review"),
                 patch("refresh_reform_pricing.write_pricing_chain_audit"),
                 patch("refresh_reform_pricing.shutil.copy2"),
             ):
@@ -113,6 +115,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 patch(
                     "refresh_reform_pricing.write_furnibox_purchase_prices"
                 ) as purchase_writer,
+                patch("refresh_reform_pricing.write_furnix_parts_price_review"),
                 patch("refresh_reform_pricing.write_pricing_chain_audit"),
                 patch("refresh_reform_pricing.shutil.copy2") as copy_file,
             ):
@@ -194,8 +197,66 @@ class RefreshReformPricingTests(unittest.TestCase):
             self.assertEqual(detail.cell(2, headers["Cabinet Part Lines"]).value, 1)
             self.assertEqual(
                 detail.cell(2, headers["Price Review"]).value,
-                "INTERNAL PLACEHOLDER",
+                "SO PRICE CORRECTION REQUIRED",
             )
+
+    def test_furnix_parts_review_uses_lpp_not_odoo_list_price(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            cabinet_parts = base / "cabinet_parts.xlsx"
+            last_purchases = base / "last_purchases.xlsx"
+            output = base / "review.xlsx"
+
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "CABINET PART PRICES"
+            sheet.append([
+                "Internal Reference", "Odoo Product ID", "Odoo Active",
+                "Furnix Unit Cost", "Furnix Markup, %",
+                "Furnix Sales Price to Furnibox", "Product Status", "BOM Source",
+            ])
+            sheet.append([
+                "PART-1", 101, "YES", 8.0, 0.0, 8.0, "EXISTING", "EXISTING",
+            ])
+            workbook.save(cabinet_parts)
+
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "COMPONENT PRICES"
+            sheet.append([
+                "Internal Reference", "Real Purchase Price", "Vendor",
+                "Purchase Order", "Order Date",
+            ])
+            sheet.append(["PART-1", 7.5, "Furnix", "PO001", "2026-08-20"])
+            workbook.save(last_purchases)
+
+            write_furnix_parts_price_review(
+                cabinet_parts,
+                last_purchases,
+                output,
+                current_sales_prices={"PART-1": 0.01},
+            )
+
+            result = load_workbook(output, data_only=True, read_only=True)
+            detail = result["FURNIX PARTS REVIEW"]
+            headers = {cell.value: cell.column for cell in detail[1]}
+            self.assertEqual(
+                detail.cell(2, headers["Production Last Purchase Price"]).value,
+                7.5,
+            )
+            self.assertAlmostEqual(
+                detail.cell(2, headers["Purchase Price Change"]).value,
+                0.5,
+            )
+            self.assertEqual(
+                detail.cell(2, headers["Current Odoo SO/List Price"]).value,
+                0.01,
+            )
+            self.assertEqual(
+                detail.cell(2, headers["SO Price Status"]).value,
+                "SO PRICE CORRECTION REQUIRED",
+            )
+            result.close()
 
     def test_current_sales_prices_are_loaded_from_read_only_reconciliation(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -233,8 +233,7 @@ def write_pricing_chain_audit(
         final_price = row[price_columns["Final Reform SO Unit Price"]]
         current_price = current_sales_prices.get(sku.casefold())
         current_is_placeholder = (
-            layer in {"FPACK", "APACK"}
-            and isinstance(current_price, (int, float))
+            isinstance(current_price, (int, float))
             and current_price <= 0.01
         )
         price_change = (
@@ -251,7 +250,7 @@ def write_pricing_chain_audit(
             else None
         )
         if current_is_placeholder:
-            price_review = "INTERNAL PLACEHOLDER"
+            price_review = "SO PRICE CORRECTION REQUIRED"
         elif price_change_percent is None:
             price_review = "NO ODOO BASELINE"
         elif abs(price_change_percent) > 0.10:
@@ -318,7 +317,7 @@ def write_pricing_chain_audit(
     summary.append(["Odoo use", "Read-only purchase prices; Odoo is not changed"])
     summary.append([
         "Important",
-        "FPACK/APACK Odoo sales price 0.01 is an internal placeholder, not a benchmark",
+        "Odoo sales price 0.01 is an intentional SO correction indicator, not a purchase-price benchmark",
     ])
 
     detail = workbook.create_sheet("PRIMARY CHAIN")
@@ -355,6 +354,227 @@ def write_pricing_chain_audit(
     detail.column_dimensions["B"].width = 38
     detail.column_dimensions["C"].width = 38
     detail.column_dimensions["Q"].width = 80
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    workbook.save(destination)
+
+
+def _read_last_purchase_prices(path: Path) -> dict[str, dict]:
+    """Load the latest approved Production purchase price by SKU."""
+    workbook = load_workbook(path, data_only=True, read_only=True)
+    sheet = workbook["COMPONENT PRICES"]
+    rows = sheet.iter_rows(values_only=True)
+    header = next(rows)
+    columns = {value: index for index, value in enumerate(header)}
+    required = (
+        "Internal Reference",
+        "Real Purchase Price",
+        "Vendor",
+        "Purchase Order",
+        "Order Date",
+    )
+    missing = [name for name in required if name not in columns]
+    if missing:
+        workbook.close()
+        raise ValueError(
+            "Last Purchase Prices faile trūksta stulpelių: "
+            + ", ".join(missing)
+        )
+
+    result = {}
+    for row in rows:
+        sku = str(row[columns["Internal Reference"]] or "").strip()
+        if not sku:
+            continue
+        result[sku.casefold()] = {
+            "price": row[columns["Real Purchase Price"]],
+            "vendor": row[columns["Vendor"]],
+            "purchase_order": row[columns["Purchase Order"]],
+            "order_date": row[columns["Order Date"]],
+        }
+    workbook.close()
+    return result
+
+
+def write_furnix_parts_price_review(
+    cabinet_part_source: Path,
+    last_purchase_source: Path,
+    destination: Path,
+    current_sales_prices: dict[str, float] | None = None,
+) -> None:
+    """Compare calculated Furnix part prices with Production LPP.
+
+    Production ``list_price`` is displayed only as an SO correction indicator.
+    It is never used as the purchase-price comparison baseline.
+    """
+    last_purchases = _read_last_purchase_prices(last_purchase_source)
+    current_sales_prices = {
+        str(sku or "").strip().casefold(): price
+        for sku, price in (current_sales_prices or {}).items()
+        if str(sku or "").strip() and isinstance(price, (int, float))
+    }
+
+    source_workbook = load_workbook(
+        cabinet_part_source, data_only=True, read_only=True
+    )
+    source_sheet = source_workbook["CABINET PART PRICES"]
+    rows = source_sheet.iter_rows(values_only=True)
+    header = next(rows)
+    columns = {value: index for index, value in enumerate(header)}
+    required = (
+        "Internal Reference",
+        "Odoo Product ID",
+        "Odoo Active",
+        "Furnix Unit Cost",
+        "Furnix Markup, %",
+        "Furnix Sales Price to Furnibox",
+        "Product Status",
+        "BOM Source",
+    )
+    missing = [name for name in required if name not in columns]
+    if missing:
+        source_workbook.close()
+        raise ValueError(
+            "Cabinet Parts faile trūksta stulpelių: " + ", ".join(missing)
+        )
+
+    prepared = []
+    for row in rows:
+        sku = str(row[columns["Internal Reference"]] or "").strip()
+        if not sku:
+            continue
+        key = sku.casefold()
+        last_purchase = last_purchases.get(key, {})
+        lpp = last_purchase.get("price")
+        new_purchase = row[columns["Furnix Sales Price to Furnibox"]]
+        current_sales_price = current_sales_prices.get(key)
+        delta = (
+            new_purchase - lpp
+            if isinstance(new_purchase, (int, float))
+            and isinstance(lpp, (int, float))
+            else None
+        )
+        delta_percent = (
+            delta / lpp
+            if delta is not None and lpp != 0
+            else None
+        )
+        if current_sales_price is None:
+            so_price_status = "NO ODOO LIST PRICE"
+        elif current_sales_price <= 0.01:
+            so_price_status = "SO PRICE CORRECTION REQUIRED"
+        else:
+            so_price_status = "ODOO LIST PRICE PRESENT"
+        if not isinstance(lpp, (int, float)):
+            review = "NO PURCHASE HISTORY / NEW"
+        elif delta > 0:
+            review = "NEW PURCHASE PRICE HIGHER"
+        elif delta < 0:
+            review = "NEW PURCHASE PRICE LOWER"
+        else:
+            review = "UNCHANGED"
+        prepared.append([
+            sku,
+            row[columns["Odoo Product ID"]],
+            row[columns["Odoo Active"]],
+            row[columns["Product Status"]],
+            row[columns["BOM Source"]],
+            lpp,
+            last_purchase.get("vendor"),
+            last_purchase.get("purchase_order"),
+            last_purchase.get("order_date"),
+            row[columns["Furnix Unit Cost"]],
+            row[columns["Furnix Markup, %"]],
+            new_purchase,
+            delta,
+            delta_percent,
+            new_purchase,
+            current_sales_price,
+            so_price_status,
+            review,
+        ])
+    source_workbook.close()
+
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "SUMMARY"
+    summary.append(["Metric", "Count"])
+    summary.append(["Furnix dimensional parts", len(prepared)])
+    summary.append([
+        "With Production Last Purchase Price",
+        sum(isinstance(row[5], (int, float)) for row in prepared),
+    ])
+    summary.append([
+        "No purchase history / new",
+        sum(row[17] == "NO PURCHASE HISTORY / NEW" for row in prepared),
+    ])
+    summary.append([
+        "New purchase price higher",
+        sum(row[17] == "NEW PURCHASE PRICE HIGHER" for row in prepared),
+    ])
+    summary.append([
+        "New purchase price lower",
+        sum(row[17] == "NEW PURCHASE PRICE LOWER" for row in prepared),
+    ])
+    summary.append([
+        "SO price correction required (0.01 or lower)",
+        sum(row[16] == "SO PRICE CORRECTION REQUIRED" for row in prepared),
+    ])
+    summary.append([])
+    summary.append([
+        "Purchase comparison baseline",
+        "Production Odoo latest approved purchase order line (Last Purchase Price)",
+    ])
+    summary.append([
+        "Important",
+        "Odoo list_price 0.01 is only an SO correction indicator and is excluded from purchase-price deltas",
+    ])
+    summary.append(["Odoo changed", "NO"])
+
+    detail = workbook.create_sheet("FURNIX PARTS REVIEW")
+    detail.append([
+        "Internal Reference",
+        "Odoo Product ID",
+        "Odoo Active",
+        "Product Status",
+        "BOM Source",
+        "Production Last Purchase Price",
+        "Last Purchase Vendor",
+        "Last Purchase Order",
+        "Last Purchase Date",
+        "New Furnix Unit Cost",
+        "Furnix Markup, %",
+        "New Furnix to Furnibox Purchase Price",
+        "Purchase Price Change",
+        "Purchase Price Change, %",
+        "New Reform Price",
+        "Current Odoo SO/List Price",
+        "SO Price Status",
+        "Purchase Price Review",
+    ])
+    for row in prepared:
+        detail.append(row)
+    detail.freeze_panes = "A2"
+    detail.auto_filter.ref = detail.dimensions
+    for column in ("F", "J", "L", "M", "O", "P"):
+        for cell in detail[column][1:]:
+            cell.number_format = '0.0000 [$€-x-euro2]'
+    for column in ("K", "N"):
+        for cell in detail[column][1:]:
+            cell.number_format = "0.00%"
+    widths = {
+        "A": 42, "B": 18, "C": 13, "D": 18, "E": 24, "F": 28,
+        "G": 34, "H": 22, "I": 21, "J": 22, "K": 18, "L": 34,
+        "M": 22, "N": 23, "O": 22, "P": 26, "Q": 34, "R": 31,
+    }
+    for column, width in widths.items():
+        detail.column_dimensions[column].width = width
+    for sheet in (summary, detail):
+        for cell in sheet[1]:
+            font = copy(cell.font)
+            font.bold = True
+            cell.font = font
+    summary.column_dimensions["A"].width = 48
+    summary.column_dimensions["B"].width = 100
     destination.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(destination)
 
@@ -511,6 +731,14 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             candidate,
             cabinet_part_prices,
             output_dir / "Pricing_Chain_Audit.xlsx",
+            current_sales_prices=read_current_sales_prices(
+                target_reconciliation
+            ),
+        )
+        write_furnix_parts_price_review(
+            cabinet_part_prices,
+            PRODUCTION_DIR / "Last_Purchase_Prices.xlsx",
+            output_dir / "Furnix_Parts_Price_Review.xlsx",
             current_sales_prices=read_current_sales_prices(
                 target_reconciliation
             ),
