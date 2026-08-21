@@ -42,9 +42,9 @@ Klausimas paliekamas kataloge tik tada, jei skirtingi jo atsakymai lemia skirtin
 5. **Kokius užsakymus Assembly turi surinkti šiandien, kad būtų apsaugoti artimiausi išsiuntimai ir didžiausias Throughput?**
 6. **Kas konkrečiai mažina Assembly našų laiką, kai paruošto darbo eilė nėra tuščia?**
 7. **Kiek laiku realizuojamo Throughput atidedame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?**
-8. **Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput: patikimesnis komponentų prieinamumas, geresnis komplektavimas ir prioritetai ar papildomas Assembly pajėgumas?**
+8. **Koks mažiausias pakeitimas greičiausiai labiausiai padidintų laiku realizuojamą surenkamų užsakymų Throughput: patikimesnis komponentų prieinamumas, geresnis komplektavimas ir prioritetai ar papildomas Assembly pajėgumas?**
 
-Klausimai detalizuojami po vieną. Žemiau formalizuojamas MQ-001; kitų klausimų formuluotės laikomos patvirtinta katalogo apimtimi, bet jų sprendimo logika dar nespecifikuota.
+Visų aštuonių klausimų sprendimo logika formalizuota šiame kataloge. Kalibruotini dydžiai ir techniškai validuotini duomenų ryšiai pažymėti prie konkrečių klausimų; jų negalima pateikti kaip jau patvirtintų faktų.
 
 ---
 
@@ -61,7 +61,7 @@ Klausimo laiko horizontas turi būti nurodomas kartu su atsakymu. Pradiniam diag
 | Atsakymas | Keičiamas vadybinis sprendimas ir veiksmas |
 |---|---|
 | **Assembly pajėgumas yra pagrindinė priežastis** | Apsaugoti ir maksimaliai išnaudoti Assembly: užtikrinti nuolatinę prioritetizuotą READY eilę, šalinti Assembly pajėgumo praradimus ir subordinuoti upstream Assembly ritmui; tik po išnaudojimo vertinti papildomą Assembly pajėgumą. |
-| **Užsakymai per vėlai paruošiami Assembly** | Nedidinti Assembly pajėgumo vien dėl užsakymų vėlavimo. Spręsti komponentų, kliento tiekiamų fasadų / stalčių, Furnix detalių, komplektavimo, rūšiavimo, vidinės logistikos, informacijos arba prioritetų prieinamumą. |
+| **Užsakymai per vėlai paruošiami Assembly** | Nedidinti Assembly pajėgumo vien dėl užsakymų vėlavimo. Spręsti komponentų, subrangovų tiekiamų fasadų / stalčių, Furnix detalių, komplektavimo, rūšiavimo, vidinės logistikos, informacijos arba prioritetų prieinamumą. |
 | **Reikšmingos abi priežastys** | Atskirti prarastą laiką iki READY nuo laukimo po READY; pirmiausia šalinti priežastį, kuri labiau riboja laiku užbaigiamų užsakymų srautą. |
 | **Signalo nepakanka** | Nepriimti pajėgumo investicijos sprendimo. Tęsti READY įvykių matavimą ir tikslinti būsenos apibrėžimą. |
 
@@ -139,7 +139,7 @@ Papildomi, bet ne pradinės klasifikacijos būtini duomenys:
 - Throughput eurais vienam užsakymui ar prioritetui;
 - komponento ar proceso tipas, blokavęs READY būseną.
 
-Šie duomenys reikalingi vėlesniems klausimams „kiek Throughput prarandame?“ ir „kas neleidžia geriau išnaudoti constraint?“, tačiau jų trūkumas neturi sustabdyti pradinio READY eilių stebėjimo.
+Šie duomenys reikalingi vėlesniems klausimams „kiek laiku realizuojamo Throughput atidedame?“ ir „kas neleidžia geriau išnaudoti constraint?“, tačiau jų trūkumas neturi sustabdyti pradinio READY eilių stebėjimo.
 
 ### 5. Esami / išvedami / trūkstami duomenys
 
@@ -194,7 +194,7 @@ Numatomos, bet dar neprojektuojamos produkto architektūros dalys:
 5. **Decision Output** — išvada, paaiškinimas ir konkretus veiksmas vadovui.
 6. **What-if** (vėlesnis etapas) — poveikio modeliavimas pakeitus Assembly pajėgumą arba upstream paruošimo patikimumą.
 
-MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patvirtinti. Modulio projektavimas vis dar nepradedamas, kol katalogo klausimai nėra nuosekliai formalizuoti ir bendras duomenų bei sprendimų kontraktas neparodo būsimos architektūros ribų.
+MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patvirtinti. Vien šio klausimo patvirtinimas neautorizuoja funkcionalumo implementacijos; architektūra formuluojama tik remiantis užbaigtu visų klausimų duomenų ir sprendimų kontraktu.
 
 ## MQ-001 likusios kalibravimo užduotys
 
@@ -278,7 +278,7 @@ Pradinis 2 dienų bufferis nėra nuolatinė norma. Jis kalibruojamas po 3–4 sa
 
 - gamybos vadovės per rytinę patikrą įvedamas dirbančių Assembly darbuotojų skaičius; `C = darbuotojų skaičius × 8 val.`;
 - aiški Assembly badavimo įvykio registravimo arba išvedimo taisyklė;
-- MQ-005 formalizuojama dienos prioritetų sudarymo taisyklė;
+- MQ-005 apibrėžta dienos prioritetų sudarymo taisyklė, kurią reikia techniškai realizuoti ir validuoti;
 - po 3–4 savaičių patvirtintos galutinės bufferio zonų ribos.
 
 ### 6. Būsimas Product Engine modulis
@@ -409,7 +409,7 @@ Modulis turi leisti nuo agreguotos priežasties pereiti iki konkrečių užsakym
 
 **Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia tokiu tempu, kokio reikia SO `Delivery Date` įsipareigojimams įvykdyti?**
 
-SO `Delivery Date` reiškia datą, kada užsakymas turi būti išsiųstas iš Furnibox. Tarp Assembly pabaigos ir Packaging nėra nustatyto privalomo laiko tarpo: pakuotojai gali pradėti pakuoti iš karto užbaigus surinkimą. Todėl pradiniame dienos tikslumo modelyje Assembly operacija laikoma užbaigta laiku, jei ji užbaigta ne vėliau kaip SO `Delivery Date`. Dirbtinis papildomas Packaging rezervas netaikomas; taisyklė kalibruojama tik atsiradus faktiniams tos pačios dienos išsiuntimo praradimams.
+SO `Delivery Date` reiškia datą, kada užsakymas turi būti išsiųstas iš Furnibox. Tarp Assembly pabaigos ir Packaging nėra nustatyto privalomo laiko tarpo: pakuotojai gali pradėti pakuoti iš karto užbaigus surinkimą. Todėl pradiniame dienos tikslumo modelyje Assembly operacija laikoma užbaigta laiku, jei ji užbaigta ne vėliau kaip SO `Delivery Date`. Dirbtinis papildomas Packaging rezervas netaikomas; taisyklė kalibruojama tik atsiradus faktiniams tos pačios dienos išsiuntimo vėlavimams.
 
 ### 2. Sprendimas, kurį atsakymas keičia
 
@@ -482,7 +482,7 @@ Vienos dienos nuokrypis nėra pakankamas pajėgumo sprendimui. Savaitinė išvad
 #### Trūkstami arba kalibruotini
 
 - gamybos vadovės ryte įvedamas dirbančių Assembly darbuotojų skaičius; sistema apskaičiuoja `C = darbuotojų skaičius × 8 val.`;
-- formalizuota MQ-005 prioritetų ir leidžiamų išimčių taisyklė;
+- techniškai įgyvendinta ir su realiais atvejais validuota MQ-005 prioritetų bei leidžiamų išimčių taisyklė;
 - faktinio išsiuntimo timestamp semantikos patikra;
 - po 3–4 savaičių kalibruotos ribos, kada vykdymo nuokrypis laikomas sisteminiu;
 - patikra, ar tos pačios `Delivery Date` dienos Assembly pabaiga realiai nesukelia Packaging / išsiuntimo vėlavimo.
@@ -735,12 +735,6 @@ Savaitinis pasikartojančių nuostolių Pareto: ...
 
 Modulis neturi WO blokavimo kalendorinės trukmės automatiškai vadinti prarastu constraint pajėgumu. Jis turi parodyti ir užsakymo srauto žalą, ir tikrą Assembly žmogaus laiko nuostolį kaip du skirtingus dydžius.
 
-## Kitas specifikacijos etapas
-
-MQ-006 WO blokavimo ir realiai prarastų Assembly žmogaus valandų atskyrimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-007 — „Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
-
-Pradinis MQ-007 duomenų kontekstas: Furnibox gali gauti pardavimo vertę ir medžiagų bei subrangovų sąnaudas SO line lygiu. Assembly reikalaujančių SO line Throughput gali būti apskaičiuojamas eilutėje ir agreguojamas į SO, laikotarpį bei priežastį. Vėluojantys Furnibox užsakymai visada vėliau išsiunčiami; dėl vėlavimo jie neatšaukiami ir nemažinami. Todėl ekonominėje išvadoje matuojamas `Throughput at risk` ir atidėtas / pavėluotas Throughput, o ne galutinai prarastas Throughput.
-
 ---
 
 ## MQ-007 — Kiek laiku realizuojamo Throughput atidedame?
@@ -862,10 +856,6 @@ Rekomenduojamas vadybinis fokusas: ...
 
 Modulis neturi pavėluoto Throughput vadinti prarastu pelnu. Jo paskirtis – parodyti, kurio proceso pakeitimas labiausiai sumažintų ekonominės vertės vėlavimą ir apsaugotų pristatymo patikimumą.
 
-## Kitas specifikacijos etapas
-
-MQ-007 ekonominio matavimo taisyklės patvirtintos: Odoo SO line savikaina apima medžiagas, bet ne Assembly darbo užmokestį, todėl darbo užmokestis lieka Operating Expense. Toliau ta pačia pilna struktūra formalizuoti MQ-008 — „Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
-
 ---
 
 ## MQ-008 — Koks mažiausias pakeitimas duotų didžiausią poveikį?
@@ -877,6 +867,8 @@ MQ-007 ekonominio matavimo taisyklės patvirtintos: Odoo SO line savikaina apima
 „Mažiausias pakeitimas“ reiškia mažiausios investicijos, mažiausios papildomos Operating Expense ir trumpiausio įgyvendinimo laiko pakeitimą, kuris duoda didžiausią pamatuojamą laiku realizuojamo Throughput pagerėjimą.
 
 Kadangi Furnibox pavėluotus SO visada vėliau išsiunčia, greitesnis esamų SO išsiuntimas pirmiausia mažina atidėtą Throughput ir gerina pristatymo patikimumą. Tikras bendro Throughput padidėjimas atsiranda tik tada, kai atlaisvintas pajėgumas leidžia per tą patį laikotarpį išsiųsti papildomą paklausą, kuri kitu atveju būtų laukusi, nepriimta ar perkelta į vėlesnį laikotarpį.
+
+Šiuo metu Reform yra vienintelis Furnibox klientas, `Delivery Date` nurodo pats klientas, o Furnibox dėl Assembly pajėgumo užsakymų neatsisako ir sąmoningai nenukelia kliento pageidaujamos datos. Todėl dabartiniame duomenų kontrakte nėra nepriimtos papildomos paklausos, kuri pagrįstų tikro bendro Throughput augimo skaičiavimą. MQ-008 pradinis rezultatas vertina tik laiku realizuojamo Throughput pagerėjimą ir vėlavimo sumažinimą; papildomas bendras Throughput rodomas kaip `not evidenced`.
 
 ### 2. Sprendimas, kurį atsakymas keičia
 
@@ -971,7 +963,7 @@ Rezultatas nėra automatinis sprendimas. Product Engine pateikia palyginimą ir 
 - konkrečių alternatyvų papildoma OE ir vienkartinė investicija;
 - įgyvendinimo trukmė bei piloto apimtis;
 - realistiškas numatomas priežasties sumažinimo procentas;
-- papildomos paklausos arba dėl pajėgumo nepriimamų / atidedamų užsakymų duomenys;
+- papildomos paklausos arba dėl pajėgumo nepriimamų / atidedamų užsakymų duomenys, kurių dabartinėje situacijoje nėra;
 - vadovybės pasirinktas sėkmės kriterijus ir piloto stabdymo taisyklė.
 
 ### 6. Būsimas Product Engine modulis
@@ -994,4 +986,4 @@ Modulis neturi rekomenduoti papildomo žmogaus vien todėl, kad užsakymai vėlu
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti, ar Furnibox šiandien turi dėl Assembly pajėgumo nepriimamų arba sąmoningai į vėlesnį laikotarpį nukeliamų užsakymų. Tada užbaigti MQ-008, atlikti viso katalogo nuoseklumo peržiūrą ir tik po jos formuluoti Product Engine sprendimų palaikymo architektūrą.
+Visų aštuonių klausimų sprendimo logika ir pradinis duomenų kontraktas formalizuoti bei tarpusavyje peržiūrėti. Reform yra vienintelis klientas, jo nurodyta `Delivery Date` nėra Furnibox sąmoningai nukeliama, o užsakymai dėl Assembly pajėgumo neatmetami. Kitas etapas – remiantis šiuo katalogu suformuluoti Product Engine sprendimų palaikymo architektūrą, dar nepradedant funkcionalumo implementacijos.
