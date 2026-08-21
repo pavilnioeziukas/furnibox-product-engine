@@ -738,3 +738,5 @@ Modulis neturi WO blokavimo kalendorinės trukmės automatiškai vadinti prarast
 ## Kitas specifikacijos etapas
 
 MQ-006 WO blokavimo ir realiai prarastų Assembly žmogaus valandų atskyrimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-007 — „Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+
+Pradinis MQ-007 duomenų kontekstas: Furnibox gali gauti pardavimo vertę ir medžiagų bei subrangovų sąnaudas SO line lygiu. Assembly reikalaujančių SO line Throughput gali būti apskaičiuojamas eilutėje ir agreguojamas į SO, laikotarpį bei priežastį. Ekonominėje išvadoje privaloma atskirti `Throughput at risk`, pavėluotą Throughput ir tikrai prarastą Throughput: vėliau išsiųstas SO nėra laikomas galutinai prarastu, jei klientas jo neatšaukė ar nesumažino.
