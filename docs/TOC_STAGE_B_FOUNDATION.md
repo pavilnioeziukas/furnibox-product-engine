@@ -1,6 +1,6 @@
 # TOC etapas B – audituojamų sprendimų pagrindas
 
-Statusas: pirmoji techninė dalis parengta; Production Odoo nerašoma.
+Statusas: individualių paskyrų, audito ir pirmojo rytinio darbo srauto dalis parengta; Production Odoo nerašoma.
 
 ## Priimti sprendimai
 
@@ -41,11 +41,22 @@ Slaptažodis perduodamas interaktyviai ir nepatenka į komandų istoriją.
 
 ## Kitas B etapo pjūvis
 
+Parengtas pirmasis ekranas **Rytinė kontrolė** leidžia gamybos vadovei:
+
+- patvirtinti dienos Assembly darbuotojų skaičių ir automatiškai apskaičiuoti `C = darbuotojai × 8 val.`;
+- pradėti audituojamą rytinę READY patikrą;
+- patvirtinti konkretų SO kaip READY;
+- pažymėti vieną arba kelias vienu metu galiojančias NOT READY priežastis;
+- nedubliuoti jau aktyvios tos pačios priežasties;
+- patvirtinus READY uždaryti visas aktyvias to SO NOT READY priežastis;
+- matyti tos dienos veiksmų auditą suprantamais pavadinimais.
+
+### Likusi B etapo dalis
+
 Ant šio pagrindo kuriamas vienas rytinis darbo srautas:
 
-1. dienos Assembly darbuotojų skaičius ir 8 val. pajėgumo patvirtinimas;
-2. READY / NOT READY patikra su keliomis vienu metu galiojančiomis priežastimis;
-3. dienos plano snapshot;
-4. plano patvirtinimas ir audituojamos eilės išimtys.
+1. kandidatiniai SO į ekraną pateikiami automatiškai iš read-only Odoo adapterio;
+2. dienos plano snapshot;
+3. plano patvirtinimas ir audituojamos eilės išimtys.
 
 Odoo šiame sraute lieka tik skaitomas faktų šaltinis.

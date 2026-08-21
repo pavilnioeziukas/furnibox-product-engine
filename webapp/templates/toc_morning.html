@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Rytinė kontrolė · {{ product_engine.app_name }}{% endblock %}
+{% block content %}
+<section class="page-head toc-head">
+  <div>
+    <p class="eyebrow">TOC · SCHEDULE</p>
+    <h1>Rytinė Assembly kontrolė</h1>
+    <p class="lead">Patvirtinkite šiandienos pajėgumą ir fizinį užsakymų pasirengimą prieš sudarant darbų eilę.</p>
+  </div>
+  <form method="get" class="date-form">
+    <label>Darbo data<input type="date" name="date" value="{{ business_date.isoformat() }}"></label>
+    <button class="secondary">Rodyti</button>
+  </form>
+</section>
+
+<div class="grid toc-grid">
+  <section class="panel">
+    <p class="eyebrow">1 žingsnis</p><h2>Dienos pajėgumas</h2>
+    {% if latest_capacity %}
+      <p class="toc-result"><strong>{{ latest_capacity.payload.capacity_hours }} val.</strong> · {{ latest_capacity.payload.employee_count }} darbuotojai</p>
+      <p class="muted">Patvirtino {{ latest_capacity.actor.username }} {{ latest_capacity.occurred_at.strftime('%H:%M') }} UTC</p>
+    {% else %}<p class="muted">Šiai dienai dar nepatvirtinta.</p>{% endif %}
+    {% if current_actor.role in ['production_manager', 'administrator'] %}
+    <form method="post" action="{{ url_for('toc_confirm_capacity') }}" class="stack">
+      <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}">
+      <label>Assembly darbuotojų skaičius<input type="number" name="employee_count" min="0" max="30" required></label>
+      <button class="primary">Patvirtinti C = darbuotojai × 8 val.</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <p class="eyebrow">2 žingsnis</p><h2>READY patikra</h2>
+    <p class="muted">READY reiškia, kad visi reikalingi komponentai fiziškai yra DC.</p>
+    {% if current_actor.role in ['production_manager', 'administrator'] %}
+    <form method="post" action="{{ url_for('toc_start_readiness_check') }}">
+      <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}">
+      <button class="secondary">Pradėti rytinę patikrą</button>
+    </form>
+    {% endif %}
+  </section>
+</div>
+
+{% if current_actor.role in ['production_manager', 'administrator'] %}
+<section class="panel toc-decision">
+  <p class="eyebrow">3 žingsnis</p><h2>Užsakymo pasirengimas</h2>
+  <form method="post" action="{{ url_for('toc_record_readiness') }}" class="stack">
+    <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}">
+    <label>Sales Order numeris<input name="so_reference" placeholder="pvz. S01234" required></label>
+    <fieldset>
+      <legend>Jei NOT READY, pažymėkite visas galiojančias priežastis</legend>
+      <div class="reason-grid">
+      {% for code, label in readiness_reasons.items() %}
+        <label class="check-row"><input type="checkbox" name="reason_code" value="{{ code }}"> {{ label }}</label>
+      {% endfor %}
+      </div>
+    </fieldset>
+    <label>Komentaras kategorijai „Kita“<input name="comment"></label>
+    <div class="decision-buttons">
+      <button class="primary" name="decision" value="ready">READY</button>
+      <button class="danger" name="decision" value="not_ready">NOT READY</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+<section class="section-head"><div><p class="eyebrow">Auditas</p><h2>Šios dienos įvykiai</h2></div></section>
+<div class="table-wrap"><table>
+  <thead><tr><th>Laikas UTC</th><th>Naudotojas</th><th>Įvykis</th><th>Užsakymas / duomenys</th></tr></thead>
+  <tbody>
+  {% for event in events %}
+    <tr><td>{{ event.occurred_at.strftime('%H:%M:%S') }}</td><td>{{ event.actor.username }}</td><td>{{ event_labels.get(event.event_type, event.event_type) }}</td><td>{{ event_description(event) }}</td></tr>
+  {% else %}<tr><td colspan="4" class="empty">Šiai dienai įvykių dar nėra.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

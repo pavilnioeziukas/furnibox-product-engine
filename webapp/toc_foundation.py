@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, String, create_engine, event, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, joinedload, mapped_column, relationship, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -20,6 +20,15 @@ EVENT_TYPES = {
     "DailyPriorityPlanGenerated",
     "DailyPriorityPlanApproved",
     "PriorityOverrideRecorded",
+}
+READINESS_BLOCKER_REASONS = {
+    "FURNIX_PARTS_MISSING": "Trūksta Furnix detalių",
+    "SUBCONTRACTOR_FRONTS_MISSING": "Neatvežti subrangovo fasadai",
+    "SUBCONTRACTOR_DRAWERS_MISSING": "Neatvežti subrangovo stalčiai",
+    "OTHER_PURCHASED_COMPONENTS_MISSING": "Trūksta kitų perkamų komponentų",
+    "COMPONENTS_NOT_FOUND": "Komponentų nepavyksta fiziškai rasti",
+    "COMPONENT_ORDER_UNKNOWN": "Neaišku, kuriam užsakymui skirti komponentai",
+    "OTHER": "Kita priežastis",
 }
 
 
@@ -144,9 +153,74 @@ class TocStore:
             db.add(item)
         return item
 
+    def active_readiness_blockers(self, so_reference: str) -> list[DecisionEvent]:
+        events = self.list_events()
+        closed_ids = {
+            item.payload.get("blocker_id")
+            for item in events
+            if item.event_type == "ReadinessBlockerClosed"
+        }
+        return [
+            item for item in events
+            if item.event_type == "ReadinessBlockerOpened"
+            and item.payload.get("so_reference") == so_reference
+            and item.id not in closed_ids
+        ]
+
+    def record_readiness(
+        self, *, so_reference: str, business_date: date, actor_id: str,
+        ready: bool, reason_codes: list[str] | None = None, comment: str = "",
+    ) -> list[DecisionEvent]:
+        so_reference = so_reference.strip().upper()
+        if not so_reference:
+            raise ValueError("SO reference is required.")
+        reasons = list(dict.fromkeys(reason_codes or []))
+        unknown = set(reasons) - READINESS_BLOCKER_REASONS.keys()
+        if unknown:
+            raise ValueError(f"Unknown readiness reason: {sorted(unknown)[0]}")
+        if not ready and not reasons:
+            raise ValueError("At least one NOT READY reason is required.")
+        if "OTHER" in reasons and not comment.strip():
+            raise ValueError("A comment is required for OTHER.")
+
+        written: list[DecisionEvent] = []
+        active = self.active_readiness_blockers(so_reference)
+        if ready:
+            for blocker in active:
+                written.append(self.append_event(
+                    event_type="ReadinessBlockerClosed", business_date=business_date,
+                    actor_id=actor_id, rule_version="readiness-v1",
+                    payload={"so_reference": so_reference, "blocker_id": blocker.id},
+                ))
+            written.append(self.append_event(
+                event_type="ReadinessConfirmed", business_date=business_date,
+                actor_id=actor_id, rule_version="readiness-v1",
+                payload={"so_reference": so_reference},
+            ))
+            return written
+
+        active_reasons = {item.payload.get("reason_code") for item in active}
+        for reason_code in reasons:
+            if reason_code in active_reasons:
+                continue
+            written.append(self.append_event(
+                event_type="ReadinessBlockerOpened", business_date=business_date,
+                actor_id=actor_id, rule_version="readiness-v1",
+                payload={
+                    "so_reference": so_reference,
+                    "reason_code": reason_code,
+                    "comment": comment.strip() if reason_code == "OTHER" else "",
+                },
+            ))
+        return written
+
     def list_events(self, business_date: date | None = None) -> list[DecisionEvent]:
         with self.sessions() as db:
-            query = select(DecisionEvent).order_by(DecisionEvent.occurred_at, DecisionEvent.id)
+            query = (
+                select(DecisionEvent)
+                .options(joinedload(DecisionEvent.actor))
+                .order_by(DecisionEvent.occurred_at, DecisionEvent.id)
+            )
             if business_date:
                 query = query.where(DecisionEvent.business_date == business_date)
             return list(db.scalars(query))

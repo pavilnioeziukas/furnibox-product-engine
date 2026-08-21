@@ -15,6 +15,7 @@
     </a>
     <nav class="topnav">
       <a href="{{ url_for('index') }}">Veiksmai</a>
+      {% if session.get('actor_id') %}<a href="{{ url_for('toc_morning') }}">Rytinė kontrolė</a>{% endif %}
       {% if product_engine.show_pricing_nav %}
         <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
         <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>

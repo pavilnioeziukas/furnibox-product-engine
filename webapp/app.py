@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +48,7 @@ from purchase_price_adjustments_import import (
     summarize_preview,
 )
 from webapp.product_engine import ProductEngineSettings, load_actions
-from webapp.toc_foundation import TocStore
+from webapp.toc_foundation import READINESS_BLOCKER_REASONS, TocStore
 
 
 SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
@@ -462,6 +462,112 @@ def logout():
     return redirect(
         url_for("login")
     )
+
+
+def require_toc_actor(*roles: str):
+    actor_id = session.get("actor_id")
+    actor = TOC_STORE.get_user(actor_id) if actor_id else None
+    if not actor:
+        abort(403, "Šiam veiksmui reikia individualios paskyros.")
+    if roles and actor.role not in roles:
+        abort(403, "Jūsų rolė neleidžia atlikti šio veiksmo.")
+    return actor
+
+
+def requested_business_date() -> date:
+    raw = request.form.get("business_date", "")
+    try:
+        return date.fromisoformat(raw) if raw else date.today()
+    except ValueError:
+        abort(400, "Neteisinga darbo data.")
+
+
+TOC_EVENT_LABELS = {
+    "DailyAssemblyCapacityConfirmed": "Patvirtintas dienos pajėgumas",
+    "ReadinessCheckStarted": "Pradėta rytinė READY patikra",
+    "ReadinessConfirmed": "Užsakymas patvirtintas READY",
+    "ReadinessBlockerOpened": "Užregistruota NOT READY priežastis",
+    "ReadinessBlockerClosed": "Pašalinta NOT READY priežastis",
+}
+
+
+def toc_event_description(item) -> str:
+    payload = item.payload
+    if item.event_type == "DailyAssemblyCapacityConfirmed":
+        return f"{payload['employee_count']} darbuotojai · {payload['capacity_hours']} val."
+    so_reference = payload.get("so_reference", "")
+    reason = READINESS_BLOCKER_REASONS.get(payload.get("reason_code"), "")
+    return " · ".join(value for value in (so_reference, reason, payload.get("comment", "")) if value)
+
+
+@app.get("/toc/morning")
+def toc_morning():
+    require_toc_actor("production_manager", "administrator", "management")
+    selected_raw = request.args.get("date", date.today().isoformat())
+    try:
+        selected_date = date.fromisoformat(selected_raw)
+    except ValueError:
+        abort(400, "Neteisinga darbo data.")
+    events = TOC_STORE.list_events(selected_date)
+    capacity_events = [item for item in events if item.event_type == "DailyAssemblyCapacityConfirmed"]
+    return render_template(
+        "toc_morning.html", business_date=selected_date,
+        events=list(reversed(events)),
+        latest_capacity=capacity_events[-1] if capacity_events else None,
+        readiness_reasons=READINESS_BLOCKER_REASONS,
+        event_labels=TOC_EVENT_LABELS,
+        event_description=toc_event_description,
+    )
+
+
+@app.post("/toc/morning/capacity")
+def toc_confirm_capacity():
+    actor = require_toc_actor("production_manager", "administrator")
+    try:
+        employee_count = int(request.form.get("employee_count", ""))
+    except ValueError:
+        abort(400, "Darbuotojų skaičius turi būti sveikasis skaičius.")
+    if not 0 <= employee_count <= 30:
+        abort(400, "Darbuotojų skaičius turi būti nuo 0 iki 30.")
+    business_date = requested_business_date()
+    TOC_STORE.append_event(
+        event_type="DailyAssemblyCapacityConfirmed", business_date=business_date,
+        actor_id=actor.id, rule_version="capacity-v1",
+        payload={"employee_count": employee_count, "hours_per_employee": 8,
+                 "capacity_hours": employee_count * 8},
+    )
+    flash(f"Patvirtintas dienos pajėgumas: {employee_count * 8} val.")
+    return redirect(url_for("toc_morning", date=business_date.isoformat()))
+
+
+@app.post("/toc/morning/start-check")
+def toc_start_readiness_check():
+    actor = require_toc_actor("production_manager", "administrator")
+    business_date = requested_business_date()
+    TOC_STORE.append_event(
+        event_type="ReadinessCheckStarted", business_date=business_date,
+        actor_id=actor.id, rule_version="readiness-v1", payload={},
+    )
+    flash("Rytinė READY patikra pradėta.")
+    return redirect(url_for("toc_morning", date=business_date.isoformat()))
+
+
+@app.post("/toc/morning/readiness")
+def toc_record_readiness():
+    actor = require_toc_actor("production_manager", "administrator")
+    business_date = requested_business_date()
+    ready = request.form.get("decision") == "ready"
+    try:
+        written = TOC_STORE.record_readiness(
+            so_reference=request.form.get("so_reference", ""),
+            business_date=business_date, actor_id=actor.id, ready=ready,
+            reason_codes=request.form.getlist("reason_code"),
+            comment=request.form.get("comment", ""),
+        )
+    except ValueError as exc:
+        abort(400, str(exc))
+    flash("Užsakymas pažymėtas READY." if ready else f"NOT READY priežastys užregistruotos: {len(written)}.")
+    return redirect(url_for("toc_morning", date=business_date.isoformat()))
 
 
 def read_job(
