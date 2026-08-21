@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import uuid
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -50,7 +51,7 @@ from purchase_price_adjustments_import import (
 from webapp.product_engine import ProductEngineSettings, load_actions
 from webapp.toc_foundation import READINESS_BLOCKER_REASONS, TocStore
 from webapp.toc_constraint import diagnose_daily_constraint_signal
-from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates
+from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates, load_plan_execution
 from webapp.toc_schedule import PRIORITY_RULE_VERSION, generate_daily_plan, serialize_plan
 
 
@@ -539,6 +540,31 @@ def toc_morning():
         candidate_result.candidates if candidate_result else (), readiness_states,
         capacity_hours=(float(latest_capacity.payload["capacity_hours"]) if latest_capacity else None),
     )
+    approved_plan_ids = {
+        item.payload.get("plan_event_id") for item in approval_events
+        if item.payload.get("plan_event_id")
+    }
+    latest_approved_plan = next(
+        (
+            TOC_STORE.get_event(item.payload.get("plan_event_id"))
+            for item in reversed(approval_events)
+            if item.payload.get("plan_event_id")
+        ),
+        None,
+    )
+    control_execution = ()
+    control_error = None
+    if latest_approved_plan:
+        planned_references = tuple(
+            entry["so_reference"] for entry in latest_approved_plan.payload.get("entries", [])
+            if entry.get("planned_today")
+        )
+        try:
+            control_execution = load_plan_execution(
+                ReadOnlyOdooReader.from_env(), planned_references,
+            )
+        except Exception as exc:
+            control_error = str(exc)
     return render_template(
         "toc_morning.html", business_date=selected_date,
         events=list(reversed(events)),
@@ -553,7 +579,10 @@ def toc_morning():
         candidate_error=candidate_error,
         readiness_states=readiness_states,
         latest_plan=plan_events[-1] if plan_events else None,
-        approved_plan_ids={item.payload.get("plan_event_id") for item in approval_events},
+        approved_plan_ids=approved_plan_ids,
+        latest_approved_plan=latest_approved_plan,
+        control_execution=control_execution,
+        control_error=control_error,
     )
 
 
@@ -635,6 +664,10 @@ def toc_generate_plan():
         source.candidates, TOC_STORE.readiness_states(), business_date=business_date,
         capacity_hours=float(capacity.payload["capacity_hours"]),
     )
+    daily_signal = diagnose_daily_constraint_signal(
+        source.candidates, TOC_STORE.readiness_states(),
+        capacity_hours=float(capacity.payload["capacity_hours"]),
+    )
     TOC_STORE.append_event(
         event_type="DailyPriorityPlanGenerated", business_date=business_date,
         actor_id=actor.id, rule_version=PRIORITY_RULE_VERSION,
@@ -643,6 +676,7 @@ def toc_generate_plan():
             "capacity_event_id": capacity.id,
             "capacity_hours": capacity.payload["capacity_hours"],
             "excluded_without_exact_so": source.excluded_without_exact_so,
+            "mq001_daily_signal": asdict(daily_signal),
             "entries": serialize_plan(entries),
         },
     )

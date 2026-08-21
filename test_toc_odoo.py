@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates
+from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates, load_plan_execution
 
 
 class FakeReader:
@@ -76,3 +76,27 @@ def test_reader_denies_unapproved_odoo_methods():
 
     with pytest.raises(PermissionError, match="uždraustas"):
         reader._call("sale.order", "write", [[1], {"name": "changed"}], {})
+
+
+def test_plan_execution_classifies_not_started_progress_and_completed():
+    class ExecutionReader:
+        def search_read(self, model, domain, fields, *, order="id asc", limit=5000):
+            return {
+                "mrp.workcenter": [{"id": 9, "name": "Assembly"}],
+                "mrp.production": [
+                    {"id": 101, "origin": "S1"}, {"id": 102, "origin": "S2"},
+                    {"id": 103, "origin": "S3"},
+                ],
+                "mrp.workorder": [
+                    {"id": 1, "production_id": [101, "MO1"], "state": "ready", "date_start": False, "date_finished": False},
+                    {"id": 2, "production_id": [102, "MO2"], "state": "progress", "date_start": "2026-08-21 08:00:00", "date_finished": False},
+                    {"id": 3, "production_id": [103, "MO3"], "state": "done", "date_start": "2026-08-21 08:00:00", "date_finished": "2026-08-21 09:00:00"},
+                ],
+            }[model]
+
+    values = load_plan_execution(ExecutionReader(), ["S1", "S2", "S3", "MISSING"])
+
+    assert [(item.so_reference, item.status) for item in values] == [
+        ("S1", "not_started"), ("S2", "in_progress"),
+        ("S3", "completed"), ("MISSING", "unknown"),
+    ]

@@ -86,6 +86,15 @@ class CandidateResult:
     excluded_without_exact_so: int
 
 
+@dataclass(frozen=True)
+class PlanExecutionStatus:
+    so_reference: str
+    status: str
+    label: str
+    assembly_workorders: int
+    completed_workorders: int
+
+
 def _relation_id(value: Any) -> int | None:
     if isinstance(value, (list, tuple)) and value:
         return int(value[0])
@@ -189,3 +198,56 @@ def load_assembly_candidates(reader: OdooReader) -> CandidateResult:
         read_at=datetime.now(timezone.utc).isoformat(),
         excluded_without_exact_so=excluded,
     )
+
+
+def load_plan_execution(
+    reader: OdooReader, so_references: list[str] | tuple[str, ...],
+) -> tuple[PlanExecutionStatus, ...]:
+    references = tuple(dict.fromkeys(str(value).strip() for value in so_references if value))
+    if not references:
+        return ()
+    workcenters = reader.search_read(
+        "mrp.workcenter", ["|", ["name", "ilike", "Assembly"], ["name", "ilike", "Surink"]],
+        ["name"], limit=20,
+    )
+    workcenter_ids = [int(item["id"]) for item in workcenters]
+    if len(workcenter_ids) != 1:
+        raise ValueError(f"Tikėtasi vieno aktyvaus Assembly darbo centro, rasta: {len(workcenter_ids)}.")
+    productions = reader.search_read(
+        "mrp.production", [["origin", "in", list(references)]],
+        ["origin"], limit=10000,
+    )
+    production_origin = {
+        int(item["id"]): str(item.get("origin") or "").strip() for item in productions
+    }
+    workorders = reader.search_read(
+        "mrp.workorder",
+        [["production_id", "in", list(production_origin)], ["workcenter_id", "in", workcenter_ids]],
+        ["production_id", "state", "date_start", "date_finished"], limit=10000,
+    ) if production_origin else []
+    states_by_so: dict[str, list[dict[str, Any]]] = {reference: [] for reference in references}
+    for workorder in workorders:
+        origin = production_origin.get(_relation_id(workorder.get("production_id")) or -1)
+        if origin in states_by_so:
+            states_by_so[origin].append(workorder)
+
+    result: list[PlanExecutionStatus] = []
+    for reference in references:
+        rows = states_by_so[reference]
+        completed = sum(str(row.get("state")) in {"done", "cancel"} for row in rows)
+        if not rows:
+            status, label = "unknown", "NĖRA DUOMENŲ"
+        elif completed == len(rows):
+            status, label = "completed", "UŽBAIGTA"
+        elif any(
+            str(row.get("state")) == "progress" or row.get("date_start")
+            for row in rows
+        ):
+            status, label = "in_progress", "VYKDOMA"
+        else:
+            status, label = "not_started", "NEPRADĖTA"
+        result.append(PlanExecutionStatus(
+            so_reference=reference, status=status, label=label,
+            assembly_workorders=len(rows), completed_workorders=completed,
+        ))
+    return tuple(result)

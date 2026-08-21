@@ -133,6 +133,44 @@
   {% else %}<p class="empty">Dienos plano versija dar nesugeneruota.</p>{% endif %}
 </section>
 
+<section class="panel daily-control">
+  <div class="plan-head">
+    <div>
+      <p class="eyebrow">CONTROL · PLANAS PRIEŠ FAKTĄ</p>
+      <h2>Patvirtinto plano vykdymas</h2>
+      <p class="muted">Faktas skaitomas iš Production Odoo. Odoo duomenys nekeičiami.</p>
+    </div>
+  </div>
+  {% if control_error %}
+    <p class="error">Nepavyko nuskaityti plano vykdymo: {{ control_error }}</p>
+  {% elif latest_approved_plan %}
+    {% set baseline = latest_approved_plan.payload.get('mq001_daily_signal') %}
+    {% if baseline %}
+      <div class="plan-meta">
+        <span>Patvirtinimo signalas: {{ baseline.label }}</span>
+        <span>C {{ baseline.capacity_hours }} val.</span>
+        <span>READY {{ baseline.final_ready_hours }} val.</span>
+      </div>
+    {% endif %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>SO</th><th>Faktinė Assembly būsena</th><th>Užbaigta WO</th><th>CONTROL interpretacija</th></tr></thead>
+      <tbody>
+      {% for item in control_execution %}
+        <tr>
+          <td><strong>{{ item.so_reference }}</strong></td>
+          <td><span class="state {{ 'ready' if item.status == 'completed' else ('waiting' if item.status == 'in_progress' else ('fail' if item.status == 'unknown' else '')) }}">{{ item.label }}</span></td>
+          <td>{{ item.completed_workorders }} / {{ item.assembly_workorders }}</td>
+          <td>{{ 'Planas įvykdytas' if item.status == 'completed' else ('Darbas pradėtas' if item.status == 'in_progress' else ('Trūksta patikimo Odoo ryšio' if item.status == 'unknown' else 'Pagal Odoo Assembly dar nepradėta')) }}</td>
+        </tr>
+      {% else %}<tr><td colspan="4" class="empty">Patvirtintame plane šiandien suplanuotų darbų nėra.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+    <p class="muted">Šis pirmas CONTROL pjūvis rodo būseną. Patikimai prarastoms constraint valandoms reikės planinės pradžios ir faktinių WO įvykių laiko procedūros.</p>
+  {% else %}
+    <p class="empty">Pirmiausia patvirtinkite dienos SCHEDULE versiją.</p>
+  {% endif %}
+</section>
+
 <section class="section-head"><div><p class="eyebrow">Auditas</p><h2>Šios dienos įvykiai</h2></div></section>
 <div class="table-wrap"><table>
   <thead><tr><th>Laikas UTC</th><th>Naudotojas</th><th>Įvykis</th><th>Užsakymas / duomenys</th></tr></thead>

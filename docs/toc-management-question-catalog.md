@@ -209,6 +209,8 @@ Numatomos, bet dar neprojektuojamos produkto architektūros dalys:
 
 MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patvirtinti. Įgyvendintas pirmasis audituojamas `SCHEDULE` vertikalus pjūvis ir dienos operacinis signalas; sisteminė constraint klasifikacija lieka neįgyvendinta, kol nėra sukauptas ir sukalibruotas CONTROL istorinis raštas.
 
+Pirmasis `CONTROL` vertikalus pjūvis saugo MQ-001 dienos signalo momentinę kopiją nekintamame sugeneruoto plano įvykyje ir patvirtintiems šiandienos SO read-only būdu lygina planą su faktine Assembly WO būsena: `NEPRADĖTA`, `VYKDOMA`, `UŽBAIGTA` arba `NĖRA DUOMENŲ`. Ši būsena dar nėra prarastų constraint valandų matas. Tokiam matui reikės atskiros procedūros, kuri planinę pradžią lygins su WO pradžios, pabaigos, pauzių ir blokavimo įvykiais.
+
 ## MQ-001 likusios kalibravimo užduotys
 
 1. Iš pirmųjų 3–4 savaičių duomenų nustatyti signalų stabilumo ribas, reikalingas prieš priimant pajėgumo investicijos sprendimą.
