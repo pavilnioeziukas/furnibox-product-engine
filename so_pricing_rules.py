@@ -10,8 +10,55 @@ from typing import Any
 from openpyxl import load_workbook
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 ADDON_FIELDS = ("assembly", "storage", "packaging", "put_on_pallet", "other", "markup")
+
+
+# Tamara's CATEGORY sheet is the business source for transformed Furnibox
+# products.  These are category rates, not SKU-specific prices.  They live in
+# application configuration so a rate can be changed once without rebuilding
+# the transformer or maintaining thousands of individual SKU overrides.
+DEFAULT_BOM_CATEGORY_RATES = (
+    ("1", "PREPACK CATEGORY 1", 0.0, 0.4, 0.4, 0.0, 0.04, 0.0),
+    ("2", "PREPACK CATEGORY 2", 0.0, 0.3, 0.2, 0.0, 0.02, 0.0),
+    ("3", "PREPACK CATEGORY 3", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    ("4", "PREPACK CATEGORY 4", 0.0, 0.0, 1.5, 0.0, 0.2, 0.0),
+    ("5", "PREPACK CATEGORY 5", 0.0, 0.5, 0.5, 0.0, 0.0, 0.0),
+    ("6", "INTERIOR STORAGE", 0.0, 4.0, 1.0, 0.0, 0.04, 0.0),
+    ("7", "SHELF HARDWARE", 0.3, 0.05, 0.03, 0.02, 0.04, 0.0),
+    ("8", "SLF PP", 0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+    ("8.1", "SLF ROD PP", 5.0, 0.5, 1.0, 0.0, 0.0, 0.0),
+    ("8.2", "SLF LED ROD PP", 7.16, 0.7, 1.0, 0.0, 0.0, 0.0),
+    ("9", "CABINET HARDWARE", 1.5, 0.0, 0.0, 0.0, 0.1, 0.0),
+    ("10", "PNL/PCL", 0.0, 0.0, 1.0, 0.0, 1.68, 0.0),
+    ("11", "LED", 0.0, 0.1, 0.1, 0.0, 0.02, 0.0),
+    ("12", "ASS PREPACK", 50.0, 0.0, 3.14, 1.0, 5.9, 3.0),
+    ("20.1", "EU FPACK", 0.0, 0.1, 0.0, 0.0, 0.0, 0.0),
+    ("21.1", "US FPACK", 0.0, 0.1, 0.0, 0.0, 0.0, 0.0),
+    ("22.1", "EU ASS PACK", 0.0, 0.1, 0.0, 0.0, 0.0, 0.0),
+    ("23.1", "US ASS PACK", 0.0, 0.1, 0.0, 0.0, 0.0, 0.0),
+    ("24.1", "PAP HRD", 0.0, 0.0, 0.0, 0.0, 0.0, 0.13),
+    ("25.1", "EU SHELF PREPACK", 0.0, 0.1, 0.0, 0.0, 0.05, 0.0),
+    ("26.1", "US SHELF PREPACK", 0.0, 0.1, 0.0, 0.0, 0.05, 0.0),
+    ("30", "COMPONENTS / FASTENERS", 0.0, 0.005, 0.005, 0.0, 0.0, 0.0),
+    ("31", "COMPONENTS / FRONT HARDWARE", 0.0, 0.04, 0.01, 0.0, 0.0, 0.0),
+    ("32", "COMPONENTS / INTERIOR STORAGE", 0.0, 1.0, 1.0, 0.0, 0.0, 0.0),
+    ("33", "COMPONENTS / CABINET HARDWARE", 0.0, 0.02, 0.01, 0.0, 0.0, 0.0),
+    ("34", "COMPONENTS / CABINET ACCESSORIES", 0.0, 0.02, 0.02, 0.0, 0.0, 0.05),
+    ("35", "COMPONENTS / SHELF HARDWARE", 0.0, 0.15, 0.05, 0.02, 0.0, 0.0),
+    ("36", "PAPER PRINT", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+)
+
+
+def default_bom_category_rates() -> list[dict[str, Any]]:
+    return [
+        {
+            "code": code,
+            "name": name,
+            **dict(zip(ADDON_FIELDS, values)),
+        }
+        for code, name, *values in DEFAULT_BOM_CATEGORY_RATES
+    ]
 
 
 def _text(value: Any) -> str:
@@ -61,6 +108,7 @@ def empty_config() -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "adjustment_rate": -0.07,
         "bom_categories": [],
+        "bom_category_rates": default_bom_category_rates(),
         "bom_skus": [],
         "bom_products": [],
         "non_bom_categories": [],
@@ -78,6 +126,11 @@ def upgrade_config(document: dict[str, Any]) -> dict[str, Any]:
     """Convert the per-SKU v1 structure to categories plus SKU assignments."""
     if document.get("schema_version") == SCHEMA_VERSION:
         return document
+    if document.get("schema_version") == 2:
+        upgraded = dict(document)
+        upgraded["schema_version"] = SCHEMA_VERSION
+        upgraded.setdefault("bom_category_rates", default_bom_category_rates())
+        return upgraded
     if document.get("schema_version") != 1:
         raise ValueError("Nepalaikoma SO kainodaros konfigūracijos versija.")
     upgraded = empty_config()
@@ -120,7 +173,8 @@ def upgrade_config(document: dict[str, Any]) -> dict[str, Any]:
             "sku": rule.sku, "name": rule.name, "product_category": rule.product_category,
             "category_id": category_id,
         })
-    return upgraded
+    upgraded["schema_version"] = 2
+    return upgrade_config(upgraded)
 
 
 def validate_config(document: dict[str, Any]) -> dict[str, Any]:
@@ -132,6 +186,14 @@ def validate_config(document: dict[str, Any]) -> dict[str, Any]:
     category_ids = {row.get("id") for row in document.get("bom_categories", [])}
     if None in category_ids or len(category_ids) != len(document.get("bom_categories", [])):
         raise ValueError("BOM kainodaros kategorijų ID turi būti unikalūs.")
+    rate_codes: set[str] = set()
+    for raw in document.get("bom_category_rates", []):
+        code = _text(raw.get("code"))
+        if not code or code.casefold() in rate_codes:
+            raise ValueError("Verslo BOM kategorijų kodai turi būti unikalūs.")
+        rate_codes.add(code.casefold())
+        for field in ADDON_FIELDS:
+            _number(raw.get(field))
     for raw in document.get("bom_skus", []):
         normalized = _text(raw.get("sku")).casefold()
         if not normalized:
@@ -303,6 +365,31 @@ def pricing_rules_from_config(document: dict[str, Any]) -> list[PricingRule]:
             **{field: float(category.get(field, 0)) for field in ADDON_FIELDS},
         ))
     return result
+
+
+def compose_bom_category_rule(
+    sku: str,
+    expression: str,
+    document: dict[str, Any],
+) -> PricingRule:
+    """Compose one SKU rule from Tamara business category codes."""
+    rates = {
+        _text(row.get("code")).casefold(): row
+        for row in validate_config(document).get("bom_category_rates", [])
+    }
+    codes = [code.strip() for code in _text(expression).split("+") if code.strip()]
+    missing = [code for code in codes if code.casefold() not in rates]
+    if missing:
+        raise ValueError(
+            f"BOM kainodaros kombinacijoje {expression!r} nėra kategorijų: "
+            + ", ".join(missing)
+        )
+    values = tuple(
+        sum(_number(rates[code.casefold()].get(field)) for code in codes)
+        for field in ADDON_FIELDS
+    )
+    names = " + ".join(rates[code.casefold()]["name"] for code in codes)
+    return PricingRule(sku, expression, names, "", *values)
 
 
 def non_bom_rules_from_config(document: dict[str, Any]) -> list[NonBomRule]:

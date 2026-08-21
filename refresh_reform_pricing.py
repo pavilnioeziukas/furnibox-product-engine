@@ -68,8 +68,12 @@ def write_blocker_report(path: Path, statuses: Counter, blocked: list[dict]) -> 
     for status, count in sorted(statuses.items()):
         summary.append([status, count])
     summary.append([])
-    summary.append(["Decision", "FINAL FILE NOT RELEASED"])
+    summary.append(["Decision", "FULL FINAL FILE NOT RELEASED"])
     summary.append(["Reason", "Pricing contains BLOCKED positions"])
+    summary.append([
+        "Safe output",
+        "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx excludes every BLOCKED SKU",
+    ])
 
     details = workbook.create_sheet("BLOCKERS")
     details.append(["SKU", "Position Type", "Status", "Issues"])
@@ -84,6 +88,74 @@ def write_blocker_report(path: Path, statuses: Counter, blocked: list[dict]) -> 
     details.column_dimensions["C"].width = 15
     details.column_dimensions["D"].width = 100
     workbook.save(path)
+
+
+def write_complete_only_price_workbook(
+    source: Path,
+    destination: Path,
+    blocked: list[dict],
+) -> None:
+    """Publish a safe partial price list without any blocked SKU."""
+    workbook = load_workbook(source)
+    blocked_skus = {
+        str(row.get("sku") or "").strip().casefold()
+        for row in blocked
+        if str(row.get("sku") or "").strip()
+    }
+
+    def remove_rows(sheet_name: str, column_name: str, remove_value) -> None:
+        sheet = workbook[sheet_name]
+        columns = {
+            str(cell.value or ""): cell.column
+            for cell in sheet[1]
+        }
+        column = columns[column_name]
+        for row_number in range(sheet.max_row, 1, -1):
+            if remove_value(sheet.cell(row_number, column).value):
+                sheet.delete_rows(row_number)
+        sheet.auto_filter.ref = sheet.dimensions
+
+    remove_rows(
+        "SO LINE PRICES",
+        "Status",
+        lambda value: str(value or "").strip().upper() != "COMPLETE",
+    )
+    remove_rows(
+        "BOM COMPONENT COSTS",
+        "Top BOM SKU",
+        lambda value: str(value or "").strip().casefold() in blocked_skus,
+    )
+    remove_rows(
+        "BOM CATEGORY BREAKDOWN",
+        "Top SKU",
+        lambda value: str(value or "").strip().casefold() in blocked_skus,
+    )
+    remove_rows(
+        "NON-BOM RULES",
+        "Status",
+        lambda value: str(value or "").strip().upper() != "COMPLETE",
+    )
+
+    diagnostics = workbook["DIAGNOSTICS"]
+    diagnostics.title = "EXCLUDED BLOCKED"
+
+    info = workbook["INFO"]
+    info.insert_rows(1, 4)
+    info.cell(1, 1, "Release type")
+    info.cell(1, 2, "COMPLETE POSITIONS ONLY")
+    info.cell(2, 1, "Safe usage")
+    info.cell(
+        2,
+        2,
+        "Use only listed SKUs; excluded SKUs must keep their previous price",
+    )
+    info.cell(3, 1, "Excluded blocked positions")
+    info.cell(3, 2, len(blocked_skus))
+    info.cell(4, 1, "Full final release")
+    info.cell(4, 2, "NO")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    workbook.save(destination)
 
 
 def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
@@ -193,6 +265,11 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
         statuses, blocked = read_pricing_status(candidate)
 
+        partial_name = (
+            "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx"
+            if blocked
+            else None
+        )
         result = {
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "bom_input": str(bom_input),
@@ -200,6 +277,9 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "blocked": blocked,
             "target_reconciliation": reconciliation_summary,
             "released": not blocked,
+            "partial_released": bool(blocked),
+            "partial_file": partial_name,
+            "excluded_blocked_count": len(blocked),
             "odoo_changed": False,
         }
         (output_dir / "Reform_Pricing_Result.json").write_text(
@@ -210,8 +290,24 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             write_blocker_report(
                 output_dir / "Reform_Pricing_BLOCKED.xlsx", statuses, blocked
             )
+            write_complete_only_price_workbook(
+                candidate,
+                output_dir / partial_name,
+                blocked,
+            )
+            write_furnibox_purchase_prices(
+                PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
+                output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
+            )
+            shutil.copy2(
+                PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
+                output_dir / "Reform_Pricing_Source.xlsx",
+            )
             print(f"\nSUSTABDYTA: {len(blocked)} BLOCKED pozicijos.")
-            print("Galutiniai kainų failai nepateikti.")
+            print(
+                "Pilnas galutinis failas nepateiktas; "
+                "sukurtas COMPLETE_ONLY failas be BLOCKED pozicijų."
+            )
             return 2
 
         write_furnibox_purchase_prices(

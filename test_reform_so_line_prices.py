@@ -15,6 +15,7 @@ if "dotenv" not in sys.modules:
 from reform_so_line_prices import (
     Item,
     add_generated_boms_to_graph,
+    apply_target_business_category_rules,
     build_from_application_config,
     build_reform_so_line_prices,
     calculate_boms,
@@ -24,9 +25,17 @@ from reform_so_line_prices import (
     inherit_unambiguous_analog_rules,
     key,
     load_target_dataset_graph,
+    load_tamara_pricing_reference,
 )
 from manifest.manifest_writer import calculate_file_hash
-from so_pricing_rules import PricingRule, load_config, migrate_legacy_workbook, save_config
+from so_pricing_rules import (
+    PricingRule,
+    compose_bom_category_rule,
+    empty_config,
+    load_config,
+    migrate_legacy_workbook,
+    save_config,
+)
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
@@ -74,6 +83,152 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertAlmostEqual(rows[0]["cost"], 1.0)
         self.assertAlmostEqual(rows[0]["final"], 6.0)
         self.assertEqual([row["level"] for row in details], ["LEVEL I BOM"])
+
+    def test_tamara_category_expression_is_composed_from_editable_rates(self):
+        rule = compose_bom_category_rule(
+            "SHELF-PP",
+            "8.2+25.1",
+            empty_config(),
+        )
+
+        self.assertEqual(rule.category_id, "8.2+25.1")
+        for actual, expected in zip(
+            rule.addons,
+            (7.16, 0.8, 1.0, 0.0, 0.05, 0.0),
+        ):
+            self.assertAlmostEqual(actual, expected)
+        self.assertAlmostEqual(sum(rule.addons), 9.01)
+
+    def test_target_business_categories_cover_shelf_and_assembled_cabinet(self):
+        shelf = "EUB-C-CAB01-SLF001"
+        shelf_pp = "EU-SREW-SHELF-163x564-WW-PP"
+        cabinet = "EUB-C-CAB01-BAS001-A"
+        apack = "APACK-EU-CAB01-BAS001-A"
+        dataset = {
+            "products": [
+                {
+                    "sku": shelf,
+                    "product_type": "CABINET SHELF",
+                    "bom_type": "KIT",
+                    "components": [
+                        {"sku": shelf_pp, "quantity": 1},
+                        {"sku": "SLF-PINS-HRD-6", "quantity": 1},
+                    ],
+                },
+                {
+                    "sku": shelf_pp,
+                    "product_type": "SHELF PREPACK",
+                    "bom_type": "MANUFACTURE",
+                    "components": [
+                        {"sku": "SHELF-PART", "quantity": 1},
+                        {"sku": "SHELF-PACK", "quantity": 0.4},
+                        {"sku": "TERMO 90X48", "quantity": 2},
+                    ],
+                },
+                {
+                    "sku": cabinet,
+                    "product_type": "CABINETS",
+                    "bom_type": "KIT",
+                    "components": [
+                        {"sku": apack, "quantity": 1},
+                        {"sku": "UNI-P-ACC01-HRD206D-A", "quantity": 1},
+                    ],
+                },
+                {
+                    "sku": apack,
+                    "product_type": "PREPACK CABINETS",
+                    "bom_type": "MANUFACTURE",
+                    "components": [
+                        {"sku": "CABINET-PART", "quantity": 1},
+                        {"sku": "N PACK EU", "quantity": 1},
+                    ],
+                },
+            ],
+        }
+
+        rules, authoritative = apply_target_business_category_rules(
+            {}, dataset, empty_config(), reference={}
+        )
+
+        self.assertAlmostEqual(sum(rules[key(shelf_pp)].addons), 1.15)
+        self.assertAlmostEqual(sum(rules[key(shelf)].addons), 1.82)
+        self.assertAlmostEqual(sum(rules[key(apack)].addons), 63.27)
+        self.assertAlmostEqual(sum(rules[key(cabinet)].addons), 64.87)
+        self.assertEqual(
+            authoritative,
+            {key(shelf), key(shelf_pp), key(cabinet), key(apack)},
+        )
+
+    def test_authoritative_product_category_does_not_double_child_addons(self):
+        top = "SHELF"
+        child = "SHELF-PP"
+        rules = {
+            key(top): self.pricing_rule(top, assembly=10),
+            key(child): self.pricing_rule(child, assembly=4),
+        }
+        rows, details = calculate_boms(
+            {top: ("CABINET SHELF", [Item(child, 1)])},
+            {key("PART"): ("Part", 2.0, "DIRECT PRICE")},
+            rules,
+            adjustment=0,
+            graph={key(top): [(child, 1)], key(child): [("PART", 1)]},
+            authoritative_rule_tops={top},
+        )
+
+        self.assertEqual(rows[0]["status"], "COMPLETE")
+        self.assertEqual(rows[0]["cost"], 2.0)
+        self.assertEqual(sum(rows[0]["addons"]), 10.0)
+        self.assertEqual([row["level"] for row in details], ["LEVEL I BOM"])
+
+    def test_target_shelf_subtypes_and_us_pack_categories(self):
+        products = []
+        expectations = {
+            "US-SREW-SHELF-420x339-WW-PP": ("8+26.1", 1.15),
+            "EU-SREW-SHELF-ROD-563x340-WW-PP": ("8.1+25.1", 6.65),
+            "EU-SREW-SHELF-LEDROD-563x340-WW-PP": ("8.2+25.1", 9.01),
+        }
+        for sku in expectations:
+            components = [{"sku": "PART", "quantity": 1}]
+            if sku.startswith("US-"):
+                components.append({"sku": "L0377", "quantity": 0.4})
+            products.append({
+                "sku": sku,
+                "product_type": "SHELF PREPACK",
+                "bom_type": "MANUFACTURE",
+                "components": components,
+            })
+
+        rules, _ = apply_target_business_category_rules(
+            {}, {"products": products}, empty_config(), reference={}
+        )
+
+        for sku, (expression, total) in expectations.items():
+            self.assertEqual(rules[key(sku)].category_id, expression)
+            self.assertAlmostEqual(sum(rules[key(sku)].addons), total)
+
+    def test_versioned_tamara_reference_wins_over_market_heuristic(self):
+        sku = "EUB-C-CAB01-BNF001-A"
+        apack = "APACK-EU-CAB01-BNF001-A"
+        reference = load_tamara_pricing_reference()
+        self.assertEqual(reference[key(sku)], "12+9+23.1+24.1")
+        rules, authoritative = apply_target_business_category_rules(
+            {},
+            {"products": [{
+                "sku": sku,
+                "product_type": "CABINETS",
+                "bom_type": "KIT",
+                "components": [{"sku": apack, "quantity": 1}],
+            }]},
+            empty_config(),
+        )
+        self.assertEqual(rules[key(sku)].category_id, "12+9+23.1+24.1")
+        self.assertIn(key(sku), authoritative)
+
+    def test_every_versioned_tamara_expression_has_configured_rates(self):
+        reference = load_tamara_pricing_reference()
+        self.assertEqual(len(reference), 3218)
+        for sku, expression in reference.items():
+            compose_bom_category_rule(sku, expression, empty_config())
 
     def test_generated_cost_only_scope_does_not_hide_parent_rule_gap(self):
         cabinet = "EUB-C-CAB01-BAS001-A"
@@ -502,12 +657,12 @@ class ReformSoLinePriceTests(unittest.TestCase):
             ws.append(["SKU", "Name", "Group", "Category", "", "", "Preparation", "Storage", "Bag", "Sticker"])
             wb.save(legacy)
             migrated = migrate_legacy_workbook(legacy)
-            self.assertEqual(migrated["schema_version"], 2)
+            self.assertEqual(migrated["schema_version"], 3)
             self.assertEqual(len(migrated["bom_categories"]), 2)
             self.assertEqual(len(migrated["bom_skus"]), 2)
             self.assertEqual(migrated["bom_skus"][0]["category_id"], "BOM-001")
             save_config(config, migrated)
-            self.assertEqual(load_config(config)["schema_version"], 2)
+            self.assertEqual(load_config(config)["schema_version"], 3)
             legacy.unlink()
 
             wb = Workbook(); ws = wb.active; ws.title = "BOM - Input"

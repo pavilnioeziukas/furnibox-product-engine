@@ -14,6 +14,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from reform_map import find_sheet, read_edges
 from so_pricing_rules import (
+    compose_bom_category_rule,
     NonBomRule,
     PricingRule,
     load_config,
@@ -35,6 +36,11 @@ from manifest.manifest_writer import calculate_file_hash
 PRICE_FILE = "Reform_Final_Prices.xlsx"
 OUTPUT_FILE = "Reform_SO_Line_Prices.xlsx"
 ADJUSTMENT = -0.07
+TAMARA_PRICING_REFERENCE_PATH = (
+    Path(__file__).resolve().parent
+    / "manifest"
+    / "tamara_pricing_reference.json"
+)
 
 ADDONS = (
     "Assembly",
@@ -565,6 +571,142 @@ def inherit_unambiguous_analog_rules(rules, dataset):
         )
 
     return result
+
+
+def _target_component_skus(product):
+    return [
+        text(component.get("sku"))
+        for component in product.get("components") or []
+        if text(component.get("sku"))
+    ]
+
+
+def _target_market_pack_code(product, eu_code, us_code):
+    """Choose the pack category from the transformed physical BOM first."""
+    component_skus = {
+        key(sku)
+        for sku in _target_component_skus(product)
+    }
+    if key("L0377") in component_skus:
+        return us_code
+    identity = " ".join(
+        text(product.get(field)).upper()
+        for field in ("sku", "source_sku", "generated_from")
+    )
+    if any(
+        token.startswith(("US-", "USB-")) or "-US-" in token
+        for token in identity.split()
+    ):
+        return us_code
+    return eu_code
+
+
+def _target_top_market_pack_code(sku, eu_code, us_code):
+    normalized = text(sku).upper()
+    if normalized.startswith(("US-", "USB-")) or "-US-" in normalized:
+        return us_code
+    return eu_code
+
+
+def _shelf_pp_base_category(sku):
+    normalized = text(sku).upper()
+    if "LED" in normalized:
+        return "8.2"
+    if "-ROD-" in normalized:
+        return "8.1"
+    return "8"
+
+
+def load_tamara_pricing_reference(path=TAMARA_PRICING_REFERENCE_PATH):
+    if not Path(path).is_file():
+        raise ValueError(f"Nerastas Tamaros kainodaros etalonas: {path}")
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 1:
+        raise ValueError("Nepalaikoma Tamaros kainodaros etalono versija.")
+    if payload.get("conflicts"):
+        raise ValueError("Tamaros kainodaros etalone yra prieštaringų SKU taisyklių.")
+    return {
+        key(row.get("sku")): text(row.get("expression"))
+        for row in payload.get("sku_expressions") or []
+        if text(row.get("sku")) and text(row.get("expression"))
+    }
+
+
+def apply_target_business_category_rules(
+    rules,
+    dataset,
+    document,
+    reference=None,
+):
+    """Overlay transformed products with Tamara CATEGORY/BOM PAP logic.
+
+    Returned ``authoritative`` products carry the complete add-on expression
+    for that BOM.  Their child material costs are still resolved recursively,
+    but child add-on rules must not be added again.
+    """
+    result = dict(rules)
+    authoritative = set()
+    products = dataset.get("products") or []
+    if reference is None:
+        reference = load_tamara_pricing_reference()
+
+    def assign(sku, expression):
+        result[key(sku)] = compose_bom_category_rule(
+            sku,
+            expression,
+            document,
+        )
+        authoritative.add(key(sku))
+
+    for product in products:
+        sku = text(product.get("sku"))
+        normalized = sku.upper()
+        product_type = text(product.get("product_type")).upper()
+        children = _target_component_skus(product)
+
+        exact_expression = reference.get(key(sku))
+        if exact_expression:
+            assign(sku, exact_expression)
+            continue
+
+        if product_type == "SHELF PREPACK" or (
+            normalized.endswith("-PP") and "SHELF" in normalized
+        ):
+            pack = _target_market_pack_code(product, "25.1", "26.1")
+            assign(sku, f"{_shelf_pp_base_category(sku)}+{pack}")
+            continue
+
+        if normalized.startswith("APACK-"):
+            pack = _target_market_pack_code(product, "22.1", "23.1")
+            assign(sku, f"12+{pack}+24.1")
+            continue
+
+        shelf_pp = next(
+            (
+                child
+                for child in children
+                if child.upper().endswith("-PP") and "SHELF" in child.upper()
+            ),
+            "",
+        )
+        if product_type == "CABINET SHELF" and shelf_pp:
+            pack = _target_top_market_pack_code(sku, "25.1", "26.1")
+            base = _shelf_pp_base_category(shelf_pp)
+            if base == "8":
+                expression = f"8+{pack}+7+30+35"
+            elif base == "8.1":
+                expression = f"8.1+{pack}+7+35"
+            else:
+                expression = f"8.2+{pack}+7+35+11"
+            assign(sku, expression)
+            continue
+
+        has_apack = any(child.upper().startswith("APACK-") for child in children)
+        if normalized.endswith("-A") and has_apack:
+            pack = _target_top_market_pack_code(sku, "22.1", "23.1")
+            assign(sku, f"12+9+{pack}+24.1")
+
+    return result, authoritative
 
 
 def exclude_bom_products_from_non_bom(items, graph):
@@ -1212,6 +1354,7 @@ def calculate_boms(
     adjustment=ADJUSTMENT,
     graph=None,
     component_cost_only_tops=None,
+    authoritative_rule_tops=None,
 ):
     """
     Calculate BOM sale prices.
@@ -1239,6 +1382,13 @@ def calculate_boms(
         key(value)
         for value in (
             component_cost_only_tops
+            or set()
+        )
+    }
+    authoritative_rule_tops = {
+        key(value)
+        for value in (
+            authoritative_rule_tops
             or set()
         )
     }
@@ -1404,6 +1554,13 @@ def calculate_boms(
                         ),
                     }
                 )
+
+            if key(top) in authoritative_rule_tops:
+                # Tamara's product category expression already represents
+                # the complete add-on combination for this BOM.  Child
+                # material cost remains recursive, but child add-ons would
+                # duplicate that authoritative product-category total.
+                continue
 
             if key(top) in component_cost_only_tops:
                 # APACK, HRD-A and Shelf-PP are generated internal
@@ -2993,6 +3150,7 @@ def build_from_application_config(
     )
 
     component_cost_only_tops = set()
+    authoritative_rule_tops = set()
     if dataset_path is not None:
         target_dataset, _ = load_target_dataset_graph(
             dataset_path,
@@ -3005,6 +3163,11 @@ def build_from_application_config(
         rules = inherit_unambiguous_analog_rules(
             rules,
             target_dataset,
+        )
+        rules, authoritative_rule_tops = apply_target_business_category_rules(
+            rules,
+            target_dataset,
+            document,
         )
         component_cost_only_tops = (
             component_cost_only_manufacture_products(
@@ -3030,6 +3193,9 @@ def build_from_application_config(
             graph=graph,
             component_cost_only_tops=(
                 component_cost_only_tops
+            ),
+            authoritative_rule_tops=(
+                authoritative_rule_tops
             ),
         )
     )

@@ -284,8 +284,9 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
         "description": (
             "Vienu paleidimu atnaujina faktines ir Furnibox (Tamaros) pirkimo "
             "kainas, Cabinet Parts kainas, "
-            "perskaičiuoja visą Reform BOM kainodarą ir pateikia galutinius "
-            "failus tik tada, kai nėra BLOCKED pozicijų. Odoo nekeičia."
+            "perskaičiuoja visą Reform BOM kainodarą. Jei yra BLOCKED pozicijų, "
+            "pateikia saugų COMPLETE_ONLY failą be jų; pilną galutinį failą "
+            "pateikia tik tada, kai BLOCKED nėra. Odoo nekeičia."
         ),
         "script": "refresh_reform_pricing.py",
         "requires_upload": True,
@@ -1687,6 +1688,43 @@ def update_pricing_adjustment():
             "pricing_rules"
         )
     )
+
+
+@app.post(
+    "/pricing-rules/business-categories/<code>"
+)
+def update_business_pricing_category(
+    code: str,
+):
+    document = load_config(
+        SO_PRICING_CONFIG_PATH
+    )
+    match = next(
+        (
+            row
+            for row in document.get("bom_category_rates", [])
+            if str(row.get("code") or "").casefold() == code.casefold()
+        ),
+        None,
+    )
+    if match is None:
+        abort(404)
+    match["name"] = request.form.get("name", "").strip()
+    for name in (
+        "assembly",
+        "storage",
+        "packaging",
+        "put_on_pallet",
+        "other",
+        "markup",
+    ):
+        match[name] = form_number(name)
+    try:
+        save_config(SO_PRICING_CONFIG_PATH, document)
+    except ValueError as exc:
+        abort(400, str(exc))
+    flash(f"Verslo BOM kategorija {match['code']} išsaugota.")
+    return redirect(url_for("pricing_rules") + "#business-categories")
 
 
 @app.post(
