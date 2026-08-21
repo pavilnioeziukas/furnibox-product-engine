@@ -822,7 +822,7 @@ Priežastis priskiriama pagal tuo metu buvusią informaciją ir pajėgumą, ne p
 #### Esami arba jau sutarti
 
 - SO line pardavimo vertė;
-- SO line medžiagų ir subrangovų sąnaudos;
+- SO line Odoo savikaina, apimanti medžiagų sąnaudas ir neapimanti Assembly darbo užmokesčio;
 - SO `Delivery Date`;
 - BOM norminės Assembly valandos;
 - READY, WO ir dienos pajėgumo duomenų kontraktai iš MQ-001–MQ-006.
@@ -840,7 +840,7 @@ Priežastis priskiriama pagal tuo metu buvusią informaciją ir pajėgumą, ne p
 
 - patikimas faktinis išsiuntimo timestamp ir SO line kiekių susiejimas dalinių išsiuntimų atveju;
 - techninė SO line–MO–WO sąsajos validacija;
-- patvirtinimas, kad į SO line sąnaudas neįtraukiamos TOC požiūriu nekintamos Operating Expense sąnaudos;
+- patikra, kaip SO line savikainoje atvaizduojamos tiesiogiai dėl konkretaus pardavimo patiriamos subrangovų sąnaudos, jei jos nėra medžiagų savikainos dalis;
 - kontrafaktinio „galėjo būti užbaigtas iki Delivery Date“ algoritmo validacija su realiais atvejais;
 - dalinio vėlavimo taisyklė, jei vieno SO dalis išsiunčiama laiku, o dalis vėliau.
 
@@ -864,4 +864,4 @@ Modulis neturi pavėluoto Throughput vadinti prarastu pelnu. Jo paskirtis – pa
 
 ## Kitas specifikacijos etapas
 
-Patvirtinti, ar SO line sąnaudų skaičiavime Assembly darbo sąnaudos yra įtrauktos ir, jei taip, ar jas galima atskirti nuo medžiagų bei subrangovų sąnaudų. Tada užbaigti MQ-007 ir ta pačia pilna struktūra formalizuoti MQ-008 — „Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
+MQ-007 ekonominio matavimo taisyklės patvirtintos: Odoo SO line savikaina apima medžiagas, bet ne Assembly darbo užmokestį, todėl darbo užmokestis lieka Operating Expense. Toliau ta pačia pilna struktūra formalizuoti MQ-008 — „Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
