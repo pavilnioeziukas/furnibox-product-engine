@@ -38,6 +38,8 @@ def generate_daily_plan(
         raise ValueError("Capacity cannot be negative.")
     ranked: list[tuple[tuple[Any, ...], AssemblyCandidate, date]] = []
     for candidate in candidates:
+        if not candidate.system_ready:
+            continue
         state = readiness_states.get(candidate.so_reference) or {}
         if state.get("status") != "ready":
             continue

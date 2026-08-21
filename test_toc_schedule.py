@@ -5,7 +5,18 @@ from webapp.toc_schedule import generate_daily_plan
 
 
 def candidate(so, due, urgent=False, hours=4):
-    return AssemblyCandidate(so, due, urgent, hours, 1)
+    return AssemblyCandidate(so, due, urgent, hours, 1, system_ready=True)
+
+
+def test_plan_excludes_physical_ready_order_when_odoo_is_not_ready():
+    item = AssemblyCandidate("S1", date(2026, 8, 22), False, 4, 1, system_ready=False)
+
+    plan = generate_daily_plan(
+        [item], {"S1": {"status": "ready", "readiness_date": date(2026, 8, 20)}},
+        business_date=date(2026, 8, 21), capacity_hours=8,
+    )
+
+    assert plan == []
 
 
 def test_plan_applies_approved_mq005_order_and_ready_tie_breaker():

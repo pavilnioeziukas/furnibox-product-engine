@@ -75,6 +75,8 @@ class AssemblyCandidate:
     urgent: bool
     assembly_hours: float
     manufacturing_order_count: int
+    system_ready: bool = False
+    system_blockers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -132,6 +134,37 @@ def load_assembly_candidates(reader: OdooReader) -> CandidateResult:
     )
     urgent_ids = {int(item["id"]) for item in urgent_tags}
 
+    raw_moves = reader.search_read(
+        "stock.move", [["raw_material_production_id", "in", production_ids]],
+        ["raw_material_production_id", "state"], limit=10000,
+    ) if production_ids else []
+    raw_move_states_by_production: dict[int, list[str]] = {}
+    for move in raw_moves:
+        production_id = _relation_id(move.get("raw_material_production_id"))
+        if production_id is not None:
+            raw_move_states_by_production.setdefault(production_id, []).append(
+                str(move.get("state") or "")
+            )
+
+    sale_ids = [int(item["id"]) for item in sales]
+    pickings = reader.search_read(
+        "stock.picking",
+        ["|", ["sale_id", "in", sale_ids], ["origin", "in", so_names]],
+        ["name", "origin", "sale_id", "state"], limit=10000,
+    ) if sale_ids else []
+    picking_states_by_so: dict[str, list[tuple[str, str]]] = {}
+    sale_name_by_id = {int(item["id"]): str(item["name"]) for item in sales}
+    for picking in pickings:
+        name = str(picking.get("name") or "")
+        if not any(stage in name.upper() for stage in ("PICK", "PACK", "OUT")):
+            continue
+        so_name = sale_name_by_id.get(_relation_id(picking.get("sale_id")) or -1)
+        so_name = so_name or str(picking.get("origin") or "").strip()
+        if so_name in sales_by_name:
+            picking_states_by_so.setdefault(so_name, []).append(
+                (name, str(picking.get("state") or ""))
+            )
+
     aggregates: dict[str, dict[str, Any]] = {}
     excluded = 0
     for workorder in workorders:
@@ -145,16 +178,36 @@ def load_assembly_candidates(reader: OdooReader) -> CandidateResult:
         item["hours"] += float(workorder.get("duration_expected") or 0.0) / 60.0
         item["mo_ids"].add(int(production["id"]))
 
-    candidates = [
-        AssemblyCandidate(
+    candidates = []
+    for so_name, values in aggregates.items():
+        blockers: list[str] = []
+        mo_ids = values["mo_ids"]
+        missing_mo_reservations = [
+            production_id for production_id in mo_ids
+            if not raw_move_states_by_production.get(production_id)
+            or any(
+                state not in {"assigned", "done", "cancel"}
+                for state in raw_move_states_by_production.get(production_id, [])
+            )
+        ]
+        if missing_mo_reservations:
+            blockers.append(f"MO komponentai nerezervuoti: {len(missing_mo_reservations)} MO")
+        picking_states = picking_states_by_so.get(so_name, [])
+        unavailable_pickings = [name for name, state in picking_states if state not in {"assigned", "done", "cancel"}]
+        if not picking_states:
+            blockers.append("Nerasta Pick / Pack / WH/OUT rezervacijos")
+        elif unavailable_pickings:
+            blockers.append("Nerezervuota: " + ", ".join(unavailable_pickings))
+
+        candidates.append(AssemblyCandidate(
             so_reference=so_name,
             delivery_date=_parse_date(values["sale"].get("commitment_date")),
             urgent=bool(urgent_ids & set(values["sale"].get("tag_ids") or [])),
             assembly_hours=round(values["hours"], 2),
-            manufacturing_order_count=len(values["mo_ids"]),
-        )
-        for so_name, values in aggregates.items()
-    ]
+            manufacturing_order_count=len(mo_ids),
+            system_ready=not blockers,
+            system_blockers=tuple(blockers),
+        ))
     candidates.sort(key=lambda item: (item.delivery_date or date.max, not item.urgent, item.so_reference))
     from datetime import datetime, timezone
     return CandidateResult(

@@ -487,11 +487,16 @@ def requested_business_date() -> date:
 TOC_EVENT_LABELS = {
     "DailyAssemblyCapacityConfirmed": "Patvirtintas dienos pajėgumas",
     "ReadinessCheckStarted": "Pradėta rytinė READY patikra",
-    "ReadinessConfirmed": "Užsakymas patvirtintas READY",
-    "ReadinessBlockerOpened": "Užregistruota NOT READY priežastis",
+    "ReadinessConfirmed": "Patvirtinti fiziniai komponentai",
+    "ReadinessBlockerOpened": "Užregistruotas fizinis trūkumas",
     "ReadinessBlockerClosed": "Pašalinta NOT READY priežastis",
     "DailyPriorityPlanGenerated": "Sugeneruota dienos darbų eilė",
     "DailyPriorityPlanApproved": "Patvirtinta dienos darbų eilė",
+}
+
+PHYSICAL_READINESS_REASONS = {
+    code: label for code, label in READINESS_BLOCKER_REASONS.items()
+    if code != "FURNIX_PARTS_MISSING"
 }
 
 
@@ -532,6 +537,7 @@ def toc_morning():
         events=list(reversed(events)),
         latest_capacity=capacity_events[-1] if capacity_events else None,
         readiness_reasons=READINESS_BLOCKER_REASONS,
+        physical_readiness_reasons=PHYSICAL_READINESS_REASONS,
         event_labels=TOC_EVENT_LABELS,
         event_description=toc_event_description,
         candidates=candidate_result.candidates if candidate_result else (),
@@ -580,6 +586,17 @@ def toc_record_readiness():
     actor = require_toc_actor("production_manager", "administrator")
     business_date = requested_business_date()
     ready = request.form.get("decision") == "ready"
+    if ready:
+        try:
+            source = load_assembly_candidates(ReadOnlyOdooReader.from_env())
+        except Exception as exc:
+            abort(503, f"Nepavyko patikrinti Odoo pasirengimo: {exc}")
+        so_reference = request.form.get("so_reference", "").strip().upper()
+        candidate = next(
+            (item for item in source.candidates if item.so_reference == so_reference), None
+        )
+        if not candidate or not candidate.system_ready:
+            abort(400, "Fizinių komponentų negalima patvirtinti, kol Odoo dalis nėra READY.")
     try:
         written = TOC_STORE.record_readiness(
             so_reference=request.form.get("so_reference", ""),
@@ -589,7 +606,7 @@ def toc_record_readiness():
         )
     except ValueError as exc:
         abort(400, str(exc))
-    flash("Užsakymas pažymėtas READY." if ready else f"NOT READY priežastys užregistruotos: {len(written)}.")
+    flash("Fiziniai komponentai patvirtinti." if ready else f"Fiziniai trūkumai užregistruoti: {len(written)}.")
     return redirect(url_for("toc_morning", date=business_date.isoformat()))
 
 

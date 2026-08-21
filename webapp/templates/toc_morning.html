@@ -31,7 +31,7 @@
 
   <section class="panel">
     <p class="eyebrow">2 žingsnis</p><h2>READY patikra</h2>
-    <p class="muted">READY reiškia, kad visi reikalingi komponentai fiziškai yra DC.</p>
+    <p class="muted">Odoo dalį sistema patikrina automatiškai. Gamybos vadovė patvirtina tik Odoo nematomus fasadus, stalčius ir kitus fiziškai atvežtus komponentus.</p>
     {% if current_actor.role in ['production_manager', 'administrator'] %}
     <form method="post" action="{{ url_for('toc_start_readiness_check') }}">
       <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}">
@@ -51,24 +51,28 @@
     <div class="candidate-list">
     {% for candidate in candidates %}
       {% set readiness = readiness_states.get(candidate.so_reference, {'status': 'unchecked', 'reasons': {}}) %}
+      {% set final_ready = candidate.system_ready and readiness.status == 'ready' %}
       <article class="candidate-card">
         <div class="candidate-summary">
           <div><strong>{{ candidate.so_reference }}</strong>{% if candidate.urgent %}<span class="state waiting">SKUBUS</span>{% endif %}</div>
           <div><small>Išsiųsti iki</small><strong>{{ candidate.delivery_date or 'Nenurodyta' }}</strong></div>
           <div><small>Assembly</small><strong>{{ candidate.assembly_hours }} val. · {{ candidate.manufacturing_order_count }} MO</strong></div>
-          <span class="state {{ 'ready' if readiness.status == 'ready' else ('fail' if readiness.status == 'not_ready' else '') }}">{{ 'READY' if readiness.status == 'ready' else ('NOT READY' if readiness.status == 'not_ready' else 'NEPATIKRINTA') }}</span>
+          <div><small>Odoo</small><span class="state {{ 'ready' if candidate.system_ready else 'fail' }}">{{ 'READY' if candidate.system_ready else 'NOT READY' }}</span></div>
+          <div><small>Fizinė patikra</small><span class="state {{ 'ready' if readiness.status == 'ready' else ('fail' if readiness.status == 'not_ready' else '') }}">{{ 'PATVIRTINTA' if readiness.status == 'ready' else ('TRŪKSTA' if readiness.status == 'not_ready' else 'NEPATIKRINTA') }}</span></div>
+          <span class="state {{ 'ready' if final_ready else ('fail' if not candidate.system_ready or readiness.status == 'not_ready' else 'waiting') }}">{{ 'READY' if final_ready else ('LAUKIA ODOO' if not candidate.system_ready else ('NOT READY' if readiness.status == 'not_ready' else 'LAUKIA FIZINĖS PATIKROS')) }}</span>
         </div>
+        {% if candidate.system_blockers %}<p class="active-reasons">Odoo: {{ candidate.system_blockers|join('; ') }}</p>{% endif %}
         {% if readiness.status == 'not_ready' %}<p class="active-reasons">Aktyvu: {% for reason in readiness.reasons.values() %}{{ readiness_reasons.get(reason, reason) }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
         {% if current_actor.role in ['production_manager', 'administrator'] %}
         <div class="candidate-actions">
           <form method="post" action="{{ url_for('toc_record_readiness') }}">
             <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}"><input type="hidden" name="so_reference" value="{{ candidate.so_reference }}">
-            <button class="primary" name="decision" value="ready" {% if readiness.status == 'ready' %}disabled{% endif %}>{{ 'READY patvirtinta' if readiness.status == 'ready' else 'Patvirtinti READY' }}</button>
+            <button class="primary" name="decision" value="ready" {% if readiness.status == 'ready' or not candidate.system_ready %}disabled{% endif %}>{{ 'Fiziniai komponentai patvirtinti' if readiness.status == 'ready' else 'Patvirtinti fasadus, stalčius ir kitus fizinius komponentus' }}</button>
           </form>
           <details><summary>Pažymėti NOT READY</summary>
             <form method="post" action="{{ url_for('toc_record_readiness') }}" class="stack blocker-form">
               <input type="hidden" name="business_date" value="{{ business_date.isoformat() }}"><input type="hidden" name="so_reference" value="{{ candidate.so_reference }}">
-              <div class="reason-grid">{% for code, label in readiness_reasons.items() %}<label class="check-row"><input type="checkbox" name="reason_code" value="{{ code }}"> {{ label }}</label>{% endfor %}</div>
+              <div class="reason-grid">{% for code, label in physical_readiness_reasons.items() %}<label class="check-row"><input type="checkbox" name="reason_code" value="{{ code }}"> {{ label }}</label>{% endfor %}</div>
               <label>Komentaras kategorijai „Kita“<input name="comment"></label>
               <button class="danger" name="decision" value="not_ready">Išsaugoti NOT READY</button>
             </form>
