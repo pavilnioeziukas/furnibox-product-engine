@@ -13,6 +13,28 @@
   </form>
 </section>
 
+<section class="panel toc-signal">
+  <div class="plan-head">
+    <div>
+      <p class="eyebrow">MQ-001 · ŠIANDIENOS OPERACINIS SIGNALAS</p>
+      <h2>{{ daily_signal.label }}</h2>
+    </div>
+    <span class="state {{ 'ready' if daily_signal.code == 'READY_LOAD_COVERS_CAPACITY' else ('waiting' if daily_signal.code == 'INSUFFICIENT_DATA' else 'fail') }}">Ne galutinė constraint išvada</span>
+  </div>
+  <p class="lead">{{ daily_signal.conclusion }}</p>
+  <div class="plan-meta">
+    <span>C = {{ daily_signal.capacity_hours if daily_signal.capacity_hours is not none else 'nepatvirtinta' }} val.</span>
+    <span>Bendras krūvis {{ daily_signal.total_load_hours }} val.</span>
+    <span>Odoo READY {{ daily_signal.odoo_ready_hours }} val.</span>
+    <span>Galutinai READY {{ daily_signal.final_ready_hours }} val.</span>
+    <span>Odoo blokuota {{ daily_signal.odoo_blocked_hours }} val.</span>
+    <span>Laukia fizinės patikros {{ daily_signal.physical_pending_hours }} val.</span>
+    <span>Fiziškai blokuota {{ daily_signal.physical_blocked_hours }} val.</span>
+  </div>
+  <p><strong>Rekomenduojamas veiksmas:</strong> {{ daily_signal.action }}</p>
+  <p class="muted">Sisteminė MQ-001 išvada bus formuojama tik iš pasikartojančio SCHEDULE ir CONTROL rašto per kalibruojamą Furnibox stebėjimo langą.</p>
+</section>
+
 <div class="grid toc-grid">
   <section class="panel">
     <p class="eyebrow">1 žingsnis</p><h2>Dienos pajėgumas</h2>

@@ -49,6 +49,7 @@ from purchase_price_adjustments_import import (
 )
 from webapp.product_engine import ProductEngineSettings, load_actions
 from webapp.toc_foundation import READINESS_BLOCKER_REASONS, TocStore
+from webapp.toc_constraint import diagnose_daily_constraint_signal
 from webapp.toc_odoo import ReadOnlyOdooReader, load_assembly_candidates
 from webapp.toc_schedule import PRIORITY_RULE_VERSION, generate_daily_plan, serialize_plan
 
@@ -532,10 +533,17 @@ def toc_morning():
         candidate_result = load_assembly_candidates(ReadOnlyOdooReader.from_env())
     except Exception as exc:
         candidate_error = str(exc)
+    readiness_states = TOC_STORE.readiness_states()
+    latest_capacity = capacity_events[-1] if capacity_events else None
+    daily_signal = diagnose_daily_constraint_signal(
+        candidate_result.candidates if candidate_result else (), readiness_states,
+        capacity_hours=(float(latest_capacity.payload["capacity_hours"]) if latest_capacity else None),
+    )
     return render_template(
         "toc_morning.html", business_date=selected_date,
         events=list(reversed(events)),
-        latest_capacity=capacity_events[-1] if capacity_events else None,
+        latest_capacity=latest_capacity,
+        daily_signal=daily_signal,
         readiness_reasons=READINESS_BLOCKER_REASONS,
         physical_readiness_reasons=PHYSICAL_READINESS_REASONS,
         event_labels=TOC_EVENT_LABELS,
@@ -543,7 +551,7 @@ def toc_morning():
         candidates=candidate_result.candidates if candidate_result else (),
         candidate_result=candidate_result,
         candidate_error=candidate_error,
-        readiness_states=TOC_STORE.readiness_states(),
+        readiness_states=readiness_states,
         latest_plan=plan_events[-1] if plan_events else None,
         approved_plan_ids={item.payload.get("plan_event_id") for item in approval_events},
     )

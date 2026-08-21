@@ -6,7 +6,7 @@ Statusas: pradinis specifikacijos artefaktas, skirtas sprendimo logikai formaliz
 
 Katalogas aprašo ne ataskaitas ar KPI, o vadybinius klausimus, kurių atsakymai turi pakeisti konkretų sprendimą ir veiksmą. Pagal Eliyahu M. Goldratto *The Haystack Syndrome* logiką Product Engine turi būti projektuojamas tokia seka:
 
-`vadybinis klausimas → sprendimas → sprendimo logika → reikalingi duomenys → informacija → veiksmas`
+`vadybinis klausimas → sprendimo procedūra → reikalingi duomenys → informacija (atsakymas) → veiksmas`
 
 Duomenų prieinamumas nėra pradinis kriterijus klausimui pasirinkti. Pirmiausia formalizuojamas vertingas klausimas ir sprendimo procedūra; tik tada nustatoma, kurie reikalingi duomenys jau egzistuoja, gali būti išvesti arba turi būti pradėti registruoti.
 
@@ -98,6 +98,19 @@ Sprendimo procedūra turi vertinti ne vieną tašką, o eilių dydžio, senėjim
 | Duomenų kokybė neleidžia patikimai atskirti laukimo iki READY nuo laukimo po READY. | **Nepakankamas signalas.** |
 
 Constraint klasifikacija laikoma pakankama vadybiniam sprendimui tik tada, kai signalas kartojasi per sutartą langą ir alternatyvi hipotezė nėra geriau paaiškinama trūkstamu READY įvykiu. Pradinės kiekybinės ribos (pvz., eilės dienos, stebėjimų dalis, seniausio darbo amžius) turi būti kalibruojamos iš pirmųjų 3–4 savaičių patikimų duomenų; jų negalima iš anksto pateikti kaip empirinio fakto.
+
+#### 3.2.1. Dienos signalas nėra constraint išvada
+
+Pirmasis `SCHEDULE` pjūvis gali pateikti šiandienos operacinį signalą pagal patvirtintą pajėgumą, bendrą nepradėtą krūvį, Odoo pasirengimą ir fizinį READY patvirtinimą. Šis signalas atsako, ar šiandien Assembly gresia badavimas, tačiau vienos dienos būsena negali būti vadinama sistemos constraint.
+
+Naudojamos laikinos operacinės klasės:
+
+- **trūksta duomenų** – nepatvirtintas dienos pajėgumas;
+- **bendras krūvis mažesnis už pajėgumą** – šiandienos signalas nerodo Assembly pajėgumo apribojimo;
+- **Assembly badavimo rizika** – bendro krūvio pakanka, bet galutinai READY valandų mažiau už dienos pajėgumą;
+- **READY krūvis dengia pajėgumą** – dienos pajėgumas apsaugotas, tačiau dar neįrodyta, kad Assembly yra constraint.
+
+Šios klasės yra Furnibox operacinė sprendimo procedūra, o ne Goldratto knygoje pateikta universali klasifikacija. Sisteminei išvadai reikia pasikartojančio SCHEDULE ir CONTROL rašto, faktinių nuokrypių bei alternatyvių hipotezių patikros. 3–4 savaičių pradinis langas yra Furnibox kalibravimo hipotezė, ne knygos nustatyta konstanta.
 
 Vadybinis ritmas:
 
@@ -194,7 +207,7 @@ Numatomos, bet dar neprojektuojamos produkto architektūros dalys:
 5. **Decision Output** — išvada, paaiškinimas ir konkretus veiksmas vadovui.
 6. **What-if** (vėlesnis etapas) — poveikio modeliavimas pakeitus Assembly pajėgumą arba upstream paruošimo patikimumą.
 
-MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patvirtinti. Vien šio klausimo patvirtinimas neautorizuoja funkcionalumo implementacijos; architektūra formuluojama tik remiantis užbaigtu visų klausimų duomenų ir sprendimų kontraktu.
+MQ-001 sprendimo logika ir pradinis READY būsenos verslo apibrėžimas yra patvirtinti. Įgyvendintas pirmasis audituojamas `SCHEDULE` vertikalus pjūvis ir dienos operacinis signalas; sisteminė constraint klasifikacija lieka neįgyvendinta, kol nėra sukauptas ir sukalibruotas CONTROL istorinis raštas.
 
 ## MQ-001 likusios kalibravimo užduotys
 
