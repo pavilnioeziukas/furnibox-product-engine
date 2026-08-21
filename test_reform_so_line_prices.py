@@ -176,6 +176,35 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(result[key(target)].sku, target)
         self.assertEqual(result[key(target)].addons, (4, 0, 0, 0, 0, 0))
 
+    def test_analog_category_labels_do_not_block_identical_pricing(self):
+        target = "FPACK-EU-CAB03-WAL015"
+        first = self.pricing_rule("FPACK-EU-CAB01-WAL015", assembly=4)
+        second = PricingRule(
+            "FPACK-EU-CAB02-WAL015",
+            "DIFFERENT-ID",
+            "Different category label",
+            "Different Odoo category",
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        dataset = {"product_catalog": [{
+            "sku": sku,
+            "has_bom": True,
+            "product_type": "PREPACK CABINETS",
+            "name_2": "WALL Cabinet - W30 H80 D37",
+        } for sku in (target, first.sku, second.sku)]}
+
+        result = inherit_unambiguous_analog_rules(
+            {key(first.sku): first, key(second.sku): second},
+            dataset,
+        )
+
+        self.assertEqual(result[key(target)].addons, (4, 0, 0, 0, 0, 0))
+
     def test_shelf_pp_rule_may_inherit_across_width_only(self):
         target = "EUB-PACK-CAB03-SLF902-PP"
         analogs = [

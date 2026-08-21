@@ -486,13 +486,8 @@ def inherit_generated_apack_rules(rules, dataset):
 
 
 def _pricing_rule_signature(rule):
-    """Return every pricing-profile field except the assigned SKU."""
-    return (
-        rule.category_id,
-        rule.category_name,
-        rule.odoo_category,
-        *rule.addons,
-    )
+    """Return the numeric values that actually determine the price."""
+    return rule.addons
 
 
 def _normalized_product_name(value, ignore_width=False):
