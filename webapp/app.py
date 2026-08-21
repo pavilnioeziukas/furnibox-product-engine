@@ -48,6 +48,7 @@ from purchase_price_adjustments_import import (
     summarize_preview,
 )
 from webapp.product_engine import ProductEngineSettings, load_actions
+from webapp.toc_foundation import TocStore
 
 
 SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
@@ -120,6 +121,14 @@ for directory in (
         parents=True,
         exist_ok=True,
     )
+
+
+TOC_STORE = TocStore(SETTINGS.database_url)
+TOC_STORE.create_schema()
+TOC_STORE.bootstrap_admin(
+    SETTINGS.initial_admin_username,
+    SETTINGS.initial_admin_password,
+)
 
 
 if (
@@ -370,12 +379,13 @@ def utc_now() -> str:
 
 
 def auth_enabled() -> bool:
-    return bool(SETTINGS.web_password)
+    return TOC_STORE.has_users() or bool(SETTINGS.web_password)
 
 
 @app.context_processor
 def product_engine_context() -> dict[str, Any]:
-    return {"product_engine": SETTINGS}
+    actor = TOC_STORE.get_user(session["actor_id"]) if session.get("actor_id") else None
+    return {"product_engine": SETTINGS, "current_actor": actor}
 
 
 @app.before_request
@@ -391,7 +401,11 @@ def require_login():
     ):
         return None
 
-    if not session.get("authenticated"):
+    actor_id = session.get("actor_id")
+    individual_actor = TOC_STORE.get_user(actor_id) if actor_id else None
+    legacy_authenticated = session.get("authenticated") and not TOC_STORE.has_users()
+    if not individual_actor and not legacy_authenticated:
+        session.clear()
         return redirect(
             url_for(
                 "login",
@@ -410,15 +424,22 @@ def login():
     error = None
 
     if request.method == "POST":
-        expected = SETTINGS.web_password
+        actor = TOC_STORE.authenticate(
+            request.form.get("username", ""),
+            request.form.get("password", ""),
+        )
+        if actor:
+            session.clear()
+            session["actor_id"] = actor.id
+            return redirect(request.args.get("next") or url_for("index"))
 
-        if secrets.compare_digest(
-            request.form.get(
-                "password",
-                "",
-            ),
-            expected,
+        expected = SETTINGS.web_password
+        if (
+            not TOC_STORE.has_users()
+            and expected
+            and secrets.compare_digest(request.form.get("password", ""), expected)
         ):
+            session.clear()
             session["authenticated"] = True
 
             return redirect(
@@ -426,7 +447,7 @@ def login():
                 or url_for("index")
             )
 
-        error = "Neteisingas slaptažodis."
+        error = "Neteisingas naudotojo vardas arba slaptažodis."
 
     return render_template(
         "login.html",

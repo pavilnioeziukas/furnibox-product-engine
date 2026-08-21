@@ -20,8 +20,11 @@
         <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
       {% endif %}
     </nav>
-    {% if session.get('authenticated') %}
-      <form method="post" action="{{ url_for('logout') }}"><button class="link-button">Atsijungti</button></form>
+    {% if session.get('authenticated') or session.get('actor_id') %}
+      <form method="post" action="{{ url_for('logout') }}">
+        {% if current_actor %}<span>{{ current_actor.username }}</span>{% endif %}
+        <button class="link-button">Atsijungti</button>
+      </form>
     {% endif %}
   </header>
   <main class="shell">

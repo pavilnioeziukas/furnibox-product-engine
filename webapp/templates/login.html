@@ -4,9 +4,10 @@
 <section class="login-card">
   <p class="eyebrow">Vidinis įrankis</p>
   <h1>Prisijungimas</h1>
-  <p class="muted">Įveskite bendrą piloto slaptažodį.</p>
+  <p class="muted">Prisijunkite savo vardu, kad sprendimai turėtų aiškų auditą.</p>
   <form method="post" class="stack">
-    <label>Slaptažodis<input name="password" type="password" required autofocus></label>
+    <label>Naudotojo vardas<input name="username" autocomplete="username" autofocus></label>
+    <label>Slaptažodis<input name="password" type="password" autocomplete="current-password" required></label>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
     <button class="primary" type="submit">Prisijungti</button>
   </form>

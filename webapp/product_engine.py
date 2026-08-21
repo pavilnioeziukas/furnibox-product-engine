@@ -34,6 +34,9 @@ class ProductEngineSettings:
     shared_data_dir: Path
     web_secret: str
     web_password: str
+    database_url: str
+    initial_admin_username: str
+    initial_admin_password: str
     max_upload_mb: int
     environment: str
     enabled_actions: tuple[str, ...]
@@ -87,6 +90,17 @@ class ProductEngineSettings:
             ),
             web_password=_env(
                 "PRODUCT_ENGINE_WEB_PASSWORD", "FURNIBOX_WEB_PASSWORD"
+            ),
+            database_url=_env(
+                "DATABASE_URL",
+                None,
+                f"sqlite:///{(state_dir / 'toc_decision_support.db').as_posix()}",
+            ),
+            initial_admin_username=_env(
+                "PRODUCT_ENGINE_INITIAL_ADMIN_USERNAME", None
+            ),
+            initial_admin_password=_env(
+                "PRODUCT_ENGINE_INITIAL_ADMIN_PASSWORD", None
             ),
             max_upload_mb=int(
                 _env(
