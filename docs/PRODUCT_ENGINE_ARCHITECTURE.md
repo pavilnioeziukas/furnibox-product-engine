@@ -1,5 +1,7 @@
 # Product Engine architektūra
 
+Furnibox TOC sprendimų palaikymo plėtinio architektūra aprašyta atskirai: [`TOC_DECISION_SUPPORT_ARCHITECTURE.md`](TOC_DECISION_SUPPORT_ARCHITECTURE.md).
+
 ## Atsakomybės
 
 `Product Engine` karkasas valdo žiniatinklio sąsają, autentifikaciją, darbų

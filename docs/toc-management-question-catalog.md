@@ -986,4 +986,4 @@ Modulis neturi rekomenduoti papildomo žmogaus vien todėl, kad užsakymai vėlu
 
 ## Kitas specifikacijos etapas
 
-Visų aštuonių klausimų sprendimo logika ir pradinis duomenų kontraktas formalizuoti bei tarpusavyje peržiūrėti. Reform yra vienintelis klientas, jo nurodyta `Delivery Date` nėra Furnibox sąmoningai nukeliama, o užsakymai dėl Assembly pajėgumo neatmetami. Kitas etapas – remiantis šiuo katalogu suformuluoti Product Engine sprendimų palaikymo architektūrą, dar nepradedant funkcionalumo implementacijos.
+Visų aštuonių klausimų sprendimo logika ir pradinis duomenų kontraktas formalizuoti bei tarpusavyje peržiūrėti. Reform yra vienintelis klientas, jo nurodyta `Delivery Date` nėra Furnibox sąmoningai nukeliama, o užsakymai dėl Assembly pajėgumo neatmetami. Pagal šį katalogą suformuluota [`TOC Decision Support architektūra`](TOC_DECISION_SUPPORT_ARCHITECTURE.md); funkcionalumo implementacija dar nepradėta.
