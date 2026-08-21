@@ -300,7 +300,64 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(rules[key(apack)].addons, source.addons)
         self.assertEqual(
             component_cost_only_manufacture_products(dataset),
-            {key(apack), key(shelf_pp)},
+            {key(fpack), key(apack), key(shelf_pp)},
+        )
+
+    def test_internal_manufacture_cost_uses_bom_instead_of_direct_history(self):
+        fpack = "FPACK-EU-CAB01-BAS001"
+        part = "EU-SIDE-SREW-800X590-WW"
+        rules = {
+            key(fpack): self.pricing_rule(fpack),
+        }
+        rows, _ = calculate_boms(
+            {fpack: ("FPACK", [Item(part, 2)])},
+            {
+                key(fpack): ("Old direct FPACK", 999.0, "LAST PURCHASE PRICE"),
+                key(part): ("Cabinet part", 5.0, "CABINET PART CALCULATION"),
+            },
+            rules,
+            adjustment=0,
+            graph={key(fpack): [(part, 2)]},
+            component_cost_only_tops={fpack},
+        )
+
+        self.assertEqual(rows[0]["status"], "COMPLETE")
+        self.assertAlmostEqual(rows[0]["cost"], 10.0)
+        self.assertAlmostEqual(rows[0]["final"], 10.0)
+
+    def test_non_positive_direct_component_price_blocks_bom(self):
+        top = "FPACK-EU-CAB01-BAS001"
+        part = "PART-ZERO"
+        rows, _ = calculate_boms(
+            {top: ("FPACK", [Item(part, 1)])},
+            {key(part): ("Part", 0.0, "LAST PURCHASE PRICE")},
+            {key(top): self.pricing_rule(top)},
+            adjustment=0,
+            graph={key(top): [(part, 1)]},
+        )
+
+        self.assertEqual(rows[0]["status"], "BLOCKED")
+        self.assertIsNone(rows[0]["final"])
+        self.assertIn(
+            "Non-positive component price: PART-ZERO (0)",
+            rows[0]["issues"],
+        )
+
+    def test_configured_bom_without_target_components_is_blocked(self):
+        top = "EMPTY-BOM"
+        rows, _ = calculate_boms(
+            {top: ("CABINETS", [])},
+            {},
+            {key(top): self.pricing_rule(top)},
+            adjustment=0,
+            graph={},
+        )
+
+        self.assertEqual(rows[0]["status"], "BLOCKED")
+        self.assertIsNone(rows[0]["final"])
+        self.assertIn(
+            "Target BOM has no components: EMPTY-BOM",
+            rows[0]["issues"],
         )
 
     def test_missing_rule_inherits_from_unanimous_exact_analogs(self):
