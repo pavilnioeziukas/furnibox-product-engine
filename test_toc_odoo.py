@@ -88,7 +88,7 @@ def test_plan_execution_classifies_not_started_progress_and_completed():
                     {"id": 103, "origin": "S3"},
                 ],
                 "mrp.workorder": [
-                    {"id": 1, "production_id": [101, "MO1"], "state": "ready", "date_start": False, "date_finished": False},
+                    {"id": 1, "production_id": [101, "MO1"], "state": "ready", "date_start": "2026-08-21 08:00:00", "date_finished": False},
                     {"id": 2, "production_id": [102, "MO2"], "state": "progress", "date_start": "2026-08-21 08:00:00", "date_finished": False},
                     {"id": 3, "production_id": [103, "MO3"], "state": "done", "date_start": "2026-08-21 08:00:00", "date_finished": "2026-08-21 09:00:00"},
                 ],

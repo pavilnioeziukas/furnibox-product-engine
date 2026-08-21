@@ -239,10 +239,7 @@ def load_plan_execution(
             status, label = "unknown", "NĖRA DUOMENŲ"
         elif completed == len(rows):
             status, label = "completed", "UŽBAIGTA"
-        elif any(
-            str(row.get("state")) == "progress" or row.get("date_start")
-            for row in rows
-        ):
+        elif any(str(row.get("state")) == "progress" for row in rows):
             status, label = "in_progress", "VYKDOMA"
         else:
             status, label = "not_started", "NEPRADĖTA"
