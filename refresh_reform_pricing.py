@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
+from copy import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -158,6 +159,206 @@ def write_complete_only_price_workbook(
     workbook.save(destination)
 
 
+def _primary_pricing_layer(sku: str, category: str) -> str:
+    normalized = str(sku or "").strip().upper()
+    category = str(category or "").strip().upper()
+    if normalized.startswith("FPACK-"):
+        return "FPACK"
+    if normalized.startswith("APACK-"):
+        return "APACK"
+    if normalized.endswith("-A") and "-C-CAB" in normalized:
+        return "CABINETS-A"
+    if category == "ALL / CABINET SHELF":
+        return "SHELF"
+    if category == "ALL / CABINETS":
+        return "CABINETS"
+    return ""
+
+
+def write_pricing_chain_audit(
+    source: Path,
+    cabinet_part_source: Path,
+    destination: Path,
+    current_sales_prices: dict[str, float] | None = None,
+) -> None:
+    """Audit the five pricing layers that determine cabinet and shelf prices."""
+    current_sales_prices = {
+        str(sku or "").strip().casefold(): price
+        for sku, price in (current_sales_prices or {}).items()
+        if str(sku or "").strip() and isinstance(price, (int, float))
+    }
+    source_workbook = load_workbook(source, data_only=True, read_only=True)
+    prices = source_workbook["SO LINE PRICES"]
+    price_rows = prices.iter_rows(values_only=True)
+    price_header = next(price_rows)
+    price_columns = {value: index for index, value in enumerate(price_header)}
+
+    components = source_workbook["BOM COMPONENT COSTS"]
+    component_rows = components.iter_rows(values_only=True)
+    component_header = next(component_rows)
+    component_columns = {value: index for index, value in enumerate(component_header)}
+    by_top: dict[str, list[tuple]] = {}
+    for row in component_rows:
+        top = str(row[component_columns["Top BOM SKU"]] or "").strip()
+        if top:
+            by_top.setdefault(top.casefold(), []).append(row)
+
+    audited = []
+    for row in price_rows:
+        sku = str(row[price_columns["SKU"]] or "").strip()
+        category = str(row[price_columns["Product Category"]] or "").strip()
+        layer = _primary_pricing_layer(sku, category)
+        if not layer:
+            continue
+        details = by_top.get(sku.casefold(), [])
+        component_cost = row[price_columns["Component / Purchase Cost"]]
+        rollup = sum(
+            float(detail[component_columns["Component Cost"]] or 0)
+            for detail in details
+        )
+        non_positive = sum(
+            1
+            for detail in details
+            if isinstance(
+                detail[component_columns["Purchase Unit Price"]],
+                (int, float),
+            )
+            and detail[component_columns["Purchase Unit Price"]] <= 0
+        )
+        sources = Counter(
+            str(detail[component_columns["Cost Source"]] or "").strip()
+            for detail in details
+        )
+        status = str(row[price_columns["Status"]] or "").strip().upper()
+        final_price = row[price_columns["Final Reform SO Unit Price"]]
+        current_price = current_sales_prices.get(sku.casefold())
+        current_is_placeholder = (
+            layer in {"FPACK", "APACK"}
+            and isinstance(current_price, (int, float))
+            and current_price <= 0.01
+        )
+        price_change = (
+            final_price - current_price
+            if isinstance(final_price, (int, float))
+            and isinstance(current_price, (int, float))
+            and current_price > 0
+            and not current_is_placeholder
+            else None
+        )
+        price_change_percent = (
+            price_change / current_price
+            if price_change is not None
+            else None
+        )
+        if current_is_placeholder:
+            price_review = "INTERNAL PLACEHOLDER"
+        elif price_change_percent is None:
+            price_review = "NO ODOO BASELINE"
+        elif abs(price_change_percent) > 0.10:
+            price_review = "REVIEW >10%"
+        else:
+            price_review = "WITHIN 10%"
+        checks = []
+        if status != "COMPLETE":
+            checks.append(str(row[price_columns["Issues"]] or "Pricing BLOCKED"))
+        if not details:
+            checks.append("No component cost breakdown")
+        if not isinstance(component_cost, (int, float)) or component_cost <= 0:
+            checks.append("Non-positive component cost")
+        if non_positive:
+            checks.append(f"Non-positive component prices: {non_positive}")
+        if isinstance(component_cost, (int, float)) and abs(rollup - component_cost) > 1e-6:
+            checks.append(
+                f"Component roll-up mismatch: {rollup:.6f} != {component_cost:.6f}"
+            )
+        audited.append({
+            "layer": layer,
+            "sku": sku,
+            "category": category,
+            "component_cost": component_cost,
+            "addons": row[price_columns["Pricing Add-ons Total"]],
+            "adjustment": row[price_columns["Adjustment Amount"]],
+            "final": final_price,
+            "current_price": current_price,
+            "price_change": price_change,
+            "price_change_percent": price_change_percent,
+            "price_review": price_review,
+            "detail_count": len(details),
+            "cabinet_part_lines": sources["CABINET PART CALCULATION"],
+            "purchase_price_lines": sources["LAST PURCHASE PRICE"],
+            "rollup": rollup,
+            "status": "PASS" if not checks else "BLOCKED",
+            "issues": "; ".join(checks),
+        })
+    source_workbook.close()
+
+    cabinet_workbook = load_workbook(
+        cabinet_part_source, data_only=True, read_only=True
+    )
+    cabinet_sheet = cabinet_workbook["CABINET PART PRICES"]
+    cabinet_rows = max(cabinet_sheet.max_row - 1, 0)
+    cabinet_workbook.close()
+
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "SUMMARY"
+    summary.append(["Layer", "Rows", "PASS", "BLOCKED", "Price review >10%"])
+    summary.append(["CABINET PARTS", cabinet_rows, cabinet_rows, 0, "N/A"])
+    for layer in ("FPACK", "CABINETS", "SHELF", "APACK", "CABINETS-A"):
+        layer_rows = [row for row in audited if row["layer"] == layer]
+        summary.append([
+            layer,
+            len(layer_rows),
+            sum(row["status"] == "PASS" for row in layer_rows),
+            sum(row["status"] != "PASS" for row in layer_rows),
+            sum(row["price_review"] == "REVIEW >10%" for row in layer_rows),
+        ])
+    summary.append([])
+    summary.append(["Rule", "FPACK, APACK and Shelf-PP use recursive BOM cost"])
+    summary.append(["Odoo use", "Read-only purchase prices; Odoo is not changed"])
+    summary.append([
+        "Important",
+        "FPACK/APACK Odoo sales price 0.01 is an internal placeholder, not a benchmark",
+    ])
+
+    detail = workbook.create_sheet("PRIMARY CHAIN")
+    headers = [
+        "Layer", "SKU", "Product Category", "Component Cost", "Pricing Add-ons",
+        "Adjustment", "Final Reform Price", "Current Odoo Sales Price",
+        "Price Change", "Price Change %", "Price Review", "Component Lines",
+        "Cabinet Part Lines", "Odoo Purchase Price Lines", "Roll-up Cost",
+        "Audit Status", "Issues",
+    ]
+    detail.append(headers)
+    for row in audited:
+        detail.append([
+            row["layer"], row["sku"], row["category"], row["component_cost"],
+            row["addons"], row["adjustment"], row["final"], row["current_price"],
+            row["price_change"], row["price_change_percent"], row["price_review"],
+            row["detail_count"],
+            row["cabinet_part_lines"], row["purchase_price_lines"], row["rollup"],
+            row["status"], row["issues"],
+        ])
+    detail.freeze_panes = "A2"
+    detail.auto_filter.ref = detail.dimensions
+    for column in ("D", "E", "F", "G", "H", "I", "O"):
+        for cell in detail[column][1:]:
+            cell.number_format = '0.0000 [$€-x-euro2]'
+    for cell in detail["J"][1:]:
+        cell.number_format = "0.00%"
+    for sheet in (summary, detail):
+        for cell in sheet[1]:
+            font = copy(cell.font)
+            font.bold = True
+            cell.font = font
+    detail.column_dimensions["A"].width = 18
+    detail.column_dimensions["B"].width = 38
+    detail.column_dimensions["C"].width = 38
+    detail.column_dimensions["Q"].width = 80
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    workbook.save(destination)
+
+
 def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     """Publish the full Furnibox-to-Reform purchase price chain."""
     source_workbook = load_workbook(source, data_only=True, read_only=True)
@@ -245,6 +446,17 @@ def read_reconciliation_summary(path: Path) -> dict:
     return summary
 
 
+def read_current_sales_prices(path: Path) -> dict[str, float]:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    result = {}
+    for row in document.get("current_sales_prices") or []:
+        sku = str(row.get("sku") or "").strip()
+        price = row.get("price")
+        if sku and isinstance(price, (int, float)):
+            result[sku] = float(price)
+    return result
+
+
 def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     PRODUCTION_DIR.mkdir(parents=True, exist_ok=True)
@@ -253,6 +465,9 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
     odoo_map = PRODUCTION_DIR / "Odoo_MAP.xlsx"
     detection = PRODUCTION_DIR / "Product_Detection_All.xlsx"
     comparison = PRODUCTION_DIR / "MAP_Comparison.xlsx"
+    cabinet_part_prices = (
+        PRODUCTION_DIR / "Existing_and_New_Cabinet_Parts_Prices.xlsx"
+    )
     target_dataset = output_dir / "Furnibox_Target_Dataset.json"
     target_reconciliation = output_dir / "Target_Odoo_Reconciliation.json"
 
@@ -292,6 +507,14 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         )
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
         statuses, blocked = read_pricing_status(candidate)
+        write_pricing_chain_audit(
+            candidate,
+            cabinet_part_prices,
+            output_dir / "Pricing_Chain_Audit.xlsx",
+            current_sales_prices=read_current_sales_prices(
+                target_reconciliation
+            ),
+        )
 
         partial_name = (
             "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx"
@@ -331,6 +554,10 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
                 output_dir / "Reform_Pricing_Source.xlsx",
             )
+            shutil.copy2(
+                cabinet_part_prices,
+                output_dir / "Cabinet_Parts_Pricing.xlsx",
+            )
             print(f"\nSUSTABDYTA: {len(blocked)} BLOCKED pozicijos.")
             print(
                 "Pilnas galutinis failas nepateiktas; "
@@ -345,6 +572,10 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         shutil.copy2(
             PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
             output_dir / "Reform_Pricing_Source.xlsx",
+        )
+        shutil.copy2(
+            cabinet_part_prices,
+            output_dir / "Cabinet_Parts_Pricing.xlsx",
         )
         shutil.copy2(candidate, output_dir / "Reform_SO_Line_Prices.xlsx")
 
