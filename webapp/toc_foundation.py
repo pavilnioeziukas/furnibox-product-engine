@@ -32,6 +32,15 @@ READINESS_BLOCKER_REASONS = {
 }
 
 
+def normalize_database_url(database_url: str) -> str:
+    """Use the installed psycopg v3 driver for Railway-style PostgreSQL URLs."""
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    return database_url
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -76,6 +85,7 @@ event.listen(DecisionEvent, "before_delete", _deny_event_mutation)
 
 class TocStore:
     def __init__(self, database_url: str):
+        database_url = normalize_database_url(database_url)
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
         self.engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)

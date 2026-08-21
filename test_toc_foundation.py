@@ -1,7 +1,19 @@
 from datetime import date
 
 import pytest
-from webapp.toc_foundation import DecisionEvent, TocStore
+from webapp.toc_foundation import DecisionEvent, TocStore, normalize_database_url
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("postgresql://user:pass@host/db", "postgresql+psycopg://user:pass@host/db"),
+        ("postgres://user:pass@host/db", "postgresql+psycopg://user:pass@host/db"),
+        ("sqlite:///toc.db", "sqlite:///toc.db"),
+    ],
+)
+def test_database_url_uses_installed_psycopg_driver(given, expected):
+    assert normalize_database_url(given) == expected
 
 
 @pytest.fixture
