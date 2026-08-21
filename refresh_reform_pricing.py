@@ -159,7 +159,7 @@ def write_complete_only_price_workbook(
 
 
 def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
-    """Publish the real and Tamara-adjusted Furnibox purchase prices."""
+    """Publish the full Furnibox-to-Reform purchase price chain."""
     source_workbook = load_workbook(source, data_only=True, read_only=True)
     source_sheet = source_workbook["REFORM PRICE LIST"]
     rows = source_sheet.iter_rows(values_only=True)
@@ -172,6 +172,8 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
         ("Vendor / Supply Source", "Vendor / Supply Source"),
         ("Real Furnibox Purchase Price", "Real Furnibox Purchase Price"),
         ("Adjusted Furnibox Purchase Price", "Furnibox (Tamara) Purchase Price"),
+        ("Reform Markup Factor", "Reform Markup Factor"),
+        ("Reform Purchase Price", "Reform Purchase Price"),
         ("Status / BOM Source", "Status / BOM Source"),
     ]
 
@@ -180,7 +182,21 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     sheet.title = "FURNIBOX PURCHASE PRICES"
     sheet.append([output_name for _, output_name in selected])
     for row in rows:
-        sheet.append([row[columns[source_name]] for source_name, _ in selected])
+        published_row = [
+            row[columns[source_name]]
+            for source_name, _ in selected
+        ]
+        reform_price_index = 7
+        reform_price = published_row[reform_price_index]
+        adjusted_price = published_row[5]
+        markup_factor = published_row[6]
+        if (
+            not isinstance(reform_price, (int, float))
+            and isinstance(adjusted_price, (int, float))
+            and isinstance(markup_factor, (int, float))
+        ):
+            published_row[reform_price_index] = adjusted_price * markup_factor
+        sheet.append(published_row)
     source_workbook.close()
 
     sheet.freeze_panes = "A2"
@@ -189,10 +205,14 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     sheet.column_dimensions["B"].width = 50
     sheet.column_dimensions["C"].width = 28
     sheet.column_dimensions["D"].width = 35
-    for column in ("E", "F"):
+    for column in ("E", "F", "H"):
         sheet.column_dimensions[column].width = 28
         for cell in sheet[column][1:]:
             cell.number_format = '0.0000 [$€-x-euro2]'
+    sheet.column_dimensions["G"].width = 22
+    sheet.column_dimensions["I"].width = 30
+    for cell in sheet["G"][1:]:
+        cell.number_format = "0.0000"
 
     info = result.create_sheet("INFO")
     info.append(["Parameter", "Value"])
@@ -200,6 +220,14 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     info.append([
         "Furnibox (Tamara) Purchase Price",
         "Tamara-adjusted Furnibox purchase price used by Reform pricing",
+    ])
+    info.append([
+        "Reform Markup Factor",
+        "Multiplier applied to the Tamara-adjusted purchase price",
+    ])
+    info.append([
+        "Reform Purchase Price",
+        "Purchase price shown to Reform after applying the markup factor",
     ])
     info.append(["Odoo changed", "NO"])
     result.save(destination)

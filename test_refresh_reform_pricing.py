@@ -235,17 +235,28 @@ class RefreshReformPricingTests(unittest.TestCase):
             sheet.append([
                 "Internal Reference", "Name", "Price Source",
                 "Vendor / Supply Source", "Real Furnibox Purchase Price",
-                "Adjusted Furnibox Purchase Price", "Status / BOM Source",
+                "Adjusted Furnibox Purchase Price", "Reform Markup Factor",
+                "Reform Purchase Price", "Status / BOM Source",
             ])
-            sheet.append(["PART-1", "Part", "PO", "Vendor", 10, 12, "OK"])
+            sheet.append([
+                "PART-1", "Part", "PO", "Vendor", 10, 12, 1.05,
+                "=F2*G2", "OK",
+            ])
             workbook.save(source)
 
             write_furnibox_purchase_prices(source, destination)
             published = load_workbook(destination, data_only=True, read_only=True)
             result = published["FURNIBOX PURCHASE PRICES"]
             header = [cell.value for cell in result[1]]
-            self.assertIn("Furnibox (Tamara) Purchase Price", header)
-            self.assertEqual(result.cell(2, header.index("Furnibox (Tamara) Purchase Price") + 1).value, 12)
+            self.assertEqual(header, [
+                "Internal Reference", "Name", "Price Source",
+                "Vendor / Supply Source", "Real Furnibox Purchase Price",
+                "Furnibox (Tamara) Purchase Price", "Reform Markup Factor",
+                "Reform Purchase Price", "Status / BOM Source",
+            ])
+            self.assertEqual(result.cell(2, 6).value, 12)
+            self.assertEqual(result.cell(2, 7).value, 1.05)
+            self.assertEqual(result.cell(2, 8).value, 12.6)
             published.close()
 
 
