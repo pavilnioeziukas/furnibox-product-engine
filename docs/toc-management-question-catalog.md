@@ -41,7 +41,7 @@ Klausimas paliekamas kataloge tik tada, jei skirtingi jo atsakymai lemia skirtin
 4. **Kai Assembly turi paruoštų užsakymų, ar jis juos užbaigia tokiu tempu, kokio reikia pristatymo įsipareigojimams įvykdyti?**
 5. **Kokius užsakymus Assembly turi surinkti šiandien, kad būtų apsaugoti artimiausi išsiuntimai ir didžiausias Throughput?**
 6. **Kas konkrečiai mažina Assembly našų laiką, kai paruošto darbo eilė nėra tuščia?**
-7. **Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?**
+7. **Kiek laiku realizuojamo Throughput atidedame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?**
 8. **Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput: patikimesnis komponentų prieinamumas, geresnis komplektavimas ir prioritetai ar papildomas Assembly pajėgumas?**
 
 Klausimai detalizuojami po vieną. Žemiau formalizuojamas MQ-001; kitų klausimų formuluotės laikomos patvirtinta katalogo apimtimi, bet jų sprendimo logika dar nespecifikuota.
@@ -739,4 +739,129 @@ Modulis neturi WO blokavimo kalendorinės trukmės automatiškai vadinti prarast
 
 MQ-006 WO blokavimo ir realiai prarastų Assembly žmogaus valandų atskyrimo taisyklės patvirtintos. Toliau ta pačia pilna struktūra formalizuoti MQ-007 — „Kiek laiku išsiunčiamų užsakymų ir Throughput prarandame dėl neparuošto darbo, o kiek – dėl nepakankamo Assembly pajėgumo?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
 
-Pradinis MQ-007 duomenų kontekstas: Furnibox gali gauti pardavimo vertę ir medžiagų bei subrangovų sąnaudas SO line lygiu. Assembly reikalaujančių SO line Throughput gali būti apskaičiuojamas eilutėje ir agreguojamas į SO, laikotarpį bei priežastį. Ekonominėje išvadoje privaloma atskirti `Throughput at risk`, pavėluotą Throughput ir tikrai prarastą Throughput: vėliau išsiųstas SO nėra laikomas galutinai prarastu, jei klientas jo neatšaukė ar nesumažino.
+Pradinis MQ-007 duomenų kontekstas: Furnibox gali gauti pardavimo vertę ir medžiagų bei subrangovų sąnaudas SO line lygiu. Assembly reikalaujančių SO line Throughput gali būti apskaičiuojamas eilutėje ir agreguojamas į SO, laikotarpį bei priežastį. Vėluojantys Furnibox užsakymai visada vėliau išsiunčiami; dėl vėlavimo jie neatšaukiami ir nemažinami. Todėl ekonominėje išvadoje matuojamas `Throughput at risk` ir atidėtas / pavėluotas Throughput, o ne galutinai prarastas Throughput.
+
+---
+
+## MQ-007 — Kiek laiku realizuojamo Throughput atidedame?
+
+### 1. Vadybinis klausimas
+
+**Kiek laiku realizuojamo Throughput atidedame dėl to, kad užsakymai per vėlai tampa `READY FOR ASSEMBLY`, o kiek – dėl nepakankamo Assembly pajėgumo ar vykdymo po READY?**
+
+Kadangi pavėluoti Furnibox SO visada vėliau išsiunčiami, klausimas nematuoja galutinai prarastų pardavimų. Jis įvertina, kiek ekonominės vertės neišsiunčiama pažadėtu laiku, kiek dienų ji atidedama ir kuri proceso dalis sukėlė vėlavimą.
+
+### 2. Sprendimas, kurį atsakymas keičia
+
+| Ekonominio poveikio šaltinis | Keičiamas vadybinis sprendimas ir veiksmas |
+|---|---|
+| **Daugiausia Throughput atideda vėlyvas READY** | Investuoti vadovų dėmesį į MQ-003 dominuojančius komponentų ir paruošimo blokatorius; nedidinti Assembly pajėgumo vien dėl pavėluotų SO. |
+| **Daugiausia Throughput atideda Assembly po READY** | Gerinti MQ-005 seką, šalinti MQ-006 laiko nuostolius ir tik tada vertinti papildomą Assembly pajėgumą. |
+| **Reikšmingos abi priežastys** | Prioritetizuoti pakeitimą pagal didžiausią sumažinamą `Throughput × vėlavimo dienos` ir realų įgyvendinimo laiką. |
+| **Throughput at risk didelis, bet dar nevėluoja** | Imtis prevencinio veiksmo prieš `Delivery Date`, nelaukiant faktinio vėlavimo. |
+| **Užsakymų skaičius didelis, bet ekonominis poveikis mažas** | Neleisti atvejų kiekiui užgožti mažesnio skaičiaus didelės Throughput vertės SO. |
+
+### 3. Sprendimo logika
+
+#### 3.1. Throughput skaičiavimas
+
+Throughput skaičiuojamas SO line lygiu:
+
+```text
+SO line Throughput = SO line pardavimo vertė
+                     − medžiagų sąnaudos
+                     − subrangovų sąnaudos
+```
+
+Assembly darbo užmokestis ir kitos fiksuotos / laikotarpio sąnaudos į SO line Throughput neatimamos, jei jos nesikeičia dėl konkretaus papildomo pardavimo; jos priklauso Operating Expense. Assembly reikalaujančių SO line Throughput agreguojamas į SO ir priežasties kategoriją.
+
+#### 3.2. Ekonominio laiko būsenos
+
+| Būsena | Taisyklė |
+|---|---|
+| **Throughput at risk** | SO dar nevėluoja, bet pagal READY būseną, standartines valandas, dienos pajėgumą ir prioritetų eilę prognozuojamas išsiuntimas po `Delivery Date`. |
+| **Atidėtas / pavėluotas Throughput** | Faktinis išsiuntimas įvyko po SO `Delivery Date`; visa atitinkamų Assembly SO line Throughput vertė priskiriama pavėluotai. |
+| **Galutinai prarastas Throughput** | Furnibox dabartinėje situacijoje lygus nuliui, nes pavėluoti SO visada išsiunčiami ir nėra atšaukiami ar mažinami dėl vėlavimo. |
+
+Pagrindinis poveikio matas:
+
+```text
+Throughput delay-days = SO Throughput × darbo dienų skaičius
+                        nuo Delivery Date iki faktinio išsiuntimo
+```
+
+Šis matas leidžia atskirti, pavyzdžiui, vienos dienos nedidelio SO vėlavimą nuo savaitę vėluojančio didelės Throughput vertės SO. Jis nėra apskaitinis nuostolis eurais ir neturi būti rodomas kaip prarastas pelnas.
+
+#### 3.3. Vėlavimo priežasties priskyrimas
+
+| Stebimas raštas | Priežasties klasė |
+|---|---|
+| Užsakymas tapo READY per vėlai, kad pagal likusias standartines valandas ir tuo metu galiojusį pajėgumą galėtų būti užbaigtas iki `Delivery Date`. | **Upstream / late readiness.** |
+| Užsakymas tapo READY pakankamai anksti, tačiau teisingoje prioritetų eilėje nebuvo užbaigtas dėl nepakankamo `C`, sisteminių vykdymo nuostolių ar blokavimų. | **Assembly capacity / execution.** |
+| Užsakymas vėlai tapo READY ir po READY dar patyrė reikšmingą Assembly laukimą ar blokavimą. | **Mixed.** |
+| Užsakymas buvo READY ir bendro pajėgumo pakako, bet jį nustūmė nepatvirtinta arba neteisinga seka. | **Priority policy.** |
+| Įvykių nepakanka patikimam kontrafaktiniam terminui apskaičiuoti. | **Unknown / insufficient data.** |
+
+Priežastis priskiriama pagal tuo metu buvusią informaciją ir pajėgumą, ne pagal vėliau paaiškėjusius duomenis. Sistema turi išsaugoti skaičiavimo paaiškinimą; ji neturi pavėluotam SO automatiškai priskirti vienos priežasties vien todėl, kad paskutinis matomas etapas buvo Assembly.
+
+### 4. Required data (reikalingi duomenys)
+
+| Duomuo | Paskirtis |
+|---|---|
+| SO line pardavimo vertė | Throughput skaičiavimo bazė. |
+| SO line medžiagų ir subrangovų sąnaudos | Visiškai kintamoms sąnaudoms atimti. |
+| Požymis, kurioms SO line reikalingas Assembly | Ekonominę vertę susieti su analizuojamu srautu. |
+| SO–MO–WO–SO line sąsajos | Priskirti READY, Assembly ir vėlavimo įvykius ekonominei vertei. |
+| SO `Delivery Date` ir faktinis išsiuntimo timestamp | Nustatyti vėlavimo faktą ir trukmę. |
+| READY timestamp bei NOT READY priežasčių intervalai | Nustatyti upstream indėlį. |
+| BOM norminės Assembly valandos | Apskaičiuoti, kada darbas galėjo būti užbaigtas. |
+| Dienos pajėgumas `C`, prioritetų seka ir WO būsenos | Nustatyti Assembly capacity, execution ir policy indėlį. |
+
+### 5. Esami / išvedami / trūkstami duomenys
+
+#### Esami arba jau sutarti
+
+- SO line pardavimo vertė;
+- SO line medžiagų ir subrangovų sąnaudos;
+- SO `Delivery Date`;
+- BOM norminės Assembly valandos;
+- READY, WO ir dienos pajėgumo duomenų kontraktai iš MQ-001–MQ-006.
+
+#### Išvedami
+
+- SO line ir SO Throughput;
+- `Throughput at risk` eurais;
+- pavėluotas Throughput eurais ir darbo dienomis;
+- `Throughput delay-days`;
+- poveikio paskirstymas į `late readiness`, `Assembly capacity / execution`, `mixed`, `priority policy` ir `unknown`;
+- savaitinis ir mėnesinis ekonominio poveikio Pareto pagal priežastį.
+
+#### Trūkstami arba validuotini
+
+- patikimas faktinis išsiuntimo timestamp ir SO line kiekių susiejimas dalinių išsiuntimų atveju;
+- techninė SO line–MO–WO sąsajos validacija;
+- patvirtinimas, kad į SO line sąnaudas neįtraukiamos TOC požiūriu nekintamos Operating Expense sąnaudos;
+- kontrafaktinio „galėjo būti užbaigtas iki Delivery Date“ algoritmo validacija su realiais atvejais;
+- dalinio vėlavimo taisyklė, jei vieno SO dalis išsiunčiama laiku, o dalis vėliau.
+
+### 6. Būsimas Product Engine modulis
+
+MQ-007 naudos būsimo **TOC Constraint Diagnostic** modulio dalį **Throughput Delay Attribution**. Ji turės pateikti:
+
+```text
+Throughput at risk: ... €
+Pavėluotas Throughput: ... €
+Throughput delay-days: ... €·darbo dienos
+Late readiness dalis: ...
+Assembly capacity / execution dalis: ...
+Priority policy dalis: ...
+Mixed / unknown dalis: ...
+Didžiausio ekonominio poveikio konkretūs SO: ...
+Rekomenduojamas vadybinis fokusas: ...
+```
+
+Modulis neturi pavėluoto Throughput vadinti prarastu pelnu. Jo paskirtis – parodyti, kurio proceso pakeitimas labiausiai sumažintų ekonominės vertės vėlavimą ir apsaugotų pristatymo patikimumą.
+
+## Kitas specifikacijos etapas
+
+Patvirtinti, ar SO line sąnaudų skaičiavime Assembly darbo sąnaudos yra įtrauktos ir, jei taip, ar jas galima atskirti nuo medžiagų bei subrangovų sąnaudų. Tada užbaigti MQ-007 ir ta pačia pilna struktūra formalizuoti MQ-008 — „Koks mažiausias pakeitimas greičiausiai padidintų surenkamų užsakymų Throughput?“ — nekeičiant patvirtinto aštuonių klausimų sąrašo be naujo verslo aptarimo.
