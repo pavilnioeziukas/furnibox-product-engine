@@ -26,7 +26,10 @@ def read_production_snapshot(client: OdooClient) -> dict[str, Any]:
     )
     templates = client.search_read_all(
         "product.template", [],
-        ["id", "name", "categ_id", "route_ids", "type", "invoice_policy", "seller_ids"],
+        [
+            "id", "name", "categ_id", "route_ids", "type", "invoice_policy",
+            "seller_ids", "list_price",
+        ],
         context={"active_test": False},
     )
     template_by_id = {int(row["id"]): row for row in templates}
@@ -67,6 +70,7 @@ def read_production_snapshot(client: OdooClient) -> dict[str, Any]:
             "product_type_field": template.get("type") or "",
             "invoice_policy": template.get("invoice_policy") or "",
             "vendor_external_id": partner_xmlids.get(partner_id or 0, ""),
+            "current_sales_price": template.get("list_price"),
         })
 
     raw_boms = client.search_read_all(
