@@ -13,9 +13,11 @@
   <article class="panel">
     <div class="panel-head"><div><p class="eyebrow">1 žingsnis</p><h2>Reform BOM įvestis</h2></div><span class="state {{ 'ready' if upload else 'waiting' }}">{{ 'Paruošta' if upload else 'Laukiama' }}</span></div>
     {% if upload %}<p class="file-name">{{ upload.name }}</p>{% else %}<p class="muted">Dar neįkeltas joks .xlsx failas.</p>{% endif %}
-    <form class="upload" method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+    <form class="upload chunked-upload" method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" data-start-url="{{ url_for('start_chunked_upload') }}">
       <input id="file" name="file" type="file" accept=".xlsx" required>
       <button class="secondary" type="submit">Įkelti naują failą</button>
+      <div class="upload-progress" hidden><progress value="0" max="100"></progress><span>0%</span></div>
+      <p class="upload-message muted" aria-live="polite"></p>
     </form>
   </article>
   <article class="panel">
@@ -58,4 +60,7 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='chunked-upload.js') }}" defer></script>
 {% endblock %}

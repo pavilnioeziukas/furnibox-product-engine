@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import secrets
@@ -59,6 +60,7 @@ SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
 STATE_DIR = SETTINGS.state_dir
 
 UPLOAD_DIR = STATE_DIR / "uploads"
+CHUNK_UPLOAD_DIR = UPLOAD_DIR / ".chunks"
 RUN_DIR = STATE_DIR / "runs"
 
 PRODUCTION_DATASET_DIR = (
@@ -117,6 +119,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 for directory in (
     UPLOAD_DIR,
+    CHUNK_UPLOAD_DIR,
     RUN_DIR,
     PRODUCTION_DATASET_DIR,
     PURCHASE_PRICE_IMPORT_DIR,
@@ -125,6 +128,26 @@ for directory in (
         parents=True,
         exist_ok=True,
     )
+
+
+def _chunk_upload_paths(upload_id: str) -> tuple[Path, Path]:
+    try:
+        normalized = uuid.UUID(upload_id).hex
+    except (ValueError, AttributeError):
+        abort(404)
+    return (
+        CHUNK_UPLOAD_DIR / f"{normalized}.json",
+        CHUNK_UPLOAD_DIR / f"{normalized}.part",
+    )
+
+
+def _read_chunk_upload(upload_id: str) -> tuple[dict[str, Any], Path, Path]:
+    metadata_path, part_path = _chunk_upload_paths(upload_id)
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        abort(404, "Įkėlimo sesija nerasta.")
+    return metadata, metadata_path, part_path
 
 
 TOC_STORE = TocStore(SETTINGS.database_url)
@@ -2206,6 +2229,84 @@ def upload():
     return redirect(
         url_for("index")
     )
+
+
+@app.post("/upload/chunked")
+def start_chunked_upload():
+    payload = request.get_json(silent=True) or {}
+    filename = secure_filename(str(payload.get("filename", "")))
+    try:
+        size = int(payload.get("size", -1))
+    except (TypeError, ValueError):
+        size = -1
+
+    if not filename or Path(filename).suffix.lower() != ".xlsx":
+        abort(400, "Leidžiamas tik .xlsx failas.")
+    if size <= 0 or size > MAX_UPLOAD_BYTES:
+        abort(413, f"Failas turi būti ne didesnis kaip {SETTINGS.max_upload_mb} MB.")
+
+    upload_id = uuid.uuid4().hex
+    metadata_path, part_path = _chunk_upload_paths(upload_id)
+    metadata = {"filename": filename, "size": size, "created_at": utc_now()}
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    part_path.touch(exist_ok=False)
+    return jsonify({"upload_id": upload_id, "offset": 0})
+
+
+@app.put("/upload/chunked/<upload_id>")
+def append_chunked_upload(upload_id: str):
+    metadata, _, part_path = _read_chunk_upload(upload_id)
+    try:
+        offset = int(request.headers.get("Upload-Offset", "-1"))
+    except ValueError:
+        offset = -1
+    chunk = request.get_data(cache=False)
+    current_size = part_path.stat().st_size
+
+    if not chunk:
+        abort(400, "Tuščia failo dalis.")
+    if offset < 0 or offset + len(chunk) > metadata["size"]:
+        abort(400, "Neteisingos failo dalies ribos.")
+
+    if offset == current_size:
+        with part_path.open("ab") as target:
+            target.write(chunk)
+            target.flush()
+            os.fsync(target.fileno())
+        current_size += len(chunk)
+    elif offset + len(chunk) <= current_size:
+        with part_path.open("rb") as target:
+            target.seek(offset)
+            if target.read(len(chunk)) != chunk:
+                abort(409, "Failo dalis nesutampa su jau įkeltais duomenimis.")
+    else:
+        abort(409, f"Tikėtasi failo pozicijos {current_size}.")
+
+    return jsonify({"offset": current_size, "size": metadata["size"]})
+
+
+@app.post("/upload/chunked/<upload_id>/complete")
+def complete_chunked_upload(upload_id: str):
+    metadata, metadata_path, part_path = _read_chunk_upload(upload_id)
+    actual_size = part_path.stat().st_size
+    if actual_size != metadata["size"]:
+        abort(409, f"Įkelta {actual_size} iš {metadata['size']} baitų.")
+
+    expected_hash = str((request.get_json(silent=True) or {}).get("sha256", "")).lower()
+    if expected_hash:
+        digest = hashlib.sha256()
+        with part_path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(block)
+        actual_hash = digest.hexdigest()
+        if not secrets.compare_digest(actual_hash, expected_hash):
+            abort(409, "Įkelto failo kontrolinė suma nesutampa.")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    target = UPLOAD_DIR / f"{timestamp}_{metadata['filename']}"
+    part_path.replace(target)
+    metadata_path.unlink(missing_ok=True)
+    return jsonify({"filename": target.name, "size": actual_size})
 
 
 @app.post(

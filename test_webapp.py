@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 import io
 from pathlib import Path
 
@@ -40,6 +41,8 @@ def test_health_and_index(monkeypatch, tmp_path):
     assert client.get("/health").get_json() == {"status": "ok"}
     assert client.get("/").status_code == 200
     assert "Atnaujinti Reform kainodarą" in client.get("/").get_data(as_text=True)
+    assert "upload-progress" in client.get("/").get_data(as_text=True)
+    assert "chunked-upload.js" in client.get("/").get_data(as_text=True)
 
 
 def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):
@@ -87,6 +90,72 @@ def test_upload_accepts_xlsx_and_rejects_other_files(monkeypatch, tmp_path):
 
     assert accepted.status_code == 302
     assert rejected.status_code == 400
+
+
+def test_chunked_upload_persists_and_completes_atomically(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    client = webapp.app.test_client()
+    content = b"large Reform workbook contents"
+
+    started = client.post(
+        "/upload/chunked", json={"filename": "Reform BOM.xlsx", "size": len(content)}
+    )
+    upload_id = started.get_json()["upload_id"]
+    first = client.put(
+        f"/upload/chunked/{upload_id}",
+        data=content[:9],
+        headers={"Upload-Offset": "0", "Content-Type": "application/octet-stream"},
+    )
+    second = client.put(
+        f"/upload/chunked/{upload_id}",
+        data=content[9:],
+        headers={"Upload-Offset": "9", "Content-Type": "application/octet-stream"},
+    )
+    completed = client.post(
+        f"/upload/chunked/{upload_id}/complete",
+        json={"sha256": hashlib.sha256(content).hexdigest()},
+    )
+
+    assert started.status_code == 200
+    assert first.get_json()["offset"] == 9
+    assert second.get_json()["offset"] == len(content)
+    assert completed.status_code == 200
+    saved = webapp.UPLOAD_DIR / completed.get_json()["filename"]
+    assert saved.read_bytes() == content
+    assert saved.parent == tmp_path / "state" / "uploads"
+    assert not list(webapp.CHUNK_UPLOAD_DIR.iterdir())
+
+
+def test_chunked_upload_retries_are_idempotent_and_offsets_are_checked(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    client = webapp.app.test_client()
+    upload_id = client.post(
+        "/upload/chunked", json={"filename": "bom.xlsx", "size": 6}
+    ).get_json()["upload_id"]
+    headers = {"Upload-Offset": "0", "Content-Type": "application/octet-stream"}
+
+    assert client.put(f"/upload/chunked/{upload_id}", data=b"abc", headers=headers).status_code == 200
+    retry = client.put(f"/upload/chunked/{upload_id}", data=b"abc", headers=headers)
+    gap = client.put(
+        f"/upload/chunked/{upload_id}",
+        data=b"z",
+        headers={"Upload-Offset": "4", "Content-Type": "application/octet-stream"},
+    )
+
+    assert retry.get_json()["offset"] == 3
+    assert gap.status_code == 409
+    assert (webapp.CHUNK_UPLOAD_DIR / f"{upload_id}.part").read_bytes() == b"abc"
+
+
+def test_chunked_upload_validates_file_and_completion(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    client = webapp.app.test_client()
+
+    assert client.post("/upload/chunked", json={"filename": "bom.csv", "size": 3}).status_code == 400
+    upload_id = client.post(
+        "/upload/chunked", json={"filename": "bom.xlsx", "size": 3}
+    ).get_json()["upload_id"]
+    assert client.post(f"/upload/chunked/{upload_id}/complete", json={}).status_code == 409
 
 
 def test_release_without_dataset_does_not_lock_queue(monkeypatch, tmp_path):
