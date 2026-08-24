@@ -37,7 +37,7 @@ class FullCatalogShelfPpTests(unittest.TestCase):
             "EU-SREW-SHELF-563X564-WW-PP": [
                 {"component": "EU-SREW-SHELF-563X564-WW", "quantity": 1},
                 {"component": "N9565A", "quantity": 0.4},
-                {"component": "TERMO 90X48", "quantity": 2},
+                {"component": "TERMO 90X48", "quantity": 1},
             ]
         })
         operations = {
@@ -90,7 +90,7 @@ class FullCatalogShelfPpTests(unittest.TestCase):
         )
         self.assertEqual(
             [component.quantity for component in products[pp].components],
-            [1, 0.4, 2],
+            [1, 0.4, 1],
         )
         self.assertEqual(
             [operation.name for operation in products[pp].operations],

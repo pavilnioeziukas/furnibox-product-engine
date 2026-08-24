@@ -136,7 +136,18 @@ def build_shelf_pp_templates(
         if len(matching_parts) != 1:
             # Kiti -PP produktai (pvz., ne lentynos) nėra Shelf PP etalonai.
             continue
-        extras = tuple(row for row in normalized if row[0] != expected_part)
+        extras = tuple(
+            (
+                component,
+                1.0 if component == "TERMO 90X48"
+                else 0.4 if component == "L0377" or (
+                    component.startswith("N95") and component.endswith("A")
+                )
+                else quantity,
+            )
+            for component, quantity in normalized
+            if component != expected_part
+        )
         if len(extras) < 2 or any(quantity <= 0 for _, quantity in normalized):
             continue
         templates[parent] = ShelfPpTemplate(

@@ -98,7 +98,7 @@ class LegacyApackGenerationTests(unittest.TestCase):
         self.assertEqual(review[0]["sku"], pp)
         self.assertEqual(
             [(line["component"], line["quantity"]) for line in ready[0]["lines"]],
-            [(part, 1), ("N9569A", 0.4), ("TERMO 90X48", 2.0)],
+            [(part, 1), ("N9569A", 0.4), ("TERMO 90X48", 1.0)],
         )
         self.assertEqual(
             [operation["name"] for operation in ready[0]["operations"]],

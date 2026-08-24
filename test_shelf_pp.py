@@ -68,8 +68,23 @@ class ShelfPpTests(unittest.TestCase):
             [
                 {"component": canonical_part, "quantity": 1},
                 {"component": self.packaging, "quantity": 0.4},
-                {"component": self.sticker, "quantity": 2.0},
+                {"component": self.sticker, "quantity": 1.0},
             ],
+        )
+
+    def test_shelf_prepack_normalizes_tamara_packaging_quantities(self):
+        templates = build_shelf_pp_templates({
+            "US-SREW-SHELF-563x564-WW-PP": [
+                {"component": "US-SREW-SHELF-563x564-WW", "quantity": 1},
+                {"component": "N9565A", "quantity": 1},
+                {"component": "L0377", "quantity": 1},
+                {"component": "TERMO 90X48", "quantity": 2},
+            ],
+        })
+
+        self.assertEqual(
+            templates["US-SREW-SHELF-563X564-WW-PP"].extra_components,
+            (("N9565A", 0.4), ("L0377", 0.4), ("TERMO 90X48", 1.0)),
         )
 
     def test_missing_shelf_part_is_blocked(self):
@@ -153,7 +168,7 @@ class ShelfPpTests(unittest.TestCase):
                     "quantity": 1,
                 },
                 {"component": "N9570A", "quantity": 0.4},
-                {"component": "TERMO 90X48", "quantity": 2},
+                {"component": "TERMO 90X48", "quantity": 1},
             ],
         })
 

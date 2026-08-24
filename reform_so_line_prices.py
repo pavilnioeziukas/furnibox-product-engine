@@ -618,6 +618,19 @@ def _shelf_pp_base_category(sku):
     return "8"
 
 
+def _fpack_market_expression(sku, expression=""):
+    """Keep the FPACK base rule, but make its market pack code authoritative."""
+    tokens = [
+        token.strip()
+        for token in text(expression).split("+")
+        if token.strip() and token.strip() not in {"20.1", "21.1"}
+    ]
+    if not tokens:
+        tokens.append("3")
+    tokens.append(_target_top_market_pack_code(sku, "20.1", "21.1"))
+    return "+".join(dict.fromkeys(tokens))
+
+
 def load_tamara_pricing_reference(path=TAMARA_PRICING_REFERENCE_PATH):
     if not Path(path).is_file():
         raise ValueError(f"Nerastas Tamaros kainodaros etalonas: {path}")
@@ -666,6 +679,9 @@ def apply_target_business_category_rules(
         children = _target_component_skus(product)
 
         exact_expression = reference.get(key(sku))
+        if normalized.startswith("FPACK-"):
+            assign(sku, _fpack_market_expression(sku, exact_expression))
+            continue
         if exact_expression:
             assign(sku, exact_expression)
             continue

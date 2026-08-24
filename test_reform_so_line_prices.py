@@ -122,7 +122,7 @@ class ReformSoLinePriceTests(unittest.TestCase):
                     "components": [
                         {"sku": "SHELF-PART", "quantity": 1},
                         {"sku": "SHELF-PACK", "quantity": 0.4},
-                        {"sku": "TERMO 90X48", "quantity": 2},
+                        {"sku": "TERMO 90X48", "quantity": 1},
                     ],
                 },
                 {
@@ -205,6 +205,24 @@ class ReformSoLinePriceTests(unittest.TestCase):
         for sku, (expression, total) in expectations.items():
             self.assertEqual(rules[key(sku)].category_id, expression)
             self.assertAlmostEqual(sum(rules[key(sku)].addons), total)
+
+    def test_fpack_market_category_follows_sku_not_stale_reference(self):
+        products = [
+            {"sku": "FPACK-EU-CAB01-BAS001", "product_type": "PREPACK CABINETS"},
+            {"sku": "FPACK-US-CAB01-BAS001", "product_type": "PREPACK CABINETS"},
+        ]
+        reference = {
+            key("FPACK-EU-CAB01-BAS001"): "3+21.1",
+            key("FPACK-US-CAB01-BAS001"): "3+20.1",
+        }
+
+        rules, authoritative = apply_target_business_category_rules(
+            {}, {"products": products}, empty_config(), reference=reference
+        )
+
+        self.assertEqual(rules[key("FPACK-EU-CAB01-BAS001")].category_id, "3+20.1")
+        self.assertEqual(rules[key("FPACK-US-CAB01-BAS001")].category_id, "3+21.1")
+        self.assertEqual(authoritative, {key(product["sku"]) for product in products})
 
     def test_versioned_tamara_reference_wins_over_market_heuristic(self):
         sku = "EUB-C-CAB01-BNF001-A"
