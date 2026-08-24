@@ -6,6 +6,7 @@ from pathlib import Path
 
 from bom_import_manufacture_v5 import load_reform_bom_lines
 from bom_import_pilot_v2 import load_operation_templates
+from bom_type_inference_v3 import canon
 from manifest.manifest_writer import calculate_file_hash
 from output_paths import environment_slug
 from product_detection_v2 import (
@@ -14,11 +15,33 @@ from product_detection_v2 import (
 )
 from validated_dataset import write_validated_dataset
 from validated_dataset.full_bom_type_catalog import (
+    FullBomTypeCatalog,
     build_full_bom_type_catalog,
 )
 from validated_dataset.full_catalog_builder import (
     build_full_validated_dataset,
 )
+
+
+def prepare_diagnostic_catalog(
+    reform_lines: dict[str, list[dict]],
+    type_catalog: FullBomTypeCatalog,
+) -> tuple[dict[str, list[dict]], FullBomTypeCatalog, list[tuple[str, str]]]:
+    skipped = sorted(type_catalog.unresolved.items())
+    if not skipped:
+        return reform_lines, type_catalog, []
+
+    unresolved_skus = {sku for sku, _ in skipped}
+    filtered_lines = {
+        sku: lines
+        for sku, lines in reform_lines.items()
+        if canon(sku) not in unresolved_skus
+    }
+    resolved_catalog = FullBomTypeCatalog(
+        assignments=type_catalog.assignments,
+        unresolved={},
+    )
+    return filtered_lines, resolved_catalog, skipped
 
 
 def main() -> None:
@@ -29,6 +52,14 @@ def main() -> None:
         "--bom-input",
         type=Path,
         help="Konkretus Reform BOM .xlsx failas.",
+    )
+    parser.add_argument(
+        "--skip-unresolved-bom-types",
+        action="store_true",
+        help=(
+            "Diagnostiniam Dataset praleidžia BOM tėvus, kurių tipas "
+            "neišspręstas. Nenaudoti release ar importui."
+        ),
     )
     args = parser.parse_args()
 
@@ -57,6 +88,16 @@ def main() -> None:
             base / "output" / "production" / "Odoo_MAP.xlsx"
         ),
     )
+    skipped: list[tuple[str, str]] = []
+    if args.skip_unresolved_bom_types:
+        reform_lines, type_catalog, skipped = prepare_diagnostic_catalog(
+            reform_lines,
+            type_catalog,
+        )
+        if skipped:
+            print("\nDIAGNOSTINIS DATASET — PRALEISTI NEIŠSPRĘSTI BOM:")
+            for sku, reason in skipped:
+                print(f"- {sku}: {reason}")
     operation_templates = load_operation_templates(
         base
         / "output"
@@ -67,7 +108,9 @@ def main() -> None:
     dataset = build_full_validated_dataset(
         environment=environment,
         batch_reference=(
-            f"{date.today():%Y%m%d}_FULL_{reform_path.stem}"
+            f"{date.today():%Y%m%d}_"
+            f"{'DIAGNOSTIC' if args.skip_unresolved_bom_types else 'FULL'}_"
+            f"{reform_path.stem}"
         ),
         source_file=reform_path,
         source_file_hash=calculate_file_hash(reform_path),
@@ -88,6 +131,7 @@ def main() -> None:
         sum(product.operation_count for product in dataset.products),
     )
     print("BOM tipai neišspręsti:", type_catalog.unresolved_count)
+    print("Diagnostikai praleisti BOM:", len(skipped))
     print("Failas:", output_path)
 
 

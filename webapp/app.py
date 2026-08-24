@@ -320,6 +320,21 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
             "{upload}",
         ],
     },
+    "diagnostic_validated_dataset": {
+        "title": "Generuoti diagnostinį Validated Dataset",
+        "description": (
+            "Tik SO tiekimo diagnostikai sukuria Dataset, aiškiai "
+            "praleisdamas neišspręsto BOM tipo pozicijas. "
+            "Nenaudoti BOM release ar Odoo importui."
+        ),
+        "script": "generate_full_validated_dataset.py",
+        "requires_upload": True,
+        "args": [
+            "--bom-input",
+            "{upload}",
+            "--skip-unresolved-bom-types",
+        ],
+    },
     "product_import": {
         "title": "Paruošti produktų importo failą",
         "description": (

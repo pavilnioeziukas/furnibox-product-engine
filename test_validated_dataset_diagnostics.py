@@ -14,6 +14,7 @@ from validated_dataset.full_catalog_builder import (
     FullCatalogBuildError,
     build_full_validated_dataset,
 )
+from generate_full_validated_dataset import prepare_diagnostic_catalog
 
 
 def test_unresolved_bom_type_error_lists_skus_and_reasons():
@@ -44,3 +45,21 @@ def test_unresolved_bom_type_error_lists_skus_and_reasons():
         "- SKU-M: Aktyvus Odoo BOM turi neatpažintą tipą.",
         "- SKU-Z: Nerastas patikimas analogas.",
     ]
+
+
+def test_diagnostic_catalog_skips_only_unresolved_bom_parents():
+    catalog = FullBomTypeCatalog(
+        assignments={"SKU-OK": object()},
+        unresolved={"SKU-SKIP": "Reikia žmogaus peržiūros."},
+    )
+    lines = {
+        "SKU-OK": [{"component": "COMPONENT"}],
+        "sku-skip": [{"component": "OTHER"}],
+    }
+
+    filtered, resolved_catalog, skipped = prepare_diagnostic_catalog(lines, catalog)
+
+    assert filtered == {"SKU-OK": [{"component": "COMPONENT"}]}
+    assert resolved_catalog.assignments == catalog.assignments
+    assert resolved_catalog.unresolved == {}
+    assert skipped == [("SKU-SKIP", "Reikia žmogaus peržiūros.")]
