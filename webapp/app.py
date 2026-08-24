@@ -226,6 +226,24 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
             "{output_dir}",
         ],
     },
+    "so_reservation_audit": {
+        "title": "Audituoti SO komponentų rezervacijas",
+        "description": (
+            "Tiesiogiai ir tik skaitymo būdu patikrina konkretaus SO "
+            "gamybos užsakymų komponentų poreikį, rezervuotą kiekį ir trūkumą. "
+            "Validated Dataset nereikalingas."
+        ),
+        "script": "run_so_reservation_audit.py",
+        "requires_upload": False,
+        "requires_so_number": True,
+        "collect_changed_outputs": False,
+        "args": [
+            "--so-number",
+            "{so_number}",
+            "--output-dir",
+            "{output_dir}",
+        ],
+    },
     "odoo_snapshot": {
         "title": "Nuskaityti Odoo duomenis",
         "description": (
