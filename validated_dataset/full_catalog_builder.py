@@ -65,9 +65,16 @@ def build_full_validated_dataset(
         )
 
     if type_catalog.unresolved_count:
+        details = "\n".join(
+            f"- {sku}: {reason}"
+            for sku, reason in sorted(
+                type_catalog.unresolved.items()
+            )
+        )
         raise FullCatalogBuildError(
             "Yra neišspręstų BOM tipų: "
-            f"{type_catalog.unresolved_count}"
+            f"{type_catalog.unresolved_count}\n"
+            f"{details}"
         )
 
     parents = set(reform_lines)
