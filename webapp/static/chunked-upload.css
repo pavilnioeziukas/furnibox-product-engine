@@ -1,0 +1,31 @@
+.chunked-upload {
+  flex-wrap: wrap;
+}
+
+.upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.upload-progress[hidden] {
+  display: none;
+}
+
+.upload-progress progress {
+  flex: 1;
+  height: 12px;
+  accent-color: var(--green);
+}
+
+.upload-progress span {
+  min-width: 3em;
+  font-weight: 800;
+  text-align: right;
+}
+
+.upload-message {
+  width: 100%;
+  margin: 0;
+}
