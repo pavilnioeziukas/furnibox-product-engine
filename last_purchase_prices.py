@@ -67,6 +67,26 @@ def reform_markup_factor(vendor):
     return 1.0
 
 
+def include_adjustment_only_prices(purchase_prices, purchase_price_adjustments):
+    """Prideda Tamaros kainas net kai produktas dar neturi pirkimo Odoo."""
+    rows = [dict(row) for row in purchase_prices]
+    existing_skus = {
+        str(row.get("Internal Reference") or "").strip().casefold()
+        for row in rows
+        if str(row.get("Internal Reference") or "").strip()
+    }
+
+    for sku in purchase_price_adjustments:
+        normalized_sku = str(sku or "").strip()
+        if not normalized_sku or normalized_sku.casefold() in existing_skus:
+            continue
+        rows.append({column: "" for column in EXPORT_COLUMNS})
+        rows[-1]["Internal Reference"] = normalized_sku
+        existing_skus.add(normalized_sku.casefold())
+
+    return rows
+
+
 def build_last_purchase_prices(purchase_lines, products):
     """Sujungia naujausią PO eilutę su tikrais product.product laukais."""
     products_by_id = {row["id"]: row for row in products}
@@ -139,6 +159,15 @@ def write_purchase_prices(
     if purchase_price_adjustments is None:
         purchase_price_adjustments = load_adjustments(PURCHASE_PRICE_ADJUSTMENTS_PATH)
 
+    effective_purchase_prices = include_adjustment_only_prices(
+        purchase_prices,
+        purchase_price_adjustments,
+    )
+    adjustments_by_sku = {
+        str(sku or "").strip().casefold(): adjustment
+        for sku, adjustment in purchase_price_adjustments.items()
+    }
+
     workbook = Workbook()
 
     info = workbook.active
@@ -150,6 +179,7 @@ def write_purchase_prices(
         ("User", metadata["login"]),
         ("Odoo UID", metadata["uid"]),
         ("Products with Last Purchase Price", len(purchase_prices)),
+        ("Products available for Reform pricing", len(effective_purchase_prices)),
         ("Purchase price adjustments source", str(PURCHASE_PRICE_ADJUSTMENTS_PATH)),
         ("Purchase price adjustments loaded", len(purchase_price_adjustments)),
     ]:
@@ -167,10 +197,10 @@ def write_purchase_prices(
 
     applied_adjustments = 0
 
-    for row in purchase_prices:
+    for row in effective_purchase_prices:
         sku = str(row.get("Internal Reference") or "").strip()
         real_price = row.get("Last Purchase Price")
-        adjustment = purchase_price_adjustments.get(sku)
+        adjustment = adjustments_by_sku.get(sku.casefold())
 
         if adjustment:
             adjusted_price = adjustment["adjusted_purchase_price"]
@@ -206,7 +236,7 @@ def write_purchase_prices(
     prices = workbook.create_sheet("COMPONENT PRICES")
     invalid_columns = [
         key
-        for row in purchase_prices
+        for row in effective_purchase_prices
         for key in row
         if key not in EXPORT_COLUMNS
     ]
@@ -217,7 +247,7 @@ def write_purchase_prices(
         )
 
     prices.append(OUTPUT_COLUMNS)
-    for row_number, row in enumerate(purchase_prices, start=2):
+    for row_number, row in enumerate(effective_purchase_prices, start=2):
         prices.append(
             [row.get(column, "") for column in EXPORT_COLUMNS]
             + [None, None, None]
