@@ -147,16 +147,31 @@ def load_prices(path: Path):
             if not sku:
                 continue
 
-            # Tamaros Adjusted Price yra medžiagos savikaina, nuo kurios
-            # galutinis Reform SO tarifas skaičiuojamas pridedant BOM darbus
-            # ir kitus kainodaros priedus. Reform Purchase Price čia netinka:
-            # jame jau gali būti tiekėjo koeficientas, todėl medžiaga būtų
-            # pabranginta dar prieš BOM kainodaros priedus.
             price = row[
-                h["Adjusted Furnibox Purchase Price"] - 1
+                h["Reform Purchase Price"] - 1
             ]
-            if not isinstance(price, (int, float)):
-                continue
+
+            # H stulpelis yra autoritetinga Reform pirkimo kaina. Kai Excel
+            # formulės rezultatas faile neišsaugotas kaip skaitinė reikšmė,
+            # atkuriame tą pačią formulę iš Tamaros kainos ir koeficiento.
+            if not isinstance(
+                price,
+                (int, float),
+            ):
+                adjusted = row[
+                    h["Adjusted Furnibox Purchase Price"] - 1
+                ]
+                factor = row[
+                    h["Reform Markup Factor"] - 1
+                ]
+
+                if (
+                    not isinstance(adjusted, (int, float))
+                    or not isinstance(factor, (int, float))
+                ):
+                    continue
+
+                price = adjusted * factor
 
             price_source = ""
             if source_column is not None:

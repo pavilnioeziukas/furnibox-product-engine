@@ -225,7 +225,7 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(rules[key("FPACK-US-CAB01-BAS001")].category_id, "3+21.1")
         self.assertEqual(authoritative, {key(product["sku"]) for product in products})
 
-    def test_bom_material_cost_uses_tamara_adjusted_price_not_reform_price(self):
+    def test_bom_material_cost_uses_reform_purchase_price(self):
         with tempfile.TemporaryDirectory() as directory:
             price_path = Path(directory) / "Reform_Final_Prices.xlsx"
             workbook = Workbook()
@@ -251,7 +251,7 @@ class ReformSoLinePriceTests(unittest.TestCase):
 
             prices = load_prices(price_path)
 
-            self.assertEqual(prices[key("MATERIAL-1")][1], 10.0)
+            self.assertEqual(prices[key("MATERIAL-1")][1], 10.5)
 
     def test_versioned_tamara_reference_wins_over_market_heuristic(self):
         sku = "EUB-C-CAB01-BNF001-A"
