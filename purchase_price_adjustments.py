@@ -9,6 +9,12 @@ DEFAULT_DOCUMENT = {
     "adjustments": {},
 }
 
+DEFAULT_ADJUSTMENTS_PATH = (
+    Path(__file__).resolve().parent
+    / "manifest"
+    / "purchase_price_adjustments.json"
+)
+
 
 def normalize_sku(value: Any) -> str:
     return str(value or "").strip()
@@ -43,7 +49,7 @@ def validate_adjustment(sku: str, document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_adjustments(path: Path) -> dict[str, dict[str, Any]]:
+def _load_document(path: Path) -> dict[str, dict[str, Any]]:
     if not path.exists():
         return {}
 
@@ -76,6 +82,17 @@ def load_adjustments(path: Path) -> dict[str, dict[str, Any]]:
         result[sku] = validate_adjustment(sku, raw_document)
 
     return result
+
+
+def load_adjustments(path: Path) -> dict[str, dict[str, Any]]:
+    """Loads approved defaults and lets persisted UI corrections override them."""
+    defaults = (
+        _load_document(DEFAULT_ADJUSTMENTS_PATH)
+        if path.resolve() != DEFAULT_ADJUSTMENTS_PATH.resolve()
+        else {}
+    )
+    defaults.update(_load_document(path))
+    return defaults
 
 
 def save_adjustments(
