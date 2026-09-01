@@ -26,6 +26,7 @@ from reform_so_line_prices import (
     key,
     load_target_dataset_graph,
     load_tamara_pricing_reference,
+    load_prices,
 )
 from manifest.manifest_writer import calculate_file_hash
 from so_pricing_rules import (
@@ -223,6 +224,34 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(rules[key("FPACK-EU-CAB01-BAS001")].category_id, "3+20.1")
         self.assertEqual(rules[key("FPACK-US-CAB01-BAS001")].category_id, "3+21.1")
         self.assertEqual(authoritative, {key(product["sku"]) for product in products})
+
+    def test_bom_material_cost_uses_tamara_adjusted_price_not_reform_price(self):
+        with tempfile.TemporaryDirectory() as directory:
+            price_path = Path(directory) / "Reform_Final_Prices.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "REFORM PRICE LIST"
+            sheet.append([
+                "Internal Reference",
+                "Name",
+                "Adjusted Furnibox Purchase Price",
+                "Reform Markup Factor",
+                "Reform Purchase Price",
+                "Price Source",
+            ])
+            sheet.append([
+                "MATERIAL-1",
+                "Material",
+                10.0,
+                1.05,
+                10.5,
+                "LAST PURCHASE PRICE",
+            ])
+            workbook.save(price_path)
+
+            prices = load_prices(price_path)
+
+            self.assertEqual(prices[key("MATERIAL-1")][1], 10.0)
 
     def test_versioned_tamara_reference_wins_over_market_heuristic(self):
         sku = "EUB-C-CAB01-BNF001-A"
@@ -618,7 +647,11 @@ class ReformSoLinePriceTests(unittest.TestCase):
 
         self.assertEqual(generated[key(assembled)], [(hrd_a, 1.0), (apack, 1.0)])
         self.assertEqual(generated[key(hrd_a)], [("HRD-PART", 2.0)])
-        self.assertEqual(generated[key(apack)], [("CABINET-PART", 3.0)])
+        self.assertEqual(generated[key(apack)], [
+            ("CABINET-PART", 3.0),
+            ("N PACK EU", 1.0),
+            ("STICKER UP", 2.0),
+        ])
 
         def rule(sku, assembly=0):
             return PricingRule(sku, "", "", "", assembly, 0, 0, 0, 0, 0)
@@ -634,13 +667,55 @@ class ReformSoLinePriceTests(unittest.TestCase):
         prices = {
             key("HRD-PART"): ("Hardware", 4.0, "DIRECT PRICE"),
             key("CABINET-PART"): ("Cabinet part", 10.0, "DIRECT PRICE"),
+            key("TERMO 90X48"): ("Label", 0.1, "DIRECT PRICE"),
+            key("EU FP PACK"): ("Flat pack", 1.0, "DIRECT PRICE"),
+            key("N PACK EU"): ("Assembled pack", 2.0, "DIRECT PRICE"),
+            key("STICKER UP"): ("Sticker", 0.05, "DIRECT PRICE"),
         }
 
         rows, _ = calculate_boms(boms, prices, rules, adjustment=0, graph=generated)
         by_sku = {row["sku"]: row for row in rows}
-        self.assertEqual(by_sku[cabinet]["cost"], 38.0)
-        self.assertEqual(by_sku[assembled]["cost"], 38.0)
+        self.assertAlmostEqual(by_sku[cabinet]["cost"], 39.1)
+        self.assertAlmostEqual(by_sku[assembled]["cost"], 40.1)
+        self.assertGreater(by_sku[assembled]["cost"], by_sku[cabinet]["cost"])
         self.assertEqual(sum(by_sku[assembled]["addons"]), 5.5)
+
+    def test_generated_fpack_and_apack_use_tamara_market_packaging(self):
+        fpack_eu = "FPACK-EU-CAB03-BNF002"
+        fpack_us = "FPACK-US-CAB03-BNF002"
+        graph = {
+            key(fpack_eu): [("EU-PART", 1)],
+            key(fpack_us): [("US-PART", 1)],
+        }
+        products = [
+            {"sku": fpack_eu, "product_category": "PREPACK CABINETS"},
+            {"sku": fpack_us, "product_category": "PREPACK CABINETS"},
+        ]
+
+        generated = add_generated_boms_to_graph(graph, products)
+
+        self.assertEqual(generated[key(fpack_eu)], [
+            ("EU-PART", 1.0),
+            ("TERMO 90X48", 1.0),
+            ("EU FP PACK", 1.0),
+        ])
+        self.assertEqual(generated[key("APACK-EU-C-CAB03-BNF002-A")], [
+            ("EU-PART", 1.0),
+            ("N PACK EU", 1.0),
+            ("STICKER UP", 2.0),
+        ])
+        self.assertEqual(generated[key(fpack_us)], [
+            ("US-PART", 1.0),
+            ("TERMO 90X48", 1.0),
+            ("L0377", 1.0),
+            ("US FP PACK", 1.0),
+        ])
+        self.assertEqual(generated[key("APACK-US-C-CAB03-BNF002-A")], [
+            ("US-PART", 1.0),
+            ("N PACK US", 1.0),
+            ("L0377", 1.0),
+            ("STICKER UP", 2.0),
+        ])
 
     def test_bom_category_breakdown_and_non_bom_logic(self):
         with tempfile.TemporaryDirectory() as directory:

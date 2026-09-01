@@ -147,7 +147,18 @@ class LegacyApackGenerationTests(unittest.TestCase):
 
         self.assertIn(apack, generated_apacks)
         self.assertIn(apack, parents)
-        self.assertEqual(lines[apack], lines[fpack])
+        self.assertEqual(lines[fpack], [
+            {"component": "USB-C-CAB01-WAL045-BOT", "quantity": 1},
+            {"component": "TERMO 90X48", "quantity": 1.0},
+            {"component": "L0377", "quantity": 1.0},
+            {"component": "US FP PACK", "quantity": 1.0},
+        ])
+        self.assertEqual(lines[apack], [
+            {"component": "USB-C-CAB01-WAL045-BOT", "quantity": 1},
+            {"component": "N PACK US", "quantity": 1.0},
+            {"component": "L0377", "quantity": 1.0},
+            {"component": "STICKER UP", "quantity": 2.0},
+        ])
         self.assertEqual(
             lines[f"{cabinet}-A"][0]["component"],
             apack,

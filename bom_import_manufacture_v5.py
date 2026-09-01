@@ -87,6 +87,47 @@ KIT_PARENT_CATEGORIES = {
     "CABINET SHELF",
 }
 
+# Tamaros BOM PAP etalonas. FPACK ir surinktas APACK naudoja skirtingą
+# fizinę pakuotę, todėl APACK negali būti akla FPACK BOM kopija.
+FPACK_PACKAGING_PROFILES = {
+    "EU": [("TERMO 90X48", 1.0), ("EU FP PACK", 1.0)],
+    "US": [
+        ("TERMO 90X48", 1.0),
+        ("L0377", 1.0),
+        ("US FP PACK", 1.0),
+    ],
+}
+APACK_PACKAGING_PROFILES = {
+    "EU": [("N PACK EU", 1.0), ("STICKER UP", 2.0)],
+    "US": [("N PACK US", 1.0), ("L0377", 1.0), ("STICKER UP", 2.0)],
+}
+
+
+def _fpack_market(sku: str) -> str:
+    normalized = canon(sku)
+    if normalized.startswith("FPACK-EU-"):
+        return "EU"
+    if normalized.startswith("FPACK-US-"):
+        return "US"
+    raise ValueError(f"Nenustatyta FPACK pakuotės rinka: {normalized}")
+
+
+def _with_packaging(lines: list[dict], profile: list[tuple[str, float]]) -> list[dict]:
+    """Prideda privalomus pakuotės komponentus, nedubliuodama esamų."""
+    result = [dict(line) for line in lines]
+    by_component = {
+        canon(line.get("component")): index
+        for index, line in enumerate(result)
+        if canon(line.get("component"))
+    }
+    for component, quantity in profile:
+        normalized = canon(component)
+        if normalized in by_component:
+            result[by_component[normalized]]["quantity"] = float(quantity)
+        else:
+            result.append({"component": normalized, "quantity": float(quantity)})
+    return result
+
 
 def is_kit_bom_parent(sku: str, product: dict) -> bool:
     """Tikras Reform tėvinis produktas, kuriam leidžiama kurti bazinį KIT."""
@@ -99,7 +140,7 @@ def is_kit_bom_parent(sku: str, product: dict) -> bool:
 
 
 def add_generated_apack_boms(parents, lines, levels, bom_types):
-    """Kiekvienam naujam FPACK prideda tokios pačios sudėties APACK BOM."""
+    """Papildo FPACK pakuote ir sukuria APACK su ASS PACK pakuote."""
     generated_from = {}
     for fpack in sorted(parents):
         if not fpack.startswith("FPACK-"):
@@ -108,6 +149,8 @@ def add_generated_apack_boms(parents, lines, levels, bom_types):
             continue
         if bom_types.get(fpack) != MANUFACTURE:
             continue
+        market = _fpack_market(fpack)
+        cabinet_components = [dict(line) for line in lines.get(fpack, [])]
         generated = canon(
             LEGACY_FPACK_APACKS.get(fpack, apack_sku(fpack))
         )
@@ -116,8 +159,15 @@ def add_generated_apack_boms(parents, lines, levels, bom_types):
                 f"APACK jau yra MAP grafe, todėl jo negalima generuoti antrą kartą: "
                 f"{generated}"
             )
+        lines[fpack] = _with_packaging(
+            cabinet_components,
+            FPACK_PACKAGING_PROFILES[market],
+        )
         parents.add(generated)
-        lines[generated] = [dict(line) for line in lines.get(fpack, [])]
+        lines[generated] = _with_packaging(
+            cabinet_components,
+            APACK_PACKAGING_PROFILES[market],
+        )
         levels[generated] = levels[fpack]
         bom_types[generated] = MANUFACTURE
         generated_from[generated] = fpack
