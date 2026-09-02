@@ -752,9 +752,42 @@ class PricingBomMap(dict):
         self.empty_bom_issues = empty_bom_issues or {}
 
 
-def classify_missing_pricing_bom(sku, raw_graph, dataset=None):
+def load_production_bom_skus(path: Path | None):
+    """Read active Production BOM parents from the read-only Odoo MAP."""
+    if path is None:
+        return set()
+    workbook = load_workbook(path, data_only=True, read_only=True)
+    try:
+        if "ODOO EDGES" not in workbook.sheetnames:
+            raise ValueError("Production Odoo MAP neturi lapo 'ODOO EDGES'.")
+        rows = workbook["ODOO EDGES"].iter_rows(values_only=True)
+        header = next(rows)
+        index = {text(value): position for position, value in enumerate(header)}
+        if "Parent SKU" not in index:
+            raise ValueError("Production Odoo MAP trūksta 'Parent SKU' stulpelio.")
+        return {
+            key(row[index["Parent SKU"]])
+            for row in rows
+            if text(row[index["Parent SKU"]])
+        }
+    finally:
+        workbook.close()
+
+
+def classify_missing_pricing_bom(
+    sku,
+    raw_graph,
+    dataset=None,
+    production_bom_skus=None,
+):
     """Explain which system owns a configured BOM that has no structure."""
     sku_key = key(sku)
+    if sku_key in (production_bom_skus or set()):
+        return (
+            "PRODUCTION_ODOO_BOM_NOT_IN_TARGET_DATASET: Active Production "
+            f"Odoo BOM exists for {sku}, but the SKU is absent from the "
+            "current Target Dataset. Review it in Product Lifecycle Audit."
+        )
     if sku_key in raw_graph:
         return (
             "REFORM_BOM_MISSING_COMPONENTS: Reform BOM source contains "
@@ -794,6 +827,7 @@ def load_reform_boms(
     products,
     rules=None,
     dataset_path: Path | None = None,
+    production_bom_path: Path | None = None,
 ):
     """
     Build pricing input and preserve the full Reform BOM graph.
@@ -840,6 +874,7 @@ def load_reform_boms(
 
     graph = normalize_graph(raw_graph)
     target_dataset = None
+    production_bom_skus = load_production_bom_skus(production_bom_path)
     if dataset_path is not None:
         target_dataset, graph = load_target_dataset_graph(dataset_path, path)
     else:
@@ -961,6 +996,7 @@ def load_reform_boms(
                 top,
                 raw_graph,
                 target_dataset,
+                production_bom_skus,
             )
 
     result.empty_bom_issues = empty_bom_issues
@@ -3310,6 +3346,7 @@ def build_from_application_config(
     config_path: Path,
     output_path: Path,
     dataset_path: Path | None = None,
+    production_bom_path: Path | None = None,
 ):
     document = load_config(
         config_path
@@ -3373,6 +3410,7 @@ def build_from_application_config(
         ],
         rules=rules,
         dataset_path=dataset_path,
+        production_bom_path=production_bom_path,
     )
 
     bom_rows, details = (
@@ -3433,6 +3471,12 @@ def main():
         "--dataset",
         type=Path,
         help="Pilnas iš to paties Reform failo sugeneruotas Target Dataset.",
+    )
+
+    parser.add_argument(
+        "--production-bom-map",
+        type=Path,
+        help="Tik skaitymui naudojamas Production Odoo MAP.",
     )
 
     parser.add_argument(
@@ -3497,6 +3541,7 @@ def main():
         args.rules,
         output,
         dataset_path=args.dataset,
+        production_bom_path=args.production_bom_map,
     )
 
     print(

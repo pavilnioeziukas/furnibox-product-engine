@@ -271,6 +271,22 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
         "script": "bom_operations_reference_v1.py",
         "requires_upload": False,
     },
+    "product_lifecycle_audit": {
+        "title": "Audituoti nebeaktualius Odoo produktus ir BOM",
+        "description": (
+            "Tik skaitymo būdu palygina Production Odoo su Target Dataset, "
+            "patikrina likučius, aktyvius dokumentus ir BOM priklausomybes. "
+            "Pateikia archyvavimo kandidatus, bet Odoo nieko nearchyvuoja."
+        ),
+        "script": "product_lifecycle_audit.py",
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "needs_dataset_arg": True,
+        "args": [
+            "--pricing-config",
+            str(SO_PRICING_CONFIG_PATH),
+        ],
+    },
     "purchase_prices": {
         "title": "Nuskaityti paskutines pirkimo kainas",
         "description": (

@@ -445,7 +445,8 @@ class ReformSoLinePriceTests(unittest.TestCase):
 
         self.assertEqual(rows[0]["status"], "COMPLETE")
         self.assertAlmostEqual(rows[0]["cost"], 10.0)
-        self.assertAlmostEqual(rows[0]["final"], 10.0)
+        self.assertAlmostEqual(rows[0]["addons"][0], 4.0)
+        self.assertAlmostEqual(rows[0]["final"], 14.0)
 
     def test_non_positive_direct_component_price_blocks_bom(self):
         top = "FPACK-EU-CAB01-BAS001"
@@ -488,6 +489,16 @@ class ReformSoLinePriceTests(unittest.TestCase):
             {key("SOURCE-BOM"): []},
         )
         self.assertIn("REFORM_BOM_MISSING_COMPONENTS", issue)
+
+    def test_production_only_bom_points_to_lifecycle_audit(self):
+        issue = classify_missing_pricing_bom(
+            "ODOO-ONLY",
+            {},
+            {"product_catalog": []},
+            {key("ODOO-ONLY")},
+        )
+        self.assertIn("PRODUCTION_ODOO_BOM_NOT_IN_TARGET_DATASET", issue)
+        self.assertIn("Product Lifecycle Audit", issue)
 
     def test_missing_generated_bom_is_attributed_to_product_engine(self):
         issue = classify_missing_pricing_bom(

@@ -724,6 +724,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "9/9 Galutinės Reform pardavimo kainos",
             "reform_so_line_prices.py", "--bom-input", str(bom_input),
             "--dataset", str(target_dataset),
+            "--production-bom-map", str(odoo_map),
             "--price-input", str(PRODUCTION_DIR / "Reform_Final_Prices.xlsx"),
             "--rules", str(rules_path), "--output-dir", str(candidate_dir),
         )

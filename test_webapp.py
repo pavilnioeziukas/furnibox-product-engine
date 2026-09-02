@@ -41,6 +41,7 @@ def test_health_and_index(monkeypatch, tmp_path):
     assert client.get("/health").get_json() == {"status": "ok"}
     assert client.get("/").status_code == 200
     assert "Atnaujinti Reform kainodarą" in client.get("/").get_data(as_text=True)
+    assert "Audituoti nebeaktualius Odoo produktus ir BOM" in client.get("/").get_data(as_text=True)
     assert "upload-progress" in client.get("/").get_data(as_text=True)
     assert "chunked-upload.js" in client.get("/").get_data(as_text=True)
 
