@@ -27,6 +27,7 @@ from reform_so_line_prices import (
     load_target_dataset_graph,
     load_tamara_pricing_reference,
     load_prices,
+    write_component_cost_breakdown,
 )
 from manifest.manifest_writer import calculate_file_hash
 from so_pricing_rules import (
@@ -54,6 +55,45 @@ class ReformSoLinePriceTests(unittest.TestCase):
             0,
             0,
         )
+
+    def test_component_cost_breakdown_formats_level_ii_and_top_bom_groups(self):
+        workbook = Workbook()
+        workbook.remove(workbook.active)
+        bom_rows = [
+            {
+                "component_details": [
+                    {
+                        "top": "TOP-1", "level_ii": "HRD-1", "level_ii_qty": 1,
+                        "component": "PART-1", "component_qty": 2, "total_qty": 2,
+                        "unit_price": 1, "line_cost": 2, "status": "OK",
+                        "cost_source": "REFORM PURCHASE PRICE",
+                    },
+                    {
+                        "top": "TOP-1", "level_ii": "PACK-1", "level_ii_qty": 1,
+                        "component": "BOX-1", "component_qty": 1, "total_qty": 1,
+                        "unit_price": 2, "line_cost": 2, "status": "OK",
+                        "cost_source": "REFORM PURCHASE PRICE",
+                    },
+                    {
+                        "top": "TOP-2", "level_ii": "HRD-2", "level_ii_qty": 1,
+                        "component": "PART-2", "component_qty": 1, "total_qty": 1,
+                        "unit_price": 3, "line_cost": 3, "status": "OK",
+                        "cost_source": "REFORM PURCHASE PRICE",
+                    },
+                ]
+            }
+        ]
+
+        write_component_cost_breakdown(workbook, bom_rows)
+        sheet = workbook["BOM COMPONENT COSTS"]
+
+        self.assertEqual(sheet["A2"].fill.fgColor.rgb, "00DCE6F1")
+        self.assertEqual(sheet["A3"].fill.fgColor.rgb, "00FDE9D9")
+        self.assertEqual(sheet["A4"].fill.fgColor.rgb, "00DCE6F1")
+        self.assertEqual(sheet["A2"].border.top.style, "medium")
+        self.assertEqual(sheet["J3"].border.bottom.style, "medium")
+        self.assertEqual(sheet["A4"].border.top.style, "medium")
+        self.assertEqual(sheet["J4"].border.bottom.style, "medium")
 
     def test_generated_manufacture_children_are_component_cost_only(self):
         apack = "APACK-EU-C-CAB01-BAS001-A"
