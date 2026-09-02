@@ -634,6 +634,11 @@ def _fpack_market_expression(sku, expression=""):
     return "+".join(dict.fromkeys(tokens))
 
 
+def fpack_labour_cost(component_cost):
+    """Return Tamara's FPACK packing labour from the cabinet-part cost."""
+    return min(10.0, max(4.0, float(component_cost) / 9.8))
+
+
 def load_tamara_pricing_reference(path=TAMARA_PRICING_REFERENCE_PATH):
     if not Path(path).is_file():
         raise ValueError(f"Nerastas Tamaros kainodaros etalonas: {path}")
@@ -1718,6 +1723,16 @@ def calculate_boms(
             for index
             in range(6)
         )
+
+        if text(top).upper().startswith("FPACK-"):
+            # FPACK labour was separated from the cabinet-part price after
+            # packaging and part costs were split.  It replaces the static
+            # Assembly amount for FPACK and follows Tamara's agreed formula:
+            # MIN(10, MAX(4, cabinet part cost / 9.8)).
+            addon_values = (
+                fpack_labour_cost(cost),
+                *addon_values[1:],
+            )
 
         addon_total = sum(
             addon_values
