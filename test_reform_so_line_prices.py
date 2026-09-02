@@ -106,23 +106,28 @@ class ReformSoLinePriceTests(unittest.TestCase):
     def test_fpack_price_replaces_static_assembly_with_tamara_labour(self):
         top = "FPACK-EU-CAB01-BAS001"
         part = "CABINET-PART"
+        packaging = "EU FP PACK"
         rules = {
             key(top): self.pricing_rule(top, assembly=7, storage=0.1),
         }
 
         rows, _ = calculate_boms(
-            {top: ("FPACK", [Item(part, 1)])},
-            {key(part): ("Part", 49.0, "REFORM PURCHASE PRICE")},
+            {top: ("FPACK", [Item(part, 1), Item(packaging, 1)])},
+            {
+                key(part): ("Part", 49.0, "CABINET PART CALCULATION"),
+                key(packaging): ("Packaging", 2.0, "LAST PURCHASE PRICE"),
+            },
             rules,
             adjustment=0,
-            graph={key(top): [(part, 1)]},
+            graph={key(top): [(part, 1), (packaging, 1)]},
             authoritative_rule_tops={top},
         )
 
         self.assertEqual(rows[0]["status"], "COMPLETE")
         self.assertEqual(rows[0]["addons"][0], 5.0)
         self.assertEqual(rows[0]["addons"][1], 0.1)
-        self.assertAlmostEqual(rows[0]["final"], 54.1)
+        self.assertAlmostEqual(rows[0]["cost"], 51.0)
+        self.assertAlmostEqual(rows[0]["final"], 56.1)
 
     def test_generated_manufacture_children_are_component_cost_only(self):
         apack = "APACK-EU-C-CAB01-BAS001-A"
