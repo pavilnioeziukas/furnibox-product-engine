@@ -1,0 +1,29 @@
+name: Pricing Control Regression
+
+on:
+  push:
+    branches:
+      - feature/shelf-pp-transformation
+    paths:
+      - pricing_control.py
+      - test_pricing_control.py
+      - refresh_reform_pricing.py
+      - .github/workflows/pricing-control-tests.yml
+  pull_request:
+    paths:
+      - pricing_control.py
+      - test_pricing_control.py
+      - refresh_reform_pricing.py
+
+jobs:
+  test-pricing-control:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest openpyxl
+      - name: Run pricing control tests
+        run: python -m pytest -q test_pricing_control.py
