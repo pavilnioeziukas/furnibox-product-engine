@@ -1463,6 +1463,7 @@ def calculate_boms(
         issues = []
         applied = []
         component_details = []
+        fpack_detail_cost = 0.0
 
         if not items:
             issues.append(
@@ -1583,6 +1584,14 @@ def calculate_boms(
                             ),
                         }
                     )
+
+                    if (
+                        text(top).upper().startswith("FPACK-")
+                        and unit_price is not None
+                        and text(leaf["source"]).casefold()
+                        == "cabinet part calculation".casefold()
+                    ):
+                        fpack_detail_cost += total_qty * unit_price
 
             else:
                 component_details.append(
@@ -1730,7 +1739,7 @@ def calculate_boms(
             # Assembly amount for FPACK and follows Tamara's agreed formula:
             # MIN(10, MAX(4, cabinet part cost / 9.8)).
             addon_values = (
-                fpack_labour_cost(cost),
+                fpack_labour_cost(fpack_detail_cost),
                 *addon_values[1:],
             )
 
