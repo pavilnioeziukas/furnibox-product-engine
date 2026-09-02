@@ -24,6 +24,7 @@ from reform_so_line_prices import (
     inherit_generated_apack_rules,
     inherit_unambiguous_analog_rules,
     key,
+    fpack_labour_cost,
     load_target_dataset_graph,
     load_tamara_pricing_reference,
     load_prices,
@@ -94,6 +95,34 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(sheet["J3"].border.bottom.style, "medium")
         self.assertEqual(sheet["A4"].border.top.style, "medium")
         self.assertEqual(sheet["J4"].border.bottom.style, "medium")
+
+    def test_fpack_labour_cost_uses_tamara_floor_rate_and_cap(self):
+        self.assertEqual(fpack_labour_cost(20), 4.0)
+        self.assertEqual(fpack_labour_cost(39.2), 4.0)
+        self.assertEqual(fpack_labour_cost(49), 5.0)
+        self.assertEqual(fpack_labour_cost(98), 10.0)
+        self.assertEqual(fpack_labour_cost(150), 10.0)
+
+    def test_fpack_price_replaces_static_assembly_with_tamara_labour(self):
+        top = "FPACK-EU-CAB01-BAS001"
+        part = "CABINET-PART"
+        rules = {
+            key(top): self.pricing_rule(top, assembly=7, storage=0.1),
+        }
+
+        rows, _ = calculate_boms(
+            {top: ("FPACK", [Item(part, 1)])},
+            {key(part): ("Part", 49.0, "REFORM PURCHASE PRICE")},
+            rules,
+            adjustment=0,
+            graph={key(top): [(part, 1)]},
+            authoritative_rule_tops={top},
+        )
+
+        self.assertEqual(rows[0]["status"], "COMPLETE")
+        self.assertEqual(rows[0]["addons"][0], 5.0)
+        self.assertEqual(rows[0]["addons"][1], 0.1)
+        self.assertAlmostEqual(rows[0]["final"], 54.1)
 
     def test_generated_manufacture_children_are_component_cost_only(self):
         apack = "APACK-EU-C-CAB01-BAS001-A"
