@@ -182,3 +182,49 @@ def test_release_without_dataset_does_not_lock_queue(monkeypatch, tmp_path):
 
     assert webapp.read_job(job_dir)["status"] == "ERROR"
     assert job_id not in webapp._reserved_jobs
+
+
+def test_job_retention_keeps_latest_ten_per_action(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    for index in range(12):
+        job_dir = webapp.RUN_DIR / f"job{index:02d}"
+        job_dir.mkdir()
+        webapp.write_job(job_dir, {
+            "id": job_dir.name,
+            "action": "audit",
+            "title": "Audit",
+            "status": "PASS",
+            "created_at": f"2026-09-{index + 1:02d}T00:00:00+00:00",
+            "files": [],
+        })
+    removed = webapp.prune_completed_jobs(keep_per_action=10)
+    assert removed == ["job01", "job00"]
+    assert len(list(webapp.RUN_DIR.iterdir())) == 10
+
+
+def test_job_retention_never_deletes_running_or_latest_target(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    target_job = webapp.RUN_DIR / "target"
+    target_job.mkdir()
+    (target_job / "files").mkdir()
+    (target_job / "files" / "Furnibox_Target_Dataset.json").write_text("{}")
+    webapp.write_job(target_job, {
+        "id": "target", "action": "pricing", "title": "Pricing",
+        "status": "BLOCKED", "created_at": "2026-01-01T00:00:00+00:00", "files": [],
+    })
+    running = webapp.RUN_DIR / "running"
+    running.mkdir()
+    webapp.write_job(running, {
+        "id": "running", "action": "pricing", "title": "Pricing",
+        "status": "RUNNING", "created_at": "2025-01-01T00:00:00+00:00", "files": [],
+    })
+    for index in range(2):
+        old = webapp.RUN_DIR / f"old{index}"
+        old.mkdir()
+        webapp.write_job(old, {
+            "id": old.name, "action": "pricing", "title": "Pricing",
+            "status": "FAIL", "created_at": f"2024-01-0{index + 1}T00:00:00+00:00", "files": [],
+        })
+    webapp.prune_completed_jobs(keep_per_action=0)
+    assert target_job.exists()
+    assert running.exists()

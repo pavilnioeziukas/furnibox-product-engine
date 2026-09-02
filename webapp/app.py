@@ -595,6 +595,43 @@ def latest_upload() -> Path | None:
     )
 
 
+def prune_completed_jobs(keep_per_action: int = 10) -> list[str]:
+    """Delete only old completed run directories inside RUN_DIR."""
+    grouped: dict[str, list[tuple[str, Path]]] = {}
+    protected = set(_reserved_jobs) | set(_active_processes)
+    latest_target = latest_full_target_dataset()
+    if latest_target is not None:
+        protected.add(latest_target.parent.parent.name)
+
+    for job_dir in RUN_DIR.iterdir():
+        if not job_dir.is_dir() or job_dir.name in protected:
+            continue
+        metadata = job_dir / "job.json"
+        if not metadata.exists():
+            continue
+        try:
+            job = read_job(job_dir)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if job.get("status") in {"QUEUED", "RUNNING"}:
+            continue
+        grouped.setdefault(text := str(job.get("action") or "unknown"), []).append(
+            (str(job.get("created_at") or ""), job_dir)
+        )
+
+    removed = []
+    run_root = RUN_DIR.resolve()
+    for jobs in grouped.values():
+        jobs.sort(key=lambda item: item[0], reverse=True)
+        for _, job_dir in jobs[keep_per_action:]:
+            resolved = job_dir.resolve()
+            if resolved.parent != run_root:
+                raise RuntimeError(f"Nesaugi run valymo vieta: {resolved}")
+            shutil.rmtree(resolved)
+            removed.append(job_dir.name)
+    return removed
+
+
 def latest_dataset() -> Path | None:
     shared_roots = {SETTINGS.shared_data_dir}
     legacy_shared_data = os.getenv("FURNIBOX_SHARED_DATA", "").strip()
@@ -631,7 +668,15 @@ def latest_dataset() -> Path | None:
 
 
 def latest_full_target_dataset() -> Path | None:
-    candidates = list(RUN_DIR.glob("*/files/Furnibox_Target_Dataset.json"))
+    candidates = []
+    for path in RUN_DIR.glob("*/files/Furnibox_Target_Dataset.json"):
+        metadata = path.parent.parent / "job.json"
+        try:
+            job = read_job(path.parent.parent)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if metadata.exists() and job.get("status") in {"PASS", "BLOCKED"}:
+            candidates.append(path)
     if not candidates:
         return None
     return max(candidates, key=lambda path: path.stat().st_mtime)
@@ -2248,6 +2293,8 @@ def start_job(
 
     if action is None:
         abort(404)
+
+    prune_completed_jobs()
 
     upload_path = (
         latest_upload()
