@@ -16,6 +16,8 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
+from pricing_control import enrich_pricing_workbook
+
 
 BASE_DIR = Path(__file__).resolve().parent
 PRODUCTION_DIR = BASE_DIR / "output" / "production"
@@ -749,8 +751,11 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             if blocked
             else None
         )
+        generated_at = datetime.now().isoformat(timespec="seconds")
+        run_id = f"REFORM-{generated_at.replace(':', '').replace('-', '')}"
+        git_commit = os.getenv("RAILWAY_GIT_COMMIT_SHA", "")
         result = {
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generated_at": generated_at,
             "bom_input": str(bom_input),
             "statuses": dict(statuses),
             "blocked": blocked,
@@ -759,6 +764,9 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "partial_released": bool(blocked),
             "partial_file": partial_name,
             "excluded_blocked_count": len(blocked),
+            "pricing_control_version": "pricing-control-v1",
+            "pricing_run_id": run_id,
+            "git_commit": git_commit,
             "odoo_changed": False,
         }
         (output_dir / "Reform_Pricing_Result.json").write_text(
@@ -769,10 +777,17 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             write_blocker_report(
                 output_dir / "Reform_Pricing_BLOCKED.xlsx", statuses, blocked
             )
+            partial_path = output_dir / partial_name
             write_complete_only_price_workbook(
                 candidate,
-                output_dir / partial_name,
+                partial_path,
                 blocked,
+            )
+            enrich_pricing_workbook(
+                partial_path,
+                git_commit=git_commit,
+                run_id=run_id,
+                generated_at=generated_at,
             )
             write_furnibox_purchase_prices(
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
@@ -793,6 +808,12 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             )
             return 2
 
+        enrich_pricing_workbook(
+            candidate,
+            git_commit=git_commit,
+            run_id=run_id,
+            generated_at=generated_at,
+        )
         write_furnibox_purchase_prices(
             PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
             output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
