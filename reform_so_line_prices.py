@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from reform_map import find_sheet, read_edges
 from so_pricing_rules import (
@@ -1910,6 +1910,58 @@ def write_component_cost_breakdown(
         ).number_format = (
             '0.0000 [$€-x-euro2]'
         )
+
+    style_component_cost_groups(ws)
+
+
+def style_component_cost_groups(sheet):
+    """Visually separate Top BOM and Level II groups for Tamara's review."""
+    if sheet.max_row < 2:
+        return
+
+    fills = (
+        PatternFill("solid", fgColor="DCE6F1"),
+        PatternFill("solid", fgColor="FDE9D9"),
+    )
+    group_side = Side(style="medium", color="000000")
+    first_data_row = 2
+    last_column = sheet.max_column
+    current_top = None
+    current_level_ii = None
+    level_ii_group_index = -1
+    top_group_start = first_data_row
+
+    def apply_top_group_border(start_row, end_row):
+        for column in range(1, last_column + 1):
+            top_cell = sheet.cell(start_row, column)
+            bottom_cell = sheet.cell(end_row, column)
+            top_cell.border = Border(top=group_side)
+            bottom_cell.border = Border(
+                top=(group_side if start_row == end_row else None),
+                bottom=group_side,
+            )
+
+    for row_number in range(first_data_row, sheet.max_row + 1):
+        top = sheet.cell(row_number, 1).value
+        level_ii = sheet.cell(row_number, 2).value
+
+        if top != current_top:
+            if current_top is not None:
+                apply_top_group_border(top_group_start, row_number - 1)
+            current_top = top
+            current_level_ii = None
+            level_ii_group_index = -1
+            top_group_start = row_number
+
+        if level_ii != current_level_ii:
+            current_level_ii = level_ii
+            level_ii_group_index += 1
+
+        fill = fills[level_ii_group_index % len(fills)]
+        for column in range(1, last_column + 1):
+            sheet.cell(row_number, column).fill = fill
+
+    apply_top_group_border(top_group_start, sheet.max_row)
 
 
 def calculate_non_bom(
