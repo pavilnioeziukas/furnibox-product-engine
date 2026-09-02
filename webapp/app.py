@@ -281,7 +281,7 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
         "script": "product_lifecycle_audit.py",
         "requires_upload": False,
         "collect_changed_outputs": False,
-        "needs_dataset_arg": True,
+        "needs_full_target_dataset_arg": True,
         "args": [
             "--pricing-config",
             str(SO_PRICING_CONFIG_PATH),
@@ -630,6 +630,13 @@ def latest_dataset() -> Path | None:
     )
 
 
+def latest_full_target_dataset() -> Path | None:
+    candidates = list(RUN_DIR.glob("*/files/Furnibox_Target_Dataset.json"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
 def snapshot_outputs() -> dict[str, int]:
     result: dict[str, int] = {}
 
@@ -768,18 +775,20 @@ def run_job(
             )
         )
 
-    if action.get(
-        "needs_dataset_arg"
-    ):
-        dataset = latest_dataset()
+    if action.get("needs_dataset_arg") or action.get("needs_full_target_dataset_arg"):
+        dataset = (
+            latest_full_target_dataset()
+            if action.get("needs_full_target_dataset_arg")
+            else latest_dataset()
+        )
 
         if dataset is None:
             job.update(
                 status="ERROR",
                 finished_at=utc_now(),
                 error=(
-                    "Validated Dataset "
-                    "dar nesukurtas."
+                    "Pilnas Target Dataset dar nesukurtas. "
+                    "Pirmiausia paleiskite Reform kainodaros atnaujinimą."
                 ),
             )
 

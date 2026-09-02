@@ -36,6 +36,25 @@ def key(value: Any) -> str:
     return text(value).casefold()
 
 
+def target_product_skus(dataset: dict[str, Any]) -> set[str]:
+    """Support both full Target Dataset and the older BOM-only schema."""
+    catalog = dataset.get("product_catalog") or []
+    if catalog:
+        return {
+            key(row.get("sku"))
+            for row in catalog
+            if text(row.get("sku"))
+        }
+    result = set()
+    for product in dataset.get("products") or []:
+        if text(product.get("sku")):
+            result.add(key(product.get("sku")))
+        for component in product.get("components") or []:
+            if text(component.get("sku")):
+                result.add(key(component.get("sku")))
+    return result
+
+
 def _product_ids(rows: list[dict[str, Any]]) -> set[int]:
     return {
         product_id
@@ -166,11 +185,7 @@ def build_audit(
     pricing_config: dict[str, Any],
     usage: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    target_skus = {
-        key(row.get("sku"))
-        for row in dataset.get("product_catalog") or []
-        if text(row.get("sku"))
-    }
+    target_skus = target_product_skus(dataset)
     pricing_skus = {
         key(row.get("sku"))
         for field in ("bom_products", "bom_skus", "non_bom_skus")
@@ -293,11 +308,7 @@ def main() -> None:
     client = OdooClient(settings)
     client.authenticate()
     production = read_production_snapshot(client)
-    target_skus = {
-        key(row.get("sku"))
-        for row in dataset.get("product_catalog") or []
-        if text(row.get("sku"))
-    }
+    target_skus = target_product_skus(dataset)
     ids = [
         int(row["id"])
         for row in production.get("products") or []

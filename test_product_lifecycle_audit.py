@@ -5,6 +5,7 @@ from product_lifecycle_audit import (
     STATUS_KEEP,
     STATUS_PRICING,
     build_audit,
+    target_product_skus,
     write_workbook,
 )
 from openpyxl import load_workbook
@@ -37,6 +38,15 @@ def test_lifecycle_statuses_are_conservative():
     assert rows["IN-STOCK"]["status"] == STATUS_IN_USE
     assert rows["PRICED"]["status"] == STATUS_PRICING
     assert rows["OLD"]["status"] == STATUS_CANDIDATE
+
+
+def test_legacy_dataset_uses_bom_parents_and_components_as_target_products():
+    assert target_product_skus({
+        "products": [{
+            "sku": "PARENT",
+            "components": [{"sku": "COMPONENT", "quantity": 1}],
+        }]
+    }) == {"parent", "component"}
 
 
 def test_active_bom_dependency_blocks_archival():
