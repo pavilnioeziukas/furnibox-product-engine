@@ -19,6 +19,7 @@ from reform_so_line_prices import (
     build_from_application_config,
     build_reform_so_line_prices,
     calculate_boms,
+    classify_missing_pricing_bom,
     component_cost_only_manufacture_products,
     exclude_bom_products_from_non_bom,
     inherit_generated_apack_rules,
@@ -480,6 +481,43 @@ class ReformSoLinePriceTests(unittest.TestCase):
             "Target BOM has no components: EMPTY-BOM",
             rows[0]["issues"],
         )
+
+    def test_missing_pricing_bom_is_attributed_to_reform_source(self):
+        issue = classify_missing_pricing_bom(
+            "SOURCE-BOM",
+            {key("SOURCE-BOM"): []},
+        )
+        self.assertIn("REFORM_BOM_MISSING_COMPONENTS", issue)
+
+    def test_missing_generated_bom_is_attributed_to_product_engine(self):
+        issue = classify_missing_pricing_bom(
+            "GENERATED-BOM",
+            {},
+            {
+                "product_catalog": [
+                    {
+                        "sku": "GENERATED-BOM",
+                        "generated_from": "SOURCE-BOM",
+                    }
+                ]
+            },
+        )
+        self.assertIn("PRODUCT_ENGINE_GENERATED_BOM_MISSING", issue)
+        self.assertIn("SOURCE-BOM", issue)
+
+    def test_missing_reform_bom_is_distinct_from_scope_mismatch(self):
+        dataset_issue = classify_missing_pricing_bom(
+            "KNOWN-PRODUCT",
+            {},
+            {"product_catalog": [{"sku": "KNOWN-PRODUCT"}]},
+        )
+        scope_issue = classify_missing_pricing_bom(
+            "CONFIG-ONLY",
+            {},
+            {"product_catalog": []},
+        )
+        self.assertIn("REFORM_BOM_NOT_PROVIDED", dataset_issue)
+        self.assertIn("PRICING_BOM_SCOPE_MISMATCH", scope_issue)
 
     def test_missing_rule_inherits_from_unanimous_exact_analogs(self):
         target = "FPACK-EU-CAB03-WAL015"

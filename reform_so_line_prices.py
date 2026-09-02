@@ -744,6 +744,51 @@ def exclude_bom_products_from_non_bom(items, graph):
     ]
 
 
+class PricingBomMap(dict):
+    """Pricing BOMs plus audit-only reasons for configured empty BOMs."""
+
+    def __init__(self, *args, empty_bom_issues=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empty_bom_issues = empty_bom_issues or {}
+
+
+def classify_missing_pricing_bom(sku, raw_graph, dataset=None):
+    """Explain which system owns a configured BOM that has no structure."""
+    sku_key = key(sku)
+    if sku_key in raw_graph:
+        return (
+            "REFORM_BOM_MISSING_COMPONENTS: Reform BOM source contains "
+            f"{sku}, but it has no usable component structure."
+        )
+
+    catalog = {
+        key(product.get("sku")): product
+        for product in (dataset or {}).get("product_catalog") or []
+        if text(product.get("sku"))
+    }
+    product = catalog.get(sku_key)
+    if product:
+        generated_from = text(
+            product.get("generated_from") or product.get("source_sku")
+        )
+        if generated_from and key(generated_from) != sku_key:
+            return (
+                "PRODUCT_ENGINE_GENERATED_BOM_MISSING: Target Dataset "
+                f"declares {sku} as generated from {generated_from}, but no "
+                "generated BOM structure exists."
+            )
+        return (
+            "REFORM_BOM_NOT_PROVIDED: Product exists in the Reform-derived "
+            f"Target Dataset, but Reform supplied no BOM structure for {sku}."
+        )
+
+    return (
+        "PRICING_BOM_SCOPE_MISMATCH: SKU is configured as a BOM pricing "
+        f"product, but {sku} exists in neither the Reform BOM source nor the "
+        "Target Dataset product catalog."
+    )
+
+
 def load_reform_boms(
     path: Path,
     products,
@@ -794,8 +839,9 @@ def load_reform_boms(
         )
 
     graph = normalize_graph(raw_graph)
+    target_dataset = None
     if dataset_path is not None:
-        _, graph = load_target_dataset_graph(dataset_path, path)
+        target_dataset, graph = load_target_dataset_graph(dataset_path, path)
     else:
         graph = add_generated_boms_to_graph(graph, products)
 
@@ -869,7 +915,8 @@ def load_reform_boms(
                 ),
             }
 
-    result = {}
+    result = PricingBomMap()
+    empty_bom_issues = {}
 
     for product in pricing_products.values():
         top = text(
@@ -908,6 +955,15 @@ def load_reform_boms(
             ),
             items,
         )
+
+        if not items:
+            empty_bom_issues[key(top)] = classify_missing_pricing_bom(
+                top,
+                raw_graph,
+                target_dataset,
+            )
+
+    result.empty_bom_issues = empty_bom_issues
 
     return result, graph
 def load_boms(path: Path):
@@ -1467,7 +1523,10 @@ def calculate_boms(
 
         if not items:
             issues.append(
-                f"Target BOM has no components: {top}"
+                getattr(boms, "empty_bom_issues", {}).get(
+                    key(top),
+                    f"Target BOM has no components: {top}",
+                )
             )
 
         for item in items:
