@@ -86,11 +86,11 @@ def test_pricing_rules_explains_internal_and_legacy_category_ids(monkeypatch, tm
     webapp = load_webapp(monkeypatch, tmp_path)
     page = webapp.app.test_client().get("/pricing-rules").get_data(as_text=True)
 
-    assert "Vidinis grupės ID" in page
-    assert "Seno šaltinio kodas" in page
-    assert "Tai atsekamumo žyma, o ne tarifas ir ne SKU kiekis" in page
     assert "Priskirta SKU" in page
-    assert "kainos pats neapskaičiuoja" in page
+    assert "Techninė informacija" in page
+    assert "Vidinis ID:" in page
+    assert "Seno MAP kodas:" in page
+    assert "kasdieniam valdymui jie nereikalingi" in page
 
 
 def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp_path):
