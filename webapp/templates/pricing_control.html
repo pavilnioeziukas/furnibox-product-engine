@@ -50,13 +50,13 @@
     </div>
     <div class="sku-metrics">
       <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) if item.cost is number else '—' }}</strong><p>Komponentų kainos × jų kiekiai. Išskaidymas pateiktas žemiau.</p></div>
-      <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) if item.addons is number else '—' }}</strong><p>Surinkimas, sandėliavimas, pakavimas ir kiti kategorijos tarifai.</p></div>
+      <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) if item.addons is number else '—' }}</strong><p>Surinkimas, sandėliavimas, pakavimas ir kiti kategorijos tarifai. <a href="{{ url_for('pricing_rules') }}#bom-categories">Keisti tarifus →</a></p></div>
       <div><small>Bendra priedų korekcija ({{ '%g'|format(config.adjustment_rate * 100) }} %)</small><strong>{{ '%.4f €'|format(item.adjustment) if item.adjustment is number else '—' }}</strong><p>Taikoma tik priedams. Komponentų savikaina nemažinama.</p></div>
       <div><small>Galutinė Reform SO kaina</small><strong>{{ '%.4f €'|format(item.final) if item.final is number else '—' }}</strong><p>Savikaina + priedai + priedų korekcija.</p></div>
     </div>
     <dl class="sku-facts">
       <div><dt>Skaičiavimo būdas</dt><dd>{% if item.position_type == 'BOM' %}<strong>Pagal BOM komponentų struktūrą.</strong> Sistema suskaičiavo žemiau parodytų komponentų savikainą.{% else %}<strong>Be BOM.</strong> Kaina pradėta nuo tiesioginės pirkimo kainos.{% endif %}</dd></div>
-      <div><dt>Kainodaros kategorija</dt><dd><strong>{{ item.category or 'Nepriskirta' }}</strong><br>Ji nustato, kurie darbų ir aptarnavimo tarifai taikomi šiam produktui.</dd></div>
+      <div><dt>Kainodaros kategorija</dt><dd><strong>{{ item.category or 'Nepriskirta' }}</strong><br>Ji nustato, kurie darbų ir aptarnavimo tarifai taikomi šiam produktui. <a href="{{ url_for('pricing_rules') }}#bom-categories">Atidaryti kategorijų konfigūraciją →</a></dd></div>
       <div><dt>Patikros rezultatas</dt><dd>{% if item.status == 'BLOCKED' %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Problemų nerasta.</strong> Kaina apskaičiuota pagal turimus duomenis ir taisykles.{% endif %}</dd></div>
       <div><dt>Naudota logika</dt><dd>{% for rule in rule_explanations %}<span class="rule-summary"><strong>{{ rule.title }}</strong> — {{ rule.explanation }}</span>{% else %}—{% endfor %}</dd></div>
     </dl>
@@ -78,6 +78,7 @@
     {% endif %}
     {% if sku_search.tariffs %}
       <details class="trace-details" open><summary>Pritaikyti tarifai ir kategorijų taisyklės · {{ sku_search.tariffs|length }} eilutės</summary>
+        <div class="tariff-links"><span>Tarifai keičiami centralizuotai:</span><a class="secondary" href="{{ url_for('pricing_rules') }}#bom-categories">BOM kategorijų tarifai</a><a class="secondary" href="{{ url_for('pricing_rules') }}#business-categories">FPACK, HRD, APACK ir Shelf tarifai</a></div>
         <div class="table-wrap"><table><thead><tr><th>Taikymo lygis</th><th>Taisyklė / kategorija</th><th>Daugiklis</th><th>Pritaikyta suma</th><th>Taisyklės ID</th></tr></thead><tbody>
           {% for row in sku_search.tariffs %}<tr><td>{{ row['Source'] or '—' }}</td><td><strong>{{ row['Input / Component / Rule'] }}</strong></td><td>{{ row['Qty / Multiplier'] if row['Qty / Multiplier'] is not none else '—' }}</td><td>{{ '%.4f €'|format(row['Amount']) if row['Amount'] is number else '—' }}</td><td>{{ row['Rule ID'] }}</td></tr>{% endfor %}
         </tbody></table></div>

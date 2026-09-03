@@ -96,6 +96,7 @@ def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp
     trace = prices.create_sheet("PRICE TRACE")
     trace.append(["SKU", "Step #", "Step Type", "Rule ID", "Input / Component / Rule", "Qty / Multiplier", "Unit Price", "Amount", "Source", "Step Status", "Explanation"])
     trace.append(["SKU-OK", 1, "MATERIAL", "R001", "COMP-1", 2, 5, 10, "Last Purchase Price", "CALCULATED", "Test"])
+    trace.append(["SKU-OK", 2, "PRICING ADD-ON", "R003/R004", "SKU-OK | C01 | Cabinet", 1, None, 1.9, "LEVEL I BOM", "CALCULATED", "Test tariff"])
     price_path = files_dir / "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx"
     prices.save(price_path)
 
@@ -122,6 +123,9 @@ def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp
     assert "Komponentų savikaina pagal BOM" in ok_page
     assert "Taikoma tik priedams. Komponentų savikaina nemažinama." in ok_page
     assert "Techniniai audito kodai" in ok_page
+    assert "Atidaryti kategorijų konfigūraciją" in ok_page
+    assert "FPACK, HRD, APACK ir Shelf tarifai" in ok_page
+    assert '/pricing-rules#bom-categories' in ok_page
     assert "Missing component price" in blocked_page
     assert "R006" in blocked_page
 
