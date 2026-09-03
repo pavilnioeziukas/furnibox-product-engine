@@ -2966,6 +2966,7 @@ def write_price_workbook(
             "Add-ons Total",
             "Adjustment Rate",
             "Adjusted Add-ons",
+            "Calculation Basis",
         ]
     )
 
@@ -2995,6 +2996,7 @@ def write_price_workbook(
                     1
                     + adjustment
                 ),
+                row.get("calculation", "Category tariff sum"),
             ]
         )
 
