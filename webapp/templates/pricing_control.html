@@ -144,11 +144,52 @@
     <div><strong>Valdomos reikšmės</strong><small>Korekcijos, detalės ir kategorijų tarifai</small></div>
   </div>
   <div class="map-arrow">↓</div>
-  <div class="map-engine"><strong>Kainodaros variklis</strong><span>Tiesioginė kaina → BOM savikaina → kategorijų priedai → korekcija → galutinė SO kaina</span></div>
+  <div class="map-engine"><strong>1. Nustatomas produkto kainodaros tipas</strong><span>SKU ir jo struktūra nukreipiami į vieną iš žemiau aprašytų skaičiavimo kelių.</span></div>
+  <div class="map-arrow">↓</div>
+  <div class="pricing-type-paths">
+    <article>
+      <p class="eyebrow">Perkamas komponentas</p><h3>Tiesioginė pirkimo kaina</h3>
+      <p><strong>Šaltinis:</strong> paskutinė patvirtinto arba užbaigto Odoo pirkimo eilutė.</p>
+      <p><strong>Perėjimas:</strong> jei yra patvirtinta SKU korekcija, ji tampa „New Purchase Price“; kitu atveju naudojama faktinė pirkimo kaina.</p>
+      <p><strong>Rezultatas:</strong> ši kaina įeina į BOM kaip komponento vieneto savikaina.</p>
+    </article>
+    <article>
+      <p class="eyebrow">Cabinet / Shelf Part</p><h3>Detalių kaina pagal matmenis</h3>
+      <p><strong>Įprasta detalė:</strong> plotas × apdirbimo tarifas + plotas × WW/BB/NO medžiagos tarifas + mažos detalės priedas.</p>
+      <p><strong>BACK detalė:</strong> plotas × BACK tarifas + mažos detalės priedas.</p>
+      <p><strong>Perėjimas:</strong> pridedamas Furnix → Furnibox antkainis; gauta kaina BOM'e naudojama kaip <em>Cabinet Part Calculation</em>.</p>
+    </article>
+    <article>
+      <p class="eyebrow">Įprastas BOM produktas</p><h3>Rekursyvi komponentų savikaina</h3>
+      <p><strong>Savikaina:</strong> kiekvieno komponento išspręsta kaina × jo kiekis; vidiniai BOM išskleidžiami iki kainą turinčių komponentų.</p>
+      <p><strong>Priedai:</strong> Level II kategorijų tarifai × kiekis + Level I produkto kategorijos tarifai.</p>
+      <p><strong>Korekcija:</strong> bendra {{ '%g'|format(config.adjustment_rate * 100) }} % korekcija taikoma tik priedams, ne komponentų savikainai.</p>
+    </article>
+    <article>
+      <p class="eyebrow">APACK / HRD-A / Shelf-PP</p><h3>Vidinio gamybos produkto kelias</h3>
+      <p><strong>Savikaina:</strong> komponentai paimami iš vidinės MANUFACTURE BOM ir įtraukiami rekursyviai.</p>
+      <p><strong>Apsauga:</strong> vidinių vaikų pardavimo priedai antrą kartą nepridedami.</p>
+      <p><strong>Perėjimas:</strong> produkto lygio kategorijos tarifai pritaikomi ten, kur jie priklauso pagal galutinio produkto taisyklę.</p>
+    </article>
+    <article>
+      <p class="eyebrow">FPACK</p><h3>Pakuotė su Cabinet Parts darbu</h3>
+      <p><strong>Medžiagos:</strong> BOM komponentai ir apskaičiuotos Cabinet Parts kainos.</p>
+      <p><strong>Surinkimo darbas:</strong> MIN(10 €, MAX(4 €, Cabinet Parts savikaina ÷ 9,8)).</p>
+      <p><strong>Perėjimas:</strong> pridedami likę FPACK kategorijos tarifai ir tik tada priedų korekcija.</p>
+    </article>
+    <article>
+      <p class="eyebrow">Ne BOM produktas</p><h3>Pirkimo kaina ir fiksuoti priedai</h3>
+      <p><strong>Formulė:</strong> pirkimo kaina + paruošimas + sandėliavimas + maišelis + lipdukas.</p>
+      <p><strong>Korekcija:</strong> bendra BOM priedų korekcija šiam keliui netaikoma.</p>
+      <p><strong>Trūkumas:</strong> jei patikimos pirkimo kainos nėra, produktas blokuojamas.</p>
+    </article>
+  </div>
+  <div class="map-arrow">↓</div>
+  <div class="map-engine"><strong>2. Sudedama galutinė Reform SO kaina</strong><span>Komponentų arba pirkimo savikaina + taikomi darbų ir aptarnavimo priedai + priedų korekcija.</span></div>
   <div class="map-arrow">↓</div>
   <div class="map-decision">
-    <div class="map-good"><strong>CALCULATED</strong><small>Kaina apskaičiuota ir paaiškinama</small></div>
-    <div class="map-bad"><strong>BLOCKED</strong><small>Kaina nespėjama; parodoma konkreti priežastis</small></div>
+    <div class="map-good"><strong>APSKAIČIUOTA</strong><small>Visos reikalingos kainos ir taisyklės rastos; rezultatas patenka į kainoraštį ir PRICE TRACE.</small></div>
+    <div class="map-bad"><strong>BLOCKED</strong><small>Nėra patikimos kainos, BOM arba taisyklės; Standard Price nenaudojama ir kaina nespėjama.</small></div>
   </div>
   <div class="map-arrow">↓</div>
   <div class="map-outputs">

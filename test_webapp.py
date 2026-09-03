@@ -57,6 +57,12 @@ def test_pricing_control_explains_inputs_and_source_priority(monkeypatch, tmp_pa
     assert "Kainos šaltinių pasirinkimo tvarka" in text
     assert "Odoo Standard Price nėra atsarginis šaltinis" in text
     assert "Odoo nekeičiamas" in text
+    assert "Nustatomas produkto kainodaros tipas" in text
+    assert "Perkamas komponentas" in text
+    assert "Cabinet / Shelf Part" in text
+    assert "APACK / HRD-A / Shelf-PP" in text
+    assert "MIN(10 €, MAX(4 €, Cabinet Parts savikaina ÷ 9,8))" in text
+    assert "Ne BOM produktas" in text
 
 
 def test_pricing_control_saves_manual_values_together(monkeypatch, tmp_path):
