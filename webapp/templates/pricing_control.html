@@ -60,12 +60,30 @@
       <div><dt>Pritaikytos taisyklės</dt><dd>{{ item.rules or '—' }}</dd></div>
       <div><dt>Problema / peržiūros priežastis</dt><dd>{{ item.issues or 'Nėra' }}</dd></div>
     </dl>
-    {% if sku_search.trace %}
-      <details class="trace-details" open><summary>Skaičiavimo kelias · {{ sku_search.trace|length }} žingsniai</summary>
-        <div class="table-wrap"><table><thead><tr><th>Žingsnis</th><th>Tipas</th><th>Komponentas / taisyklė</th><th>Kiekis</th><th>Vieneto kaina</th><th>Suma</th><th>Šaltinis</th><th>Statusas</th></tr></thead><tbody>
-          {% for row in sku_search.trace %}<tr><td>{{ row['Step #'] }}</td><td>{{ row['Step Type'] }}</td><td>{{ row['Input / Component / Rule'] }}</td><td>{{ row['Qty / Multiplier'] or '—' }}</td><td>{{ row['Unit Price'] or '—' }}</td><td>{{ row['Amount'] or '—' }}</td><td>{{ row['Source'] }}</td><td><span class="state {{ 'fail' if row['Step Status'] == 'BLOCKED' else 'ready' }}">{{ row['Step Status'] }}</span></td></tr>{% endfor %}
+    {% if item.status != 'BLOCKED' %}
+      <div class="price-equation" aria-label="Galutinės kainos formulė">
+        <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) }}</strong></div><b>+</b>
+        <div><small>Kainodaros priedai</small><strong>{{ '%.4f €'|format(item.addons) }}</strong></div><b>+</b>
+        <div><small>Korekcija</small><strong>{{ '%.4f €'|format(item.adjustment) }}</strong></div><b>=</b>
+        <div class="equation-total"><small>Galutinė SO kaina</small><strong>{{ '%.4f €'|format(item.final) }}</strong></div>
+      </div>
+    {% endif %}
+    {% if sku_search.materials %}
+      <details class="trace-details" open><summary>BOM struktūra ir komponentų kainos · {{ sku_search.materials|length }} eilutės</summary>
+        <div class="table-wrap"><table><thead><tr><th>BOM kelias</th><th>Komponentas</th><th>Kiekis</th><th>Vieneto kaina</th><th>Suma</th><th>Iš kur gauta kaina</th><th>Statusas</th></tr></thead><tbody>
+          {% for row in sku_search.materials %}<tr><td>{{ row['Explanation'].split(';')[0] }}</td><td><strong>{{ row['Input / Component / Rule'] }}</strong></td><td>{{ row['Qty / Multiplier'] if row['Qty / Multiplier'] is not none else '—' }}</td><td>{{ '%.4f €'|format(row['Unit Price']) if row['Unit Price'] is number else '—' }}</td><td>{{ '%.4f €'|format(row['Amount']) if row['Amount'] is number else '—' }}</td><td>{{ row['Source'] or '—' }}</td><td><span class="state {{ 'fail' if row['Step Status'] == 'BLOCKED' else 'ready' }}">{{ row['Step Status'] }}</span></td></tr>{% endfor %}
         </tbody></table></div>
       </details>
+    {% endif %}
+    {% if sku_search.tariffs %}
+      <details class="trace-details" open><summary>Pritaikyti tarifai ir kategorijų taisyklės · {{ sku_search.tariffs|length }} eilutės</summary>
+        <div class="table-wrap"><table><thead><tr><th>Taikymo lygis</th><th>Taisyklė / kategorija</th><th>Daugiklis</th><th>Pritaikyta suma</th><th>Taisyklės ID</th></tr></thead><tbody>
+          {% for row in sku_search.tariffs %}<tr><td>{{ row['Source'] or '—' }}</td><td><strong>{{ row['Input / Component / Rule'] }}</strong></td><td>{{ row['Qty / Multiplier'] if row['Qty / Multiplier'] is not none else '—' }}</td><td>{{ '%.4f €'|format(row['Amount']) if row['Amount'] is number else '—' }}</td><td>{{ row['Rule ID'] }}</td></tr>{% endfor %}
+        </tbody></table></div>
+      </details>
+    {% endif %}
+    {% if sku_search.trace and not sku_search.materials and not sku_search.tariffs %}
+      <p class="sku-empty muted">Šiam SKU atskiros BOM komponentų ar tarifų eilutės netaikomos.</p>
     {% endif %}
   {% elif sku_search.query %}
     <div class="sku-empty"><strong>Tikslaus SKU „{{ sku_search.query }}“ paskutiniame run’e nerasta.</strong>

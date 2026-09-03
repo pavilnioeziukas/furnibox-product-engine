@@ -116,6 +116,9 @@ def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp
     assert "11.9000 €" in ok_page
     assert "COMP-1" in ok_page
     assert "Last Purchase Price" in ok_page
+    assert "BOM struktūra ir komponentų kainos" in ok_page
+    assert "Iš kur gauta kaina" in ok_page
+    assert "Galutinės kainos formulė" in ok_page
     assert "Missing component price" in blocked_page
     assert "R006" in blocked_page
 

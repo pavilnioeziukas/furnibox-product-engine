@@ -1162,6 +1162,17 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
             for row in _sheet_rows(pricing_path, "PRICE TRACE")
             if str(row.get("SKU") or "").strip().casefold() == normalized
         ]
+        result["materials"] = [
+            row for row in result["trace"]
+            if str(row.get("Step Type") or "").upper() == "MATERIAL"
+        ]
+        result["tariffs"] = [
+            row for row in result["trace"]
+            if str(row.get("Step Type") or "").upper() == "PRICING ADD-ON"
+        ]
+    else:
+        result["materials"] = []
+        result["tariffs"] = []
 
     seen = set()
     for candidate in candidates:
