@@ -1221,6 +1221,54 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
     return result
 
 
+PRICING_RULE_LABELS = {
+    "R001": (
+        "Tiesioginė komponento kaina",
+        "Panaudota paruošta faktinė arba patvirtinta pakoreguota pirkimo kaina.",
+    ),
+    "R002": (
+        "Komponentų savikaina pagal BOM",
+        "Savikaina gauta sudėjus BOM komponentų kainas, padaugintas iš jų kiekių.",
+    ),
+    "R003": (
+        "Kategorijos darbų ir aptarnavimo priedai",
+        "Pridėti kategorijai nustatyti surinkimo, sandėliavimo, pakavimo ir kiti tarifai.",
+    ),
+    "R004": (
+        "Bendra priedų korekcija",
+        "Bendras korekcijos procentas pritaikytas tik kainodaros priedams, ne komponentų savikainai.",
+    ),
+    "R005": (
+        "Vidinio gamybos produkto savikaina",
+        "APACK, HRD-A arba Shelf-PP komponentai įtraukti per jų vidinę BOM struktūrą.",
+    ),
+    "R006": (
+        "Trūkstamų duomenų saugiklis",
+        "Kaina blokuojama, kai nėra patikimos tiesioginės kainos arba išsprendžiamos BOM struktūros.",
+    ),
+    "R007": (
+        "Ne BOM produkto kaina",
+        "Prie pirkimo kainos pridėti paruošimo, sandėliavimo, maišelio ir lipduko tarifai.",
+    ),
+}
+
+
+def _rule_explanations(match: dict[str, Any] | None) -> list[dict[str, str]]:
+    if not match:
+        return []
+    result = []
+    for rule_id in str(match.get("rules") or "").split(","):
+        rule_id = rule_id.strip()
+        if not rule_id:
+            continue
+        title, explanation = PRICING_RULE_LABELS.get(
+            rule_id,
+            ("Techninė kainodaros taisyklė", "Taisyklės paaiškinimas dar neaprašytas."),
+        )
+        result.append({"id": rule_id, "title": title, "explanation": explanation})
+    return result
+
+
 @app.get("/pricing-control")
 def pricing_control():
     config = load_config(SO_PRICING_CONFIG_PATH)
@@ -1240,6 +1288,7 @@ def pricing_control():
 
     pricing_job = _latest_job_for("refresh_reform_pricing")
     sku_query = request.args.get("sku", "").strip()
+    sku_search = _search_latest_pricing(pricing_job, sku_query)
 
     return render_template(
         "pricing_control.html",
@@ -1247,7 +1296,8 @@ def pricing_control():
         parameters=parameters,
         adjustment_total=len(adjustments),
         pricing_job=pricing_job,
-        sku_search=_search_latest_pricing(pricing_job, sku_query),
+        sku_search=sku_search,
+        rule_explanations=_rule_explanations(sku_search["match"]),
         lifecycle_job=_latest_job_for("product_lifecycle_audit"),
         parameter_updated_at=parameter_updated_at,
     )

@@ -49,22 +49,23 @@
       <span class="state {{ 'fail' if item.status == 'BLOCKED' else 'ready' }}">{{ item.status }}</span>
     </div>
     <div class="sku-metrics">
-      <div><small>Savikaina</small><strong>{{ '%.4f €'|format(item.cost) if item.cost is number else '—' }}</strong></div>
-      <div><small>Kainodaros priedai</small><strong>{{ '%.4f €'|format(item.addons) if item.addons is number else '—' }}</strong></div>
-      <div><small>Korekcija</small><strong>{{ '%.4f €'|format(item.adjustment) if item.adjustment is number else '—' }}</strong></div>
-      <div><small>Galutinė SO kaina</small><strong>{{ '%.4f €'|format(item.final) if item.final is number else '—' }}</strong></div>
+      <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) if item.cost is number else '—' }}</strong><p>Komponentų kainos × jų kiekiai. Išskaidymas pateiktas žemiau.</p></div>
+      <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) if item.addons is number else '—' }}</strong><p>Surinkimas, sandėliavimas, pakavimas ir kiti kategorijos tarifai.</p></div>
+      <div><small>Bendra priedų korekcija ({{ '%g'|format(config.adjustment_rate * 100) }} %)</small><strong>{{ '%.4f €'|format(item.adjustment) if item.adjustment is number else '—' }}</strong><p>Taikoma tik priedams. Komponentų savikaina nemažinama.</p></div>
+      <div><small>Galutinė Reform SO kaina</small><strong>{{ '%.4f €'|format(item.final) if item.final is number else '—' }}</strong><p>Savikaina + priedai + priedų korekcija.</p></div>
     </div>
     <dl class="sku-facts">
-      <div><dt>Tipas</dt><dd>{{ item.position_type or '—' }}</dd></div>
-      <div><dt>Kategorija</dt><dd>{{ item.category or '—' }}</dd></div>
-      <div><dt>Pritaikytos taisyklės</dt><dd>{{ item.rules or '—' }}</dd></div>
-      <div><dt>Problema / peržiūros priežastis</dt><dd>{{ item.issues or 'Nėra' }}</dd></div>
+      <div><dt>Skaičiavimo būdas</dt><dd>{% if item.position_type == 'BOM' %}<strong>Pagal BOM komponentų struktūrą.</strong> Sistema suskaičiavo žemiau parodytų komponentų savikainą.{% else %}<strong>Be BOM.</strong> Kaina pradėta nuo tiesioginės pirkimo kainos.{% endif %}</dd></div>
+      <div><dt>Kainodaros kategorija</dt><dd><strong>{{ item.category or 'Nepriskirta' }}</strong><br>Ji nustato, kurie darbų ir aptarnavimo tarifai taikomi šiam produktui.</dd></div>
+      <div><dt>Patikros rezultatas</dt><dd>{% if item.status == 'BLOCKED' %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Problemų nerasta.</strong> Kaina apskaičiuota pagal turimus duomenis ir taisykles.{% endif %}</dd></div>
+      <div><dt>Naudota logika</dt><dd>{% for rule in rule_explanations %}<span class="rule-summary"><strong>{{ rule.title }}</strong> — {{ rule.explanation }}</span>{% else %}—{% endfor %}</dd></div>
     </dl>
+    <details class="technical-rules"><summary>Techniniai audito kodai</summary><p>{{ item.rules or 'Nėra' }}. Kodai reikalingi rezultatui atsekti Excel PRICING RULES lape.</p></details>
     {% if item.status != 'BLOCKED' %}
       <div class="price-equation" aria-label="Galutinės kainos formulė">
         <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) }}</strong></div><b>+</b>
-        <div><small>Kainodaros priedai</small><strong>{{ '%.4f €'|format(item.addons) }}</strong></div><b>+</b>
-        <div><small>Korekcija</small><strong>{{ '%.4f €'|format(item.adjustment) }}</strong></div><b>=</b>
+        <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) }}</strong></div><b>+</b>
+        <div><small>Priedų korekcija ({{ '%g'|format(config.adjustment_rate * 100) }} %)</small><strong>{{ '%.4f €'|format(item.adjustment) }}</strong></div><b>=</b>
         <div class="equation-total"><small>Galutinė SO kaina</small><strong>{{ '%.4f €'|format(item.final) }}</strong></div>
       </div>
     {% endif %}
