@@ -602,7 +602,7 @@ def latest_upload() -> Path | None:
     )
 
 
-def prune_completed_jobs(keep_per_action: int = 10) -> list[str]:
+def prune_completed_jobs(keep_per_action: int = 2) -> list[str]:
     """Delete only old completed run directories inside RUN_DIR."""
     grouped: dict[str, list[tuple[str, Path]]] = {}
     protected = set(_reserved_jobs) | set(_active_processes)
