@@ -82,6 +82,17 @@ def test_pricing_control_saves_manual_values_together(monkeypatch, tmp_path):
     assert saved.output_decimals == 3
 
 
+def test_pricing_rules_explains_internal_and_legacy_category_ids(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    page = webapp.app.test_client().get("/pricing-rules").get_data(as_text=True)
+
+    assert "Vidinis grupės ID" in page
+    assert "Seno šaltinio kodas" in page
+    assert "Tai atsekamumo žyma, o ne tarifas ir ne SKU kiekis" in page
+    assert "Priskirta SKU" in page
+    assert "kainos pats neapskaičiuoja" in page
+
+
 def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp_path):
     webapp = load_webapp(monkeypatch, tmp_path)
     job_dir = webapp.RUN_DIR / "pricing123"
