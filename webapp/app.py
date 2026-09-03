@@ -32,7 +32,12 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from so_pricing_rules import load_config, migrate_legacy_workbook, save_config
+from so_pricing_rules import (
+    load_config,
+    migrate_legacy_workbook,
+    save_config,
+    validate_config,
+)
 from cabinet_parts_price_parameters import (
     load_parameters as load_cabinet_parts_parameters,
     save_parameters as save_cabinet_parts_parameters,
@@ -1044,6 +1049,89 @@ def purchase_pricing():
         ),
         adjustment_query=adjustment_query,
     )
+
+
+def _latest_job_for(action: str) -> dict[str, Any] | None:
+    return next(
+        (
+            job
+            for job in list_jobs()
+            if job.get("action") == action
+        ),
+        None,
+    )
+
+
+@app.get("/pricing-control")
+def pricing_control():
+    config = load_config(SO_PRICING_CONFIG_PATH)
+    parameters = load_cabinet_parts_parameters(
+        CABINET_PARTS_PARAMETERS_PATH
+    )
+    adjustments = load_purchase_price_adjustments(
+        PURCHASE_PRICE_ADJUSTMENTS_PATH
+    )
+
+    parameter_updated_at = None
+    if CABINET_PARTS_PARAMETERS_PATH.exists():
+        parameter_updated_at = datetime.fromtimestamp(
+            CABINET_PARTS_PARAMETERS_PATH.stat().st_mtime,
+            timezone.utc,
+        ).isoformat()
+
+    return render_template(
+        "pricing_control.html",
+        config=config,
+        parameters=parameters,
+        adjustment_total=len(adjustments),
+        pricing_job=_latest_job_for("refresh_reform_pricing"),
+        lifecycle_job=_latest_job_for("product_lifecycle_audit"),
+        parameter_updated_at=parameter_updated_at,
+    )
+
+
+@app.post("/pricing-control/manual-values")
+def update_pricing_control_manual_values():
+    document = {
+        "back_rate_per_m2": form_number("back_rate_per_m2"),
+        "processing_rate_per_m2": form_number("processing_rate_per_m2"),
+        "ww_material_rate_per_m2": form_number("ww_material_rate_per_m2"),
+        "bb_material_rate_per_m2": form_number("bb_material_rate_per_m2"),
+        "no_material_rate_per_m2": form_number("no_material_rate_per_m2"),
+        "small_part_threshold_m2": form_number("small_part_threshold_m2"),
+        "small_part_surcharge": form_number("small_part_surcharge"),
+        "furnix_markup_percent": form_number("furnix_markup_percent"),
+        "output_decimals": request.form.get("output_decimals", "").strip(),
+    }
+
+    try:
+        parameters = validate_cabinet_parts_parameters(document)
+        adjustment_percent = form_number("adjustment_percent")
+        if not -100 < adjustment_percent <= 0:
+            raise ValueError(
+                "Bendra BOM korekcija turi būti didesnė nei -100 % "
+                "ir ne didesnė nei 0 %."
+            )
+
+        config = load_config(SO_PRICING_CONFIG_PATH)
+        config["adjustment_rate"] = adjustment_percent / 100
+
+        # Validate both groups before either application-owned file is changed.
+        config = validate_config(config)
+
+        save_cabinet_parts_parameters(
+            CABINET_PARTS_PARAMETERS_PATH,
+            parameters,
+        )
+        save_config(SO_PRICING_CONFIG_PATH, config)
+    except ValueError as exc:
+        abort(400, str(exc))
+
+    flash(
+        "Rankiniu būdu valdomos kainodaros reikšmės išsaugotos. "
+        "Naujos reikšmės bus naudojamos kitame kainodaros paleidime."
+    )
+    return redirect(url_for("pricing_control") + "#manual-values")
 
 
 @app.post("/purchase-pricing")

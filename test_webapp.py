@@ -46,6 +46,41 @@ def test_health_and_index(monkeypatch, tmp_path):
     assert "chunked-upload.js" in client.get("/").get_data(as_text=True)
 
 
+def test_pricing_control_explains_inputs_and_source_priority(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    page = webapp.app.test_client().get("/pricing-control")
+    text = page.get_data(as_text=True)
+
+    assert page.status_code == 200
+    assert "Rankiniu būdu valdome" in text
+    assert "Kainos šaltinių pasirinkimo tvarka" in text
+    assert "Odoo Standard Price nėra atsarginis šaltinis" in text
+    assert "Odoo nekeičiamas" in text
+
+
+def test_pricing_control_saves_manual_values_together(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    client = webapp.app.test_client()
+    response = client.post("/pricing-control/manual-values", data={
+        "adjustment_percent": "-5",
+        "back_rate_per_m2": "12",
+        "processing_rate_per_m2": "18",
+        "ww_material_rate_per_m2": "9",
+        "bb_material_rate_per_m2": "8",
+        "no_material_rate_per_m2": "9",
+        "small_part_threshold_m2": "0.4",
+        "small_part_surcharge": "1.2",
+        "furnix_markup_percent": "2",
+        "output_decimals": "3",
+    })
+
+    assert response.status_code == 302
+    assert webapp.load_config(webapp.SO_PRICING_CONFIG_PATH)["adjustment_rate"] == -0.05
+    saved = webapp.load_cabinet_parts_parameters(webapp.CABINET_PARTS_PARAMETERS_PATH)
+    assert saved.processing_rate_per_m2 == 18
+    assert saved.output_decimals == 3
+
+
 def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):
     webapp = load_webapp(monkeypatch, tmp_path)
     monkeypatch.setenv("PRODUCT_ENGINE_BRAND", "Furnix")

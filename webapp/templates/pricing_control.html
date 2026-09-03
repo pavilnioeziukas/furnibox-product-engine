@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Kainodaros kontrolė · {{ product_engine.app_name }}{% endblock %}
+
+{% block content %}
+<section class="page-head control-head">
+  <div>
+    <p class="eyebrow">Vienas valdymo taškas</p>
+    <h1>Kainodaros kontrolė</h1>
+    <p class="lead">Čia aiškiai atskirta, ką įvedame ranka, ką parenka algoritmas ir ką reikia patikrinti po paleidimo.</p>
+  </div>
+  <span class="state ready">Odoo nekeičiamas</span>
+</section>
+
+<section class="control-flow" aria-label="Kainodaros valdymo eiga">
+  <article><span>1</span><div><strong>Įvedame</strong><small>Tik verslo reikšmes</small></div></article>
+  <article><span>2</span><div><strong>Skaičiuojame</strong><small>Pagal matomą šaltinių tvarką</small></div></article>
+  <article><span>3</span><div><strong>Patikriname</strong><small>CONTROL, TRACE ir EXCEPTIONS</small></div></article>
+</section>
+
+<section class="grid control-status-grid">
+  <article class="panel">
+    <div class="panel-head"><div><p class="eyebrow">Paskutinis skaičiavimas</p><h2>Reform kainodara</h2></div>
+      {% if pricing_job %}<span class="state {{ pricing_job.status|lower }}">{{ pricing_job.status }}</span>{% else %}<span class="state waiting">Dar nepaleista</span>{% endif %}
+    </div>
+    {% if pricing_job %}<p class="muted">{{ pricing_job.created_at }} · Run {{ pricing_job.id }}</p>{% else %}<p class="muted">Nėra išsaugoto paleidimo.</p>{% endif %}
+    <a class="secondary control-button" href="{{ url_for('index') }}">Paleisti naują skaičiavimą</a>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><div><p class="eyebrow">Katalogo kontrolė</p><h2>Produktų gyvavimo auditas</h2></div>
+      {% if lifecycle_job %}<span class="state {{ lifecycle_job.status|lower }}">{{ lifecycle_job.status }}</span>{% else %}<span class="state waiting">Dar nepaleista</span>{% endif %}
+    </div>
+    <p class="muted">Archyvavimo kandidatai tik siūlomi. Produkciniai duomenys automatiškai nekeičiami.</p>
+  </article>
+</section>
+
+<section id="manual-values" class="section-head"><div><p class="eyebrow">Rankiniu būdu valdome</p><h2>Reikšmės, kurias iš tikrųjų įvedame</h2></div><p>Visi kiti skaičiai gaunami iš duomenų arba formulės.</p></section>
+
+<form method="post" action="{{ url_for('update_pricing_control_manual_values') }}">
+  <div class="panel control-form">
+    <div class="control-group">
+      <div><h3>Bendra Reform taisyklė</h3><p class="muted">Taikoma BOM kategorijų priedams.</p></div>
+      <label><span>Bendra BOM priedų korekcija</span><span class="number-field"><input name="adjustment_percent" type="number" step="0.01" min="-99.99" max="0" value="{{ '%g'|format(config.adjustment_rate * 100) }}" required><b>%</b></span></label>
+    </div>
+
+    <div class="control-group">
+      <div><h3>Cabinet Parts savikaina</h3><p class="muted">Medžiaga ir apdirbimas skaičiuojami pagal detalės plotą.</p></div>
+      <div class="control-fields">
+        <label><span>BACK tarifas</span><span class="number-field"><input name="back_rate_per_m2" type="number" step="any" min="0" value="{{ parameters.back_rate_per_m2 }}" required><b>€/m²</b></span></label>
+        <label><span>Apdirbimo tarifas</span><span class="number-field"><input name="processing_rate_per_m2" type="number" step="any" min="0" value="{{ parameters.processing_rate_per_m2 }}" required><b>€/m²</b></span></label>
+        <label><span>WW medžiaga</span><span class="number-field"><input name="ww_material_rate_per_m2" type="number" step="any" min="0" value="{{ parameters.ww_material_rate_per_m2 }}" required><b>€/m²</b></span></label>
+        <label><span>BB medžiaga</span><span class="number-field"><input name="bb_material_rate_per_m2" type="number" step="any" min="0" value="{{ parameters.bb_material_rate_per_m2 }}" required><b>€/m²</b></span></label>
+        <label><span>NO medžiaga</span><span class="number-field"><input name="no_material_rate_per_m2" type="number" step="any" min="0" value="{{ parameters.no_material_rate_per_m2 }}" required><b>€/m²</b></span></label>
+        <label><span>Mažos detalės riba</span><span class="number-field"><input name="small_part_threshold_m2" type="number" step="any" min="0" value="{{ parameters.small_part_threshold_m2 }}" required><b>m²</b></span></label>
+        <label><span>Mažos detalės priedas</span><span class="number-field"><input name="small_part_surcharge" type="number" step="any" min="0" value="{{ parameters.small_part_surcharge }}" required><b>€/vnt.</b></span></label>
+        <label><span>Furnix → Furnibox antkainis</span><span class="number-field"><input name="furnix_markup_percent" type="number" step="0.01" min="0" value="{{ parameters.furnix_markup_percent }}" required><b>%</b></span></label>
+        <label><span>Apvalinimas</span><span class="number-field"><input name="output_decimals" type="number" step="1" min="0" max="8" value="{{ parameters.output_decimals }}" required><b>sk.</b></span></label>
+      </div>
+    </div>
+
+    <div class="save-bar"><div><strong>Bus naudojama tik kitame paleidime</strong><small>{% if parameter_updated_at %}Paskutinis parametrų pakeitimas: {{ parameter_updated_at }}{% else %}Naudojamos numatytosios reikšmės{% endif %}</small></div><button class="primary" type="submit">Išsaugoti visas reikšmes</button></div>
+  </div>
+</form>
+
+<section class="section-head"><div><p class="eyebrow">Algoritmas</p><h2>Kainos šaltinių pasirinkimo tvarka</h2></div><p>Šios eilutės nėra papildomi įvedimai — tai dabar galiojanti skaičiavimo sutartis.</p></section>
+<div class="panel source-policy">
+  <div class="policy-row"><span class="policy-order">1</span><div><strong>Paruošta faktinė pirkimo / perdavimo kaina</strong><p>Naudojama paskutinė Odoo pirkimo kaina, o jei SKU turi patvirtintą korekciją — pakoreguota „New Purchase Price“.</p></div><span class="state ready">Pirmas pasirinkimas</span></div>
+  <div class="policy-row"><span class="policy-order">2</span><div><strong>Rekursyvus BOM skaičiavimas</strong><p>Jei tiesioginės kainos nėra, produkto savikaina sudedama iš BOM komponentų kainų ir kiekių.</p></div><span class="state running">Kai nėra tiesioginės</span></div>
+  <div class="policy-row"><span class="policy-order">3</span><div><strong>BLOCKED, jei nėra nei kainos, nei BOM</strong><p>Spėjama kaina nenaudojama. Odoo Standard Price nėra atsarginis šaltinis.</p></div><span class="state fail">Nestebima tyliai</span></div>
+</div>
+
+<section class="section-head"><div><p class="eyebrow">Detalus valdymas</p><h2>Kur valdomos išimtys ir priskyrimai</h2></div></section>
+<div class="grid control-links">
+  <a class="panel" href="{{ url_for('purchase_pricing') }}#purchase-price-adjustments"><strong>{{ adjustment_total }} pirkimo kainų korekcijų</strong><span>Peržiūrėti SKU išimtis ir jų komentarus →</span></a>
+  <a class="panel" href="{{ url_for('pricing_rules') }}#business-categories"><strong>{{ config.bom_category_rates|length }} verslo kategorijų tarifai</strong><span>Keisti FPACK, HRD, Shelf, APACK ir kitus tarifus →</span></a>
+  <a class="panel" href="{{ url_for('pricing_rules') }}#bom-skus"><strong>{{ config.bom_skus|length }} BOM SKU priskyrimų</strong><span>Patikrinti, kuriai kategorijai priskirtas SKU →</span></a>
+</div>
+{% endblock %}

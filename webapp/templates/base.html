@@ -17,6 +17,7 @@
     <nav class="topnav">
       <a href="{{ url_for('index') }}">Veiksmai</a>
       {% if product_engine.show_pricing_nav %}
+        <a href="{{ url_for('pricing_control') }}">Kainodaros kontrolė</a>
         <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
         <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
       {% endif %}
