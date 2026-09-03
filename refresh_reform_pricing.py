@@ -15,6 +15,9 @@ from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from pricing_control import enrich_pricing_workbook
 
@@ -582,7 +585,7 @@ def write_furnix_parts_price_review(
 
 
 def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
-    """Publish the full Furnibox-to-Reform purchase price chain."""
+    """Publish Furnix cabinet parts and bought components on separate sheets."""
     source_workbook = load_workbook(source, data_only=True, read_only=True)
     source_sheet = source_workbook["REFORM PRICE LIST"]
     rows = source_sheet.iter_rows(values_only=True)
@@ -601,9 +604,13 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     ]
 
     result = Workbook()
-    sheet = result.active
-    sheet.title = "FURNIBOX PURCHASE PRICES"
-    sheet.append([output_name for _, output_name in selected])
+    result.remove(result.active)
+    sheets = {
+        "CABINET PARTS": result.create_sheet("CABINET PARTS"),
+        "COMPONENTS": result.create_sheet("COMPONENTS"),
+    }
+    for sheet in sheets.values():
+        sheet.append([output_name for _, output_name in selected])
     for row in rows:
         published_row = [
             row[columns[source_name]]
@@ -619,23 +626,37 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
             and isinstance(markup_factor, (int, float))
         ):
             published_row[reform_price_index] = adjusted_price * markup_factor
-        sheet.append(published_row)
+        target_sheet = (
+            sheets["CABINET PARTS"]
+            if str(published_row[2] or "").strip().upper()
+            == "CABINET PART CALCULATION"
+            else sheets["COMPONENTS"]
+        )
+        target_sheet.append(published_row)
     source_workbook.close()
 
-    sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = sheet.dimensions
-    sheet.column_dimensions["A"].width = 38
-    sheet.column_dimensions["B"].width = 50
-    sheet.column_dimensions["C"].width = 28
-    sheet.column_dimensions["D"].width = 35
-    for column in ("E", "F", "H"):
-        sheet.column_dimensions[column].width = 28
-        for cell in sheet[column][1:]:
-            cell.number_format = '0.0000 [$€-x-euro2]'
-    sheet.column_dimensions["G"].width = 22
-    sheet.column_dimensions["I"].width = 30
-    for cell in sheet["G"][1:]:
-        cell.number_format = "0.0000"
+    header_fill = PatternFill("solid", fgColor="1F5A44")
+    for sheet in sheets.values():
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        sheet.sheet_view.showGridLines = False
+        sheet.column_dimensions["A"].width = 38
+        sheet.column_dimensions["B"].width = 50
+        sheet.column_dimensions["C"].width = 28
+        sheet.column_dimensions["D"].width = 35
+        for cell in sheet[1]:
+            cell.fill = header_fill
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+        sheet.row_dimensions[1].height = 34
+        for column in ("E", "F", "H"):
+            sheet.column_dimensions[column].width = 28
+            for cell in sheet[column][1:]:
+                cell.number_format = '0.0000 [$€-x-euro2]'
+        sheet.column_dimensions["G"].width = 22
+        sheet.column_dimensions["I"].width = 30
+        for cell in sheet["G"][1:]:
+            cell.number_format = "0.0000"
 
     info = result.create_sheet("INFO")
     info.append(["Parameter", "Value"])
@@ -654,6 +675,158 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
     ])
     info.append(["Odoo changed", "NO"])
     result.save(destination)
+
+
+def write_tamara_product_classification_review(
+    dataset_path: Path,
+    reconciliation_path: Path,
+    destination: Path,
+    price_source_path: Path | None = None,
+) -> None:
+    """Export the full current product line for Tamara's classification review."""
+    dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    reconciliation = json.loads(reconciliation_path.read_text(encoding="utf-8"))
+    products_by_sku = {
+        str(row.get("sku") or "").strip().casefold(): row
+        for row in dataset.get("products") or []
+        if str(row.get("sku") or "").strip()
+    }
+    odoo_status_by_sku = {
+        str(row.get("sku") or "").strip().casefold(): str(row.get("status") or "")
+        for row in reconciliation.get("products") or []
+        if str(row.get("sku") or "").strip()
+    }
+    price_names_by_sku = {}
+    if price_source_path and price_source_path.is_file():
+        price_workbook = load_workbook(
+            price_source_path,
+            data_only=True,
+            read_only=True,
+        )
+        price_sheet = price_workbook["REFORM PRICE LIST"]
+        price_rows = price_sheet.iter_rows(values_only=True)
+        price_header = next(price_rows)
+        price_columns = {value: index for index, value in enumerate(price_header)}
+        for row in price_rows:
+            sku = str(row[price_columns["Internal Reference"]] or "").strip()
+            name = str(row[price_columns["Name"]] or "").strip()
+            if sku and name and name.upper() not in {"#N/A", "N/A"}:
+                price_names_by_sku[sku.casefold()] = name
+        price_workbook.close()
+
+    workbook = Workbook()
+    instructions = workbook.active
+    instructions.title = "INSTRUCTIONS"
+    instructions.append(["TAMARA PRODUCT CLASSIFICATION REVIEW"])
+    instructions.append([
+        "Purpose",
+        "Review the complete current product line and correct only the yellow columns.",
+    ])
+    instructions.append([
+        "Tamara Decision",
+        "Choose GAMINAMAS, PERKAMAS or NENAUDOJAMAS. Leave blank when the current suggestion is correct.",
+    ])
+    instructions.append([
+        "Safety",
+        "This workbook is a review file only. It does not change Production Odoo.",
+    ])
+    instructions.column_dimensions["A"].width = 28
+    instructions.column_dimensions["B"].width = 100
+    instructions["A1"].font = Font(bold=True, size=16, color="FFFFFF")
+    instructions["A1"].fill = PatternFill("solid", fgColor="1F5A44")
+    instructions.merge_cells("A1:B1")
+    instructions.sheet_view.showGridLines = False
+
+    review = workbook.create_sheet("PRODUCT REVIEW")
+    headers = [
+        "SKU",
+        "Product Name",
+        "Origin",
+        "Current Dataset Role",
+        "Current BOM Type",
+        "Current Product Type",
+        "Has BOM",
+        "Current Odoo Check",
+        "System Suggestion",
+        "Tamara Decision",
+        "Tamara Comment",
+    ]
+    review.append(headers)
+    for catalog_row in sorted(
+        dataset.get("product_catalog") or [],
+        key=lambda row: str(row.get("sku") or "").casefold(),
+    ):
+        sku = str(catalog_row.get("sku") or "").strip()
+        if not sku:
+            continue
+        product = products_by_sku.get(sku.casefold(), {})
+        has_bom = bool(catalog_row.get("has_bom"))
+        suggestion = "GAMINAMAS" if has_bom else "PERKAMAS"
+        name = (
+            catalog_row.get("name_2")
+            or catalog_row.get("name_1")
+            or product.get("name_2")
+            or product.get("name")
+            or price_names_by_sku.get(sku.casefold())
+            or ""
+        )
+        if str(name).strip().upper() in {"#N/A", "N/A"}:
+            name = ""
+        review.append([
+            sku,
+            name,
+            catalog_row.get("origin") or "",
+            catalog_row.get("role") or "",
+            product.get("bom_type") or ("NO BOM" if not has_bom else ""),
+            product.get("product_type") or catalog_row.get("product_type") or "",
+            "YES" if has_bom else "NO",
+            odoo_status_by_sku.get(sku.casefold(), ""),
+            suggestion,
+            "",
+            "",
+        ])
+
+    header_fill = PatternFill("solid", fgColor="1F5A44")
+    edit_fill = PatternFill("solid", fgColor="FFF2CC")
+    for cell in review[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    review.row_dimensions[1].height = 34
+    review.freeze_panes = "A2"
+    review.auto_filter.ref = review.dimensions
+    review.sheet_view.showGridLines = False
+    widths = [30, 52, 22, 26, 20, 26, 12, 23, 22, 22, 55]
+    for index, width in enumerate(widths, start=1):
+        review.column_dimensions[review.cell(1, index).column_letter].width = width
+    for row_number in range(2, review.max_row + 1):
+        review.cell(row_number, 10).fill = edit_fill
+        review.cell(row_number, 11).fill = edit_fill
+    decision_validation = DataValidation(
+        type="list",
+        formula1='"GAMINAMAS,PERKAMAS,NENAUDOJAMAS"',
+        allow_blank=True,
+    )
+    decision_validation.error = "Pasirinkite vieną iš pateiktų sprendimų."
+    decision_validation.errorTitle = "Neteisingas sprendimas"
+    decision_validation.prompt = "Keiskite tik jei sistemos pasiūlymas neteisingas."
+    decision_validation.promptTitle = "Tamaros sprendimas"
+    review.add_data_validation(decision_validation)
+    decision_validation.add(f"J2:J{review.max_row}")
+    review.conditional_formatting.add(
+        f"J2:J{review.max_row}",
+        FormulaRule(formula=['J2="GAMINAMAS"'], fill=PatternFill("solid", fgColor="E2F0D9")),
+    )
+    review.conditional_formatting.add(
+        f"J2:J{review.max_row}",
+        FormulaRule(formula=['J2="PERKAMAS"'], fill=PatternFill("solid", fgColor="DDEBF7")),
+    )
+    review.conditional_formatting.add(
+        f"J2:J{review.max_row}",
+        FormulaRule(formula=['J2="NENAUDOJAMAS"'], fill=PatternFill("solid", fgColor="F4CCCC")),
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    workbook.save(destination)
 
 
 def read_reconciliation_summary(path: Path) -> dict:
@@ -773,6 +946,14 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         (output_dir / "Reform_Pricing_Result.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+
+        if target_dataset.is_file() and target_reconciliation.is_file():
+            write_tamara_product_classification_review(
+                target_dataset,
+                target_reconciliation,
+                output_dir / "Tamara_Product_Classification_Review.xlsx",
+                PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
+            )
 
         if blocked:
             write_blocker_report(

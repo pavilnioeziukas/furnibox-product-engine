@@ -15,6 +15,7 @@ from refresh_reform_pricing import (
     write_furnibox_purchase_prices,
     write_furnix_parts_price_review,
     write_pricing_chain_audit,
+    write_tamara_product_classification_review,
 )
 
 
@@ -392,7 +393,11 @@ class RefreshReformPricingTests(unittest.TestCase):
 
             write_furnibox_purchase_prices(source, destination)
             published = load_workbook(destination, data_only=True, read_only=True)
-            result = published["FURNIBOX PURCHASE PRICES"]
+            self.assertEqual(
+                published.sheetnames,
+                ["CABINET PARTS", "COMPONENTS", "INFO"],
+            )
+            result = published["COMPONENTS"]
             header = [cell.value for cell in result[1]]
             self.assertEqual(header, [
                 "Internal Reference", "Name", "Price Source",
@@ -404,6 +409,85 @@ class RefreshReformPricingTests(unittest.TestCase):
             self.assertEqual(result.cell(2, 7).value, 1.05)
             self.assertEqual(result.cell(2, 8).value, 12.6)
             published.close()
+
+    def test_splits_cabinet_parts_from_bought_components(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "source.xlsx"
+            destination = base / "purchase.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "REFORM PRICE LIST"
+            sheet.append([
+                "Internal Reference", "Name", "Price Source",
+                "Vendor / Supply Source", "Real Furnibox Purchase Price",
+                "Adjusted Furnibox Purchase Price", "Reform Markup Factor",
+                "Reform Purchase Price", "Status / BOM Source",
+            ])
+            sheet.append([
+                "PART-FURNIX", "Panel", "CABINET PART CALCULATION", "Furnix",
+                5, 5, None, 5, "EXISTING",
+            ])
+            sheet.append([
+                "COMP-1", "Hinge", "LAST PURCHASE PRICE", "Vendor",
+                2, 2, 1, 2, "",
+            ])
+            workbook.save(source)
+
+            write_furnibox_purchase_prices(source, destination)
+            published = load_workbook(destination, data_only=True, read_only=True)
+            self.assertEqual(published["CABINET PARTS"]["A2"].value, "PART-FURNIX")
+            self.assertEqual(published["COMPONENTS"]["A2"].value, "COMP-1")
+            published.close()
+
+    def test_exports_full_tamara_product_classification_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            dataset = base / "dataset.json"
+            reconciliation = base / "reconciliation.json"
+            destination = base / "review.xlsx"
+            dataset.write_text(json.dumps({
+                "products": [{
+                    "sku": "MADE-1",
+                    "bom_type": "MANUFACTURE",
+                    "product_type": "ACCESSORIES",
+                }],
+                "product_catalog": [
+                    {
+                        "sku": "MADE-1", "origin": "REFORM",
+                        "role": "BOM PARENT", "has_bom": True,
+                        "name_2": "Made",
+                    },
+                    {
+                        "sku": "BUY-1", "origin": "REFORM",
+                        "role": "NON-BOM COMPONENT", "has_bom": False,
+                        "name_2": "Bought",
+                    },
+                ],
+            }), encoding="utf-8")
+            reconciliation.write_text(json.dumps({
+                "products": [
+                    {"sku": "MADE-1", "status": "PRODUCT UNCHANGED"},
+                    {"sku": "BUY-1", "status": "UPDATE PRODUCT"},
+                ],
+            }), encoding="utf-8")
+
+            write_tamara_product_classification_review(
+                dataset,
+                reconciliation,
+                destination,
+            )
+            workbook = load_workbook(destination, data_only=True)
+            review = workbook["PRODUCT REVIEW"]
+            rows = {
+                review.cell(row, 1).value: row
+                for row in range(2, review.max_row + 1)
+            }
+            self.assertEqual(review.cell(rows["MADE-1"], 5).value, "MANUFACTURE")
+            self.assertEqual(review.cell(rows["MADE-1"], 9).value, "GAMINAMAS")
+            self.assertEqual(review.cell(rows["BUY-1"], 9).value, "PERKAMAS")
+            self.assertTrue(review.data_validations.count)
+            workbook.close()
 
 
 if __name__ == "__main__":
