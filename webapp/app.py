@@ -2777,7 +2777,12 @@ def start_job(
         / job_id
     )
 
-    job_dir.mkdir()
+    try:
+        job_dir.mkdir()
+    except OSError:
+        with _jobs_lock:
+            _reserved_jobs.discard(job_id)
+        raise
 
     write_job(
         job_dir,
