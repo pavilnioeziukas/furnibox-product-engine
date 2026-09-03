@@ -730,6 +730,14 @@ def apply_target_business_category_rules(
         if normalized.endswith("-A") and has_apack:
             pack = _target_top_market_pack_code(sku, "22.1", "23.1")
             assign(sku, f"12+9+{pack}+24.1")
+            continue
+
+        # A flat-pack cabinet gets its add-ons from the FPACK and HRD children.
+        # It still needs a zero-value Level I rule so every sellable cabinet in
+        # the current Target Dataset can enter the pricing scope.
+        has_fpack = any(child.upper().startswith("FPACK-") for child in children)
+        if product_type == "CABINETS" and has_fpack and key(sku) not in result:
+            result[key(sku)] = PricingRule(sku, "", "", "")
 
     return result, authoritative
 
@@ -900,6 +908,28 @@ def load_reform_boms(
                 )
             ),
         }
+
+    # The current Target Dataset, not a historic manually migrated SKU list,
+    # defines which sellable KIT products must receive a price. A product is
+    # included only when the rule-building stage produced a deterministic rule.
+    if target_dataset is not None and rules:
+        for product in target_dataset.get("products") or []:
+            sku = text(product.get("sku"))
+            product_type = text(product.get("product_type")).upper()
+            if (
+                not sku
+                or text(product.get("bom_type")).upper() != "KIT"
+                or product_type not in {"CABINETS", "CABINET SHELF"}
+                or key(sku) not in rules
+            ):
+                continue
+            pricing_products.setdefault(
+                key(sku),
+                {
+                    "sku": sku,
+                    "product_category": product_type,
+                },
+            )
 
     # FPACK/APACK are valid standalone pricing objects as well as BOM nodes.
     # Synthetic APACK graph nodes above follow the same FPACK -> APACK rule

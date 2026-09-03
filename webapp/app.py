@@ -1197,6 +1197,31 @@ def _read_pricing_index_match(
         connection.close()
 
 
+def _read_target_dataset_match(path: Path, normalized: str) -> dict[str, Any] | None:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    for product in document.get("products") or []:
+        sku = str(product.get("sku") or "").strip()
+        if sku.casefold() != normalized:
+            continue
+        return {
+            "sku": sku,
+            "name": product.get("name_2") or product.get("name") or "",
+            "position_type": "BOM",
+            "category": product.get("product_type") or product.get("reform_category") or "",
+            "cost": None,
+            "addons": None,
+            "adjustment": None,
+            "final": None,
+            "status": "NEĮTRAUKTAS",
+            "rules": "",
+            "issues": (
+                "Produktas yra aktualiame Target Dataset, bet nepateko į "
+                "paskutinio run'o kainodaros rezultatą."
+            ),
+        }
+    return None
+
+
 def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "query": query,
@@ -1216,6 +1241,7 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
     )
     blocker_path = _job_file(job, "Reform_Pricing_BLOCKED.xlsx")
     index_path = _job_file(job, "Pricing_Explain_Index.sqlite")
+    dataset_path = _job_file(job, "Furnibox_Target_Dataset.json")
 
     pricing_match = None
     pricing_trace: list[dict[str, Any]] = []
@@ -1250,6 +1276,9 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
                 "rules": "R006",
                 "issues": row.get("Issues") or "",
             }
+
+    if result["match"] is None and dataset_path:
+        result["match"] = _read_target_dataset_match(dataset_path, normalized)
 
     if result["match"] and pricing_path:
         result["trace"] = pricing_trace

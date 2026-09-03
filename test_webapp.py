@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import hashlib
 import io
+import json
 from pathlib import Path
 from openpyxl import Workbook
 
@@ -169,6 +170,18 @@ def test_pricing_search_stops_after_matching_trace_block(monkeypatch, tmp_path):
 
     assert match["sku"] == "A"
     assert [row["Input / Component / Rule"] for row in rows] == ["PART-A"]
+
+
+def test_pricing_search_explains_target_product_outside_result(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    dataset = tmp_path / "target.json"
+    dataset.write_text(json.dumps({"products": [{
+        "sku": "USB-C-CAB01-UPP010",
+        "product_type": "CABINETS",
+    }]}), encoding="utf-8")
+    match = webapp._read_target_dataset_match(dataset, "usb-c-cab01-upp010")
+    assert match["status"] == "NEĮTRAUKTAS"
+    assert "aktualiame Target Dataset" in match["issues"]
 
 
 def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):

@@ -257,6 +257,24 @@ class ReformSoLinePriceTests(unittest.TestCase):
             {key(shelf), key(shelf_pp), key(cabinet), key(apack)},
         )
 
+    def test_target_business_categories_cover_flat_pack_usb_cabinet(self):
+        sku = "USB-C-CAB01-UPP010"
+        dataset = {"products": [{
+            "sku": sku,
+            "product_type": "CABINETS",
+            "bom_type": "KIT",
+            "components": [
+                {"sku": "FPACK-US-CAB01-UPP010", "quantity": 1},
+                {"sku": "UNI-P-ACC01-HRD202D", "quantity": 1},
+            ],
+        }]}
+        rules, authoritative = apply_target_business_category_rules(
+            {}, dataset, empty_config(), reference={}
+        )
+        self.assertIn(key(sku), rules)
+        self.assertEqual(rules[key(sku)].addons, (0, 0, 0, 0, 0, 0))
+        self.assertNotIn(key(sku), authoritative)
+
     def test_authoritative_product_category_does_not_double_child_addons(self):
         top = "SHELF"
         child = "SHELF-PP"

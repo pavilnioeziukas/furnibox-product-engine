@@ -46,7 +46,7 @@
     {% set item = sku_search.match %}
     <div class="sku-result-head">
       <div><p class="eyebrow">Rastas paskutiniame run’e</p><h3>{{ item.sku }}</h3><p class="muted">{{ item.name }}</p></div>
-      <span class="state {{ 'fail' if item.status == 'BLOCKED' else 'ready' }}">{{ item.status }}</span>
+      <span class="state {{ 'fail' if item.status in ('BLOCKED', 'NEĮTRAUKTAS') else 'ready' }}">{{ item.status }}</span>
     </div>
     <div class="sku-metrics">
       <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) if item.cost is number else '—' }}</strong><p>Komponentų kainos × jų kiekiai. Išskaidymas pateiktas žemiau.</p></div>
@@ -57,11 +57,11 @@
     <dl class="sku-facts">
       <div><dt>Skaičiavimo būdas</dt><dd>{% if item.position_type == 'BOM' %}<strong>Pagal BOM komponentų struktūrą.</strong> Sistema suskaičiavo žemiau parodytų komponentų savikainą.{% else %}<strong>Be BOM.</strong> Kaina pradėta nuo tiesioginės pirkimo kainos.{% endif %}</dd></div>
       <div><dt>Kainodaros kategorija</dt><dd><strong>{{ item.category or 'Nepriskirta' }}</strong><br>Ji nustato, kurie darbų ir aptarnavimo tarifai taikomi šiam produktui. <a href="{{ url_for('pricing_rules') }}#bom-categories">Atidaryti kategorijų konfigūraciją →</a></dd></div>
-      <div><dt>Patikros rezultatas</dt><dd>{% if item.status == 'BLOCKED' %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Problemų nerasta.</strong> Kaina apskaičiuota pagal turimus duomenis ir taisykles.{% endif %}</dd></div>
+      <div><dt>Patikros rezultatas</dt><dd>{% if item.status in ('BLOCKED', 'NEĮTRAUKTAS') %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Problemų nerasta.</strong> Kaina apskaičiuota pagal turimus duomenis ir taisykles.{% endif %}</dd></div>
       <div><dt>Naudota logika</dt><dd>{% for rule in rule_explanations %}<span class="rule-summary"><strong>{{ rule.title }}</strong> — {{ rule.explanation }}</span>{% else %}—{% endfor %}</dd></div>
     </dl>
     <details class="technical-rules"><summary>Techniniai audito kodai</summary><p>{% for rule in rule_explanations %}<a href="#rule-{{ rule.id }}">{{ rule.id }} · {{ rule.title }}</a>{% if not loop.last %}<br>{% endif %}{% else %}Nėra{% endfor %}</p></details>
-    {% if item.status != 'BLOCKED' %}
+    {% if item.status not in ('BLOCKED', 'NEĮTRAUKTAS') %}
       <div class="price-equation" aria-label="Galutinės kainos formulė">
         <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) }}</strong></div><b>+</b>
         <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) }}</strong></div><b>+</b>
