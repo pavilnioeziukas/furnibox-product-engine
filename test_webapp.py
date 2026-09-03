@@ -4,6 +4,7 @@ import importlib
 import hashlib
 import io
 from pathlib import Path
+from openpyxl import Workbook
 
 
 def load_webapp(monkeypatch, tmp_path):
@@ -79,6 +80,44 @@ def test_pricing_control_saves_manual_values_together(monkeypatch, tmp_path):
     saved = webapp.load_cabinet_parts_parameters(webapp.CABINET_PARTS_PARAMETERS_PATH)
     assert saved.processing_rate_per_m2 == 18
     assert saved.output_decimals == 3
+
+
+def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    job_dir = webapp.RUN_DIR / "pricing123"
+    files_dir = job_dir / "files"
+    files_dir.mkdir(parents=True)
+
+    prices = Workbook()
+    sheet = prices.active
+    sheet.title = "PRICE RESULTS"
+    sheet.append(["SKU", "Name", "Position Type", "Product Category", "Component / Purchase Cost", "Pricing Add-ons Total", "Adjustment Amount", "Final Reform SO Unit Price", "Control Status", "Applied Rule IDs", "Issues / Review Reason"])
+    sheet.append(["SKU-OK", "Test product", "BOM", "Cabinet", 10, 2, -0.1, 11.9, "CALCULATED", "R002, R003", ""])
+    trace = prices.create_sheet("PRICE TRACE")
+    trace.append(["SKU", "Step #", "Step Type", "Rule ID", "Input / Component / Rule", "Qty / Multiplier", "Unit Price", "Amount", "Source", "Step Status", "Explanation"])
+    trace.append(["SKU-OK", 1, "MATERIAL", "R001", "COMP-1", 2, 5, 10, "Last Purchase Price", "CALCULATED", "Test"])
+    price_path = files_dir / "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx"
+    prices.save(price_path)
+
+    blocked = Workbook()
+    blockers = blocked.active
+    blockers.title = "BLOCKERS"
+    blockers.append(["SKU", "Position Type", "Status", "Issues"])
+    blockers.append(["SKU-BLOCKED", "BOM", "BLOCKED", "Missing component price"])
+    blocker_path = files_dir / "Reform_Pricing_BLOCKED.xlsx"
+    blocked.save(blocker_path)
+
+    webapp.write_job(job_dir, {"id": "pricing123", "action": "refresh_reform_pricing", "title": "Pricing", "status": "BLOCKED", "created_at": "2026-09-03T00:00:00+00:00", "files": [{"name": price_path.name, "path": str(price_path)}, {"name": blocker_path.name, "path": str(blocker_path)}]})
+    client = webapp.app.test_client()
+
+    ok_page = client.get("/pricing-control?sku=SKU-OK").get_data(as_text=True)
+    blocked_page = client.get("/pricing-control?sku=SKU-BLOCKED").get_data(as_text=True)
+
+    assert "11.9000 €" in ok_page
+    assert "COMP-1" in ok_page
+    assert "Last Purchase Price" in ok_page
+    assert "Missing component price" in blocked_page
+    assert "R006" in blocked_page
 
 
 def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):

@@ -26,6 +26,7 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
+from openpyxl import load_workbook
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -1062,6 +1063,117 @@ def _latest_job_for(action: str) -> dict[str, Any] | None:
     )
 
 
+def _job_file(job: dict[str, Any] | None, *names: str) -> Path | None:
+    if not job:
+        return None
+    by_name = {
+        str(item.get("name")): Path(str(item.get("path")))
+        for item in job.get("files", [])
+        if item.get("name") and item.get("path")
+    }
+    for name in names:
+        path = by_name.get(name)
+        if path and path.exists() and path.is_file():
+            return path
+    return None
+
+
+def _sheet_rows(path: Path, sheet_name: str) -> list[dict[str, Any]]:
+    workbook = load_workbook(path, data_only=True, read_only=True)
+    try:
+        if sheet_name not in workbook.sheetnames:
+            return []
+        rows = workbook[sheet_name].iter_rows(values_only=True)
+        header = next(rows, ())
+        names = [str(value or "").strip() for value in header]
+        return [
+            dict(zip(names, values))
+            for values in rows
+            if any(value not in (None, "") for value in values)
+        ]
+    finally:
+        workbook.close()
+
+
+def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "query": query,
+        "match": None,
+        "trace": [],
+        "suggestions": [],
+        "source_job": job,
+    }
+    normalized = query.strip().casefold()
+    if not normalized or not job:
+        return result
+
+    pricing_path = _job_file(
+        job,
+        "Reform_SO_Line_Prices.xlsx",
+        "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx",
+    )
+    blocker_path = _job_file(job, "Reform_Pricing_BLOCKED.xlsx")
+
+    rows = _sheet_rows(pricing_path, "PRICE RESULTS") if pricing_path else []
+    blockers = _sheet_rows(blocker_path, "BLOCKERS") if blocker_path else []
+    candidates: list[dict[str, Any]] = []
+
+    for row in rows:
+        sku = str(row.get("SKU") or "").strip()
+        if normalized in sku.casefold():
+            candidates.append({"sku": sku, "name": row.get("Name") or ""})
+        if sku.casefold() == normalized:
+            result["match"] = {
+                "sku": sku,
+                "name": row.get("Name") or "",
+                "position_type": row.get("Position Type") or "",
+                "category": row.get("Product Category") or "",
+                "cost": row.get("Component / Purchase Cost"),
+                "addons": row.get("Pricing Add-ons Total"),
+                "adjustment": row.get("Adjustment Amount"),
+                "final": row.get("Final Reform SO Unit Price"),
+                "status": row.get("Control Status") or "",
+                "rules": row.get("Applied Rule IDs") or "",
+                "issues": row.get("Issues / Review Reason") or "",
+            }
+
+    for row in blockers:
+        sku = str(row.get("SKU") or "").strip()
+        if normalized in sku.casefold():
+            candidates.append({"sku": sku, "name": ""})
+        if sku.casefold() == normalized:
+            result["match"] = {
+                "sku": sku,
+                "name": "",
+                "position_type": row.get("Position Type") or "",
+                "category": "",
+                "cost": None,
+                "addons": None,
+                "adjustment": None,
+                "final": None,
+                "status": row.get("Status") or "BLOCKED",
+                "rules": "R006",
+                "issues": row.get("Issues") or "",
+            }
+
+    if result["match"] and pricing_path:
+        result["trace"] = [
+            row
+            for row in _sheet_rows(pricing_path, "PRICE TRACE")
+            if str(row.get("SKU") or "").strip().casefold() == normalized
+        ]
+
+    seen = set()
+    for candidate in candidates:
+        key = candidate["sku"].casefold()
+        if key not in seen:
+            result["suggestions"].append(candidate)
+            seen.add(key)
+        if len(result["suggestions"]) == 20:
+            break
+    return result
+
+
 @app.get("/pricing-control")
 def pricing_control():
     config = load_config(SO_PRICING_CONFIG_PATH)
@@ -1079,12 +1191,16 @@ def pricing_control():
             timezone.utc,
         ).isoformat()
 
+    pricing_job = _latest_job_for("refresh_reform_pricing")
+    sku_query = request.args.get("sku", "").strip()
+
     return render_template(
         "pricing_control.html",
         config=config,
         parameters=parameters,
         adjustment_total=len(adjustments),
-        pricing_job=_latest_job_for("refresh_reform_pricing"),
+        pricing_job=pricing_job,
+        sku_search=_search_latest_pricing(pricing_job, sku_query),
         lifecycle_job=_latest_job_for("product_lifecycle_audit"),
         parameter_updated_at=parameter_updated_at,
     )

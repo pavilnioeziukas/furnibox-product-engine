@@ -34,6 +34,46 @@
   </article>
 </section>
 
+<section id="sku-search" class="section-head"><div><p class="eyebrow">Paaiškinti kainą</p><h2>SKU paieška paskutiniame run’e</h2></div><p>Rodomi išsaugoti skaičiavimo rezultatai — kaina čia neperskaičiuojama.</p></section>
+<section class="panel sku-search-panel">
+  <form class="sku-search-form" method="get" action="{{ url_for('pricing_control') }}">
+    <label for="sku"><strong>SKU</strong></label>
+    <input id="sku" name="sku" value="{{ sku_search.query }}" placeholder="Pvz. EUB-C-CAB01-PNL006" autocomplete="off" required>
+    <button class="primary" type="submit">Rasti ir paaiškinti</button>
+  </form>
+
+  {% if sku_search.query and sku_search.match %}
+    {% set item = sku_search.match %}
+    <div class="sku-result-head">
+      <div><p class="eyebrow">Rastas paskutiniame run’e</p><h3>{{ item.sku }}</h3><p class="muted">{{ item.name }}</p></div>
+      <span class="state {{ 'fail' if item.status == 'BLOCKED' else 'ready' }}">{{ item.status }}</span>
+    </div>
+    <div class="sku-metrics">
+      <div><small>Savikaina</small><strong>{{ '%.4f €'|format(item.cost) if item.cost is number else '—' }}</strong></div>
+      <div><small>Kainodaros priedai</small><strong>{{ '%.4f €'|format(item.addons) if item.addons is number else '—' }}</strong></div>
+      <div><small>Korekcija</small><strong>{{ '%.4f €'|format(item.adjustment) if item.adjustment is number else '—' }}</strong></div>
+      <div><small>Galutinė SO kaina</small><strong>{{ '%.4f €'|format(item.final) if item.final is number else '—' }}</strong></div>
+    </div>
+    <dl class="sku-facts">
+      <div><dt>Tipas</dt><dd>{{ item.position_type or '—' }}</dd></div>
+      <div><dt>Kategorija</dt><dd>{{ item.category or '—' }}</dd></div>
+      <div><dt>Pritaikytos taisyklės</dt><dd>{{ item.rules or '—' }}</dd></div>
+      <div><dt>Problema / peržiūros priežastis</dt><dd>{{ item.issues or 'Nėra' }}</dd></div>
+    </dl>
+    {% if sku_search.trace %}
+      <details class="trace-details" open><summary>Skaičiavimo kelias · {{ sku_search.trace|length }} žingsniai</summary>
+        <div class="table-wrap"><table><thead><tr><th>Žingsnis</th><th>Tipas</th><th>Komponentas / taisyklė</th><th>Kiekis</th><th>Vieneto kaina</th><th>Suma</th><th>Šaltinis</th><th>Statusas</th></tr></thead><tbody>
+          {% for row in sku_search.trace %}<tr><td>{{ row['Step #'] }}</td><td>{{ row['Step Type'] }}</td><td>{{ row['Input / Component / Rule'] }}</td><td>{{ row['Qty / Multiplier'] or '—' }}</td><td>{{ row['Unit Price'] or '—' }}</td><td>{{ row['Amount'] or '—' }}</td><td>{{ row['Source'] }}</td><td><span class="state {{ 'fail' if row['Step Status'] == 'BLOCKED' else 'ready' }}">{{ row['Step Status'] }}</span></td></tr>{% endfor %}
+        </tbody></table></div>
+      </details>
+    {% endif %}
+  {% elif sku_search.query %}
+    <div class="sku-empty"><strong>Tikslaus SKU „{{ sku_search.query }}“ paskutiniame run’e nerasta.</strong>
+      {% if sku_search.suggestions %}<p>Galimi atitikmenys:</p><div class="sku-suggestions">{% for item in sku_search.suggestions %}<a href="{{ url_for('pricing_control', sku=item.sku) }}#sku-search">{{ item.sku }}</a>{% endfor %}</div>{% else %}<p class="muted">Patikrinkite SKU arba paleiskite naują kainodaros run’ą su aktualiu BOM.</p>{% endif %}
+    </div>
+  {% endif %}
+</section>
+
 <section id="manual-values" class="section-head"><div><p class="eyebrow">Rankiniu būdu valdome</p><h2>Reikšmės, kurias iš tikrųjų įvedame</h2></div><p>Visi kiti skaičiai gaunami iš duomenų arba formulės.</p></section>
 
 <form method="post" action="{{ url_for('update_pricing_control_manual_values') }}">
@@ -75,4 +115,38 @@
   <a class="panel" href="{{ url_for('pricing_rules') }}#business-categories"><strong>{{ config.bom_category_rates|length }} verslo kategorijų tarifai</strong><span>Keisti FPACK, HRD, Shelf, APACK ir kitus tarifus →</span></a>
   <a class="panel" href="{{ url_for('pricing_rules') }}#bom-skus"><strong>{{ config.bom_skus|length }} BOM SKU priskyrimų</strong><span>Patikrinti, kuriai kategorijai priskirtas SKU →</span></a>
 </div>
+
+<section id="how-it-works" class="section-head"><div><p class="eyebrow">Nuolatinė dokumentacija</p><h2>Kaip realizuota Furnibox kainodara</h2></div><p>Ši schema ir aprašymas lieka Product Engine aplikacijoje.</p></section>
+<section class="panel pricing-map">
+  <div class="map-sources">
+    <div><strong>Production Odoo</strong><small>Paskutinės pirkimo kainos · tik skaitymas</small></div>
+    <div><strong>Aktualus Reform BOM</strong><small>Produktai, komponentai ir kiekiai</small></div>
+    <div><strong>Valdomos reikšmės</strong><small>Korekcijos, detalės ir kategorijų tarifai</small></div>
+  </div>
+  <div class="map-arrow">↓</div>
+  <div class="map-engine"><strong>Kainodaros variklis</strong><span>Tiesioginė kaina → BOM savikaina → kategorijų priedai → korekcija → galutinė SO kaina</span></div>
+  <div class="map-arrow">↓</div>
+  <div class="map-decision">
+    <div class="map-good"><strong>CALCULATED</strong><small>Kaina apskaičiuota ir paaiškinama</small></div>
+    <div class="map-bad"><strong>BLOCKED</strong><small>Kaina nespėjama; parodoma konkreti priežastis</small></div>
+  </div>
+  <div class="map-arrow">↓</div>
+  <div class="map-outputs">
+    <div><strong>PRICE RESULTS</strong><small>Galutiniai rezultatai</small></div><div><strong>PRICE TRACE</strong><small>Kiekvienas žingsnis</small></div><div><strong>EXCEPTIONS</strong><small>Spręstinos vietos</small></div><div><strong>CONTROL</strong><small>Run, versija ir statusai</small></div>
+  </div>
+</section>
+
+<section class="panel implementation-list">
+  <h3>Realizacijos sąrašas</h3>
+  <ol>
+    <li><strong>Įvestys.</strong> Naujausias Reform BOM, Production Odoo pirkimo kainos ir aplikacijoje saugomos verslo reikšmės.</li>
+    <li><strong>Pirkimo kaina.</strong> Pirmiausia imama paruošta faktinė kaina; patvirtinta SKU korekcija ją pakeičia į „New Purchase Price“.</li>
+    <li><strong>BOM savikaina.</strong> Kai tiesioginės kainos nėra, komponentų savikaina skaičiuojama rekursyviai pagal kiekius.</li>
+    <li><strong>Kainodaros taisyklės.</strong> Pridedami SKU kategorijai priskirti surinkimo, sandėliavimo, pakavimo ir kiti tarifai.</li>
+    <li><strong>Saugiklis.</strong> Jei nėra nei patikimos kainos, nei išsprendžiamo BOM, pozicija pažymima BLOCKED; Standard Price nenaudojama.</li>
+    <li><strong>Išleidimas.</strong> Esant BLOCKED pateikiamas tik COMPLETE_ONLY failas; pilnas kainoraštis pateikiamas tik kai BLOCKED = 0.</li>
+    <li><strong>Auditas.</strong> Kiekvienas SKU gauna statusą, taisyklių ID, komponentų šaltinius, tarpines sumas ir problemos paaiškinimą.</li>
+    <li><strong>Odoo apsauga.</strong> Kainodaros paleidimas ir ši kontrolė yra read-only Production Odoo atžvilgiu.</li>
+  </ol>
+</section>
 {% endblock %}
