@@ -686,11 +686,20 @@ def enrich_pricing_workbook(
         control_names.append("CHANGES")
     _insert_control_sheets_first(workbook, control_names)
 
-    if search_index is not None:
-        _write_search_index(workbook, Path(search_index))
-
     destination.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(destination)
+
+    if search_index is not None:
+        index_path = Path(search_index)
+        try:
+            _write_search_index(workbook, index_path)
+        except (OSError, sqlite3.OperationalError) as exc:
+            index_path.unlink(missing_ok=True)
+            print(
+                "WARNING: SKU paieškos indeksas nesukurtas; "
+                f"Excel kainodaros failas išsaugotas. Priežastis: {exc}",
+                flush=True,
+            )
     return destination
 
 

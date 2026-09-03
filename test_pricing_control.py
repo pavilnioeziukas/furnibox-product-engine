@@ -1,5 +1,6 @@
 from pathlib import Path
 import sqlite3
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
@@ -138,3 +139,22 @@ def test_enrich_pricing_workbook_writes_search_index(tmp_path):
         connection.close()
     assert sku == ("CAB-1",)
     assert trace_count == 3
+
+
+def test_search_index_failure_does_not_block_controlled_workbook(tmp_path):
+    source = tmp_path / "source.xlsx"
+    output = tmp_path / "controlled.xlsx"
+    index = tmp_path / "Pricing_Explain_Index.sqlite"
+    _sample_source(source)
+
+    with patch(
+        "pricing_control._write_search_index",
+        side_effect=sqlite3.OperationalError("database or disk is full"),
+    ):
+        enrich_pricing_workbook(source, output, search_index=index)
+
+    assert output.is_file()
+    workbook = load_workbook(output, data_only=True)
+    assert "CONTROL" in workbook.sheetnames
+    assert "PRICE RESULTS" in workbook.sheetnames
+    workbook.close()
