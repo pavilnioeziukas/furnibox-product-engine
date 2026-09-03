@@ -123,6 +123,26 @@ def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp
     assert "R006" in blocked_page
 
 
+def test_pricing_search_stops_after_matching_trace_block(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    path = tmp_path / "prices.xlsx"
+    workbook = Workbook()
+    results = workbook.active
+    results.title = "PRICE RESULTS"
+    results.append(["SKU", "Name", "Position Type", "Product Category", "Component / Purchase Cost", "Pricing Add-ons Total", "Adjustment Amount", "Final Reform SO Unit Price", "Control Status", "Applied Rule IDs", "Issues / Review Reason"])
+    results.append(["A", "A", "BOM", "C", 1, 0, 0, 1, "CALCULATED", "R002", ""])
+    trace = workbook.create_sheet("PRICE TRACE")
+    trace.append(["SKU", "Step Type", "Input / Component / Rule"])
+    trace.append(["A", "MATERIAL", "PART-A"])
+    trace.append(["B", "MATERIAL", "PART-B"])
+    workbook.save(path)
+
+    match, rows, _ = webapp._read_pricing_workbook_match(path, "a")
+
+    assert match["sku"] == "A"
+    assert [row["Input / Component / Rule"] for row in rows] == ["PART-A"]
+
+
 def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):
     webapp = load_webapp(monkeypatch, tmp_path)
     monkeypatch.setenv("PRODUCT_ENGINE_BRAND", "Furnix")

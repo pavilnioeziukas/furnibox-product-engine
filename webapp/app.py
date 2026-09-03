@@ -1095,6 +1095,58 @@ def _sheet_rows(path: Path, sheet_name: str) -> list[dict[str, Any]]:
         workbook.close()
 
 
+def _read_pricing_workbook_match(
+    path: Path,
+    normalized: str,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read only matching rows; never materialize the large trace sheet."""
+    workbook = load_workbook(path, data_only=True, read_only=True)
+    match = None
+    trace: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    try:
+        if "PRICE RESULTS" not in workbook.sheetnames:
+            return match, trace, candidates
+        rows = workbook["PRICE RESULTS"].iter_rows(values_only=True)
+        names = [str(value or "").strip() for value in next(rows, ())]
+        for values in rows:
+            row = dict(zip(names, values))
+            sku = str(row.get("SKU") or "").strip()
+            if normalized in sku.casefold() and len(candidates) < 20:
+                candidates.append({"sku": sku, "name": row.get("Name") or ""})
+            if sku.casefold() == normalized:
+                match = {
+                    "sku": sku,
+                    "name": row.get("Name") or "",
+                    "position_type": row.get("Position Type") or "",
+                    "category": row.get("Product Category") or "",
+                    "cost": row.get("Component / Purchase Cost"),
+                    "addons": row.get("Pricing Add-ons Total"),
+                    "adjustment": row.get("Adjustment Amount"),
+                    "final": row.get("Final Reform SO Unit Price"),
+                    "status": row.get("Control Status") or "",
+                    "rules": row.get("Applied Rule IDs") or "",
+                    "issues": row.get("Issues / Review Reason") or "",
+                }
+
+        if match and "PRICE TRACE" in workbook.sheetnames:
+            rows = workbook["PRICE TRACE"].iter_rows(values_only=True)
+            names = [str(value or "").strip() for value in next(rows, ())]
+            found = False
+            for values in rows:
+                row = dict(zip(names, values))
+                sku = str(row.get("SKU") or "").strip().casefold()
+                if sku == normalized:
+                    trace.append(row)
+                    found = True
+                elif found:
+                    # pricing_control writes every SKU trace as one contiguous block.
+                    break
+        return match, trace, candidates
+    finally:
+        workbook.close()
+
+
 def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "query": query,
@@ -1114,28 +1166,16 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
     )
     blocker_path = _job_file(job, "Reform_Pricing_BLOCKED.xlsx")
 
-    rows = _sheet_rows(pricing_path, "PRICE RESULTS") if pricing_path else []
+    pricing_match = None
+    pricing_trace: list[dict[str, Any]] = []
+    pricing_candidates: list[dict[str, Any]] = []
+    if pricing_path:
+        pricing_match, pricing_trace, pricing_candidates = (
+            _read_pricing_workbook_match(pricing_path, normalized)
+        )
     blockers = _sheet_rows(blocker_path, "BLOCKERS") if blocker_path else []
-    candidates: list[dict[str, Any]] = []
-
-    for row in rows:
-        sku = str(row.get("SKU") or "").strip()
-        if normalized in sku.casefold():
-            candidates.append({"sku": sku, "name": row.get("Name") or ""})
-        if sku.casefold() == normalized:
-            result["match"] = {
-                "sku": sku,
-                "name": row.get("Name") or "",
-                "position_type": row.get("Position Type") or "",
-                "category": row.get("Product Category") or "",
-                "cost": row.get("Component / Purchase Cost"),
-                "addons": row.get("Pricing Add-ons Total"),
-                "adjustment": row.get("Adjustment Amount"),
-                "final": row.get("Final Reform SO Unit Price"),
-                "status": row.get("Control Status") or "",
-                "rules": row.get("Applied Rule IDs") or "",
-                "issues": row.get("Issues / Review Reason") or "",
-            }
+    candidates: list[dict[str, Any]] = pricing_candidates
+    result["match"] = pricing_match
 
     for row in blockers:
         sku = str(row.get("SKU") or "").strip()
@@ -1157,11 +1197,7 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
             }
 
     if result["match"] and pricing_path:
-        result["trace"] = [
-            row
-            for row in _sheet_rows(pricing_path, "PRICE TRACE")
-            if str(row.get("SKU") or "").strip().casefold() == normalized
-        ]
+        result["trace"] = pricing_trace
         result["materials"] = [
             row for row in result["trace"]
             if str(row.get("Step Type") or "").upper() == "MATERIAL"
