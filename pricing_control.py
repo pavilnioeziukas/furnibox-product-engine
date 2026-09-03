@@ -9,6 +9,8 @@ from without reading Python code.
 from __future__ import annotations
 
 import argparse
+import json
+import sqlite3
 from collections import Counter, defaultdict
 from copy import copy
 from datetime import datetime
@@ -640,6 +642,7 @@ def enrich_pricing_workbook(
     git_commit: str = "",
     run_id: str = "",
     generated_at: str = "",
+    search_index: Path | None = None,
 ) -> Path:
     """Add human-readable control sheets without changing calculated values."""
     source = Path(source)
@@ -677,9 +680,43 @@ def enrich_pricing_workbook(
         control_names.append("CHANGES")
     _insert_control_sheets_first(workbook, control_names)
 
+    if search_index is not None:
+        _write_search_index(workbook, Path(search_index))
+
     destination.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(destination)
     return destination
+
+
+def _write_search_index(workbook, path: Path) -> None:
+    """Create a compact random-access index for the web Explain Price view."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE price_result (sku_key TEXT PRIMARY KEY, sku TEXT NOT NULL, payload TEXT NOT NULL);
+            CREATE TABLE price_trace (sku_key TEXT NOT NULL, step_number INTEGER NOT NULL, payload TEXT NOT NULL);
+            CREATE INDEX price_trace_sku ON price_trace (sku_key, step_number);
+            """
+        )
+        for sheet_name, table_name in (("PRICE RESULTS", "price_result"), ("PRICE TRACE", "price_trace")):
+            sheet = workbook[sheet_name]
+            headers = [_text(cell.value) for cell in sheet[1]]
+            for values in sheet.iter_rows(min_row=2, values_only=True):
+                row = dict(zip(headers, values))
+                sku = _text(row.get("SKU"))
+                if not sku:
+                    continue
+                payload = json.dumps(row, ensure_ascii=False, default=str)
+                if table_name == "price_result":
+                    connection.execute("INSERT INTO price_result VALUES (?, ?, ?)", (_key(sku), sku, payload))
+                else:
+                    connection.execute("INSERT INTO price_trace VALUES (?, ?, ?)", (_key(sku), int(row.get("Step #") or 0), payload))
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def main() -> None:

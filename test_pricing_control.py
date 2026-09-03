@@ -1,4 +1,5 @@
 from pathlib import Path
+import sqlite3
 
 from openpyxl import Workbook, load_workbook
 
@@ -115,3 +116,25 @@ def test_enrich_pricing_workbook_adds_changes_when_previous_is_supplied(tmp_path
     assert changes["C2"].value == 11.86
     assert round(changes["D2"].value, 2) == 1.86
     workbook.close()
+
+
+def test_enrich_pricing_workbook_writes_search_index(tmp_path):
+    source = tmp_path / "source.xlsx"
+    output = tmp_path / "controlled.xlsx"
+    index = tmp_path / "Pricing_Explain_Index.sqlite"
+    _sample_source(source)
+
+    enrich_pricing_workbook(source, output, search_index=index)
+
+    connection = sqlite3.connect(index)
+    try:
+        sku = connection.execute(
+            "SELECT sku FROM price_result WHERE sku_key = ?", ("cab-1",)
+        ).fetchone()
+        trace_count = connection.execute(
+            "SELECT COUNT(*) FROM price_trace WHERE sku_key = ?", ("cab-1",)
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    assert sku == ("CAB-1",)
+    assert trace_count == 3

@@ -789,6 +789,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 git_commit=git_commit,
                 run_id=run_id,
                 generated_at=generated_at,
+                search_index=output_dir / "Pricing_Explain_Index.sqlite",
             )
             write_furnibox_purchase_prices(
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
@@ -814,6 +815,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             git_commit=git_commit,
             run_id=run_id,
             generated_at=generated_at,
+            search_index=output_dir / "Pricing_Explain_Index.sqlite",
         )
         write_furnibox_purchase_prices(
             PRODUCTION_DIR / "Reform_Final_Prices.xlsx",

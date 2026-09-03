@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -1147,6 +1148,55 @@ def _read_pricing_workbook_match(
         workbook.close()
 
 
+def _read_pricing_index_match(
+    path: Path,
+    normalized: str,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
+    connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    try:
+        found = connection.execute(
+            "SELECT payload FROM price_result WHERE sku_key = ?", (normalized,)
+        ).fetchone()
+        trace_rows = (
+            connection.execute(
+                "SELECT payload FROM price_trace WHERE sku_key = ? ORDER BY step_number",
+                (normalized,),
+            ).fetchall()
+            if found else []
+        )
+        safe_fragment = normalized.replace("%", "").replace("_", "")
+        suggestions = connection.execute(
+            "SELECT sku, payload FROM price_result WHERE sku_key LIKE ? LIMIT 20",
+            (f"%{safe_fragment}%",),
+        ).fetchall()
+        raw = json.loads(found[0]) if found else None
+        match = None
+        if raw:
+            match = {
+                "sku": raw.get("SKU") or "",
+                "name": raw.get("Name") or "",
+                "position_type": raw.get("Position Type") or "",
+                "category": raw.get("Product Category") or "",
+                "cost": raw.get("Component / Purchase Cost"),
+                "addons": raw.get("Pricing Add-ons Total"),
+                "adjustment": raw.get("Adjustment Amount"),
+                "final": raw.get("Final Reform SO Unit Price"),
+                "status": raw.get("Control Status") or "",
+                "rules": raw.get("Applied Rule IDs") or "",
+                "issues": raw.get("Issues / Review Reason") or "",
+            }
+        return (
+            match,
+            [json.loads(row[0]) for row in trace_rows],
+            [
+                {"sku": sku, "name": json.loads(payload).get("Name") or ""}
+                for sku, payload in suggestions
+            ],
+        )
+    finally:
+        connection.close()
+
+
 def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "query": query,
@@ -1165,11 +1215,16 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
         "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx",
     )
     blocker_path = _job_file(job, "Reform_Pricing_BLOCKED.xlsx")
+    index_path = _job_file(job, "Pricing_Explain_Index.sqlite")
 
     pricing_match = None
     pricing_trace: list[dict[str, Any]] = []
     pricing_candidates: list[dict[str, Any]] = []
-    if pricing_path:
+    if index_path:
+        pricing_match, pricing_trace, pricing_candidates = (
+            _read_pricing_index_match(index_path, normalized)
+        )
+    elif pricing_path:
         pricing_match, pricing_trace, pricing_candidates = (
             _read_pricing_workbook_match(pricing_path, normalized)
         )
