@@ -352,6 +352,8 @@ def test_job_retention_never_deletes_running_or_latest_target(monkeypatch, tmp_p
     })
     running = webapp.RUN_DIR / "running"
     running.mkdir()
+    (running / "files").mkdir()
+    (running / "files" / "Pricing_Explain_Index.sqlite").write_bytes(b"partial")
     webapp.write_job(running, {
         "id": "running", "action": "pricing", "title": "Pricing",
         "status": "RUNNING", "created_at": "2025-01-01T00:00:00+00:00", "files": [],
@@ -366,3 +368,5 @@ def test_job_retention_never_deletes_running_or_latest_target(monkeypatch, tmp_p
     webapp.prune_completed_jobs(keep_per_action=0)
     assert target_job.exists()
     assert running.exists()
+    assert webapp.read_job(running)["status"] == "FAIL"
+    assert not (running / "files" / "Pricing_Explain_Index.sqlite").exists()

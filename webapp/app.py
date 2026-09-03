@@ -621,6 +621,18 @@ def prune_completed_jobs(keep_per_action: int = 10) -> list[str]:
         except (OSError, json.JSONDecodeError):
             continue
         if job.get("status") in {"QUEUED", "RUNNING"}:
+            # A persisted running job that is not protected by the current
+            # process cannot still be running after an application restart.
+            # Remove only its disposable partial search index, which can be
+            # large enough to block the next read-only export.
+            partial_index = job_dir / "files" / "Pricing_Explain_Index.sqlite"
+            partial_index.unlink(missing_ok=True)
+            job.update(
+                status="FAIL",
+                finished_at=utc_now(),
+                error="Paleidimas nutrūko perkraunant aplikaciją.",
+            )
+            write_job(job_dir, job)
             continue
         grouped.setdefault(text := str(job.get("action") or "unknown"), []).append(
             (str(job.get("created_at") or ""), job_dir)
