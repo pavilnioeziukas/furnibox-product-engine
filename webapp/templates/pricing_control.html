@@ -60,7 +60,7 @@
       <div><dt>Patikros rezultatas</dt><dd>{% if item.status == 'BLOCKED' %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Problemų nerasta.</strong> Kaina apskaičiuota pagal turimus duomenis ir taisykles.{% endif %}</dd></div>
       <div><dt>Naudota logika</dt><dd>{% for rule in rule_explanations %}<span class="rule-summary"><strong>{{ rule.title }}</strong> — {{ rule.explanation }}</span>{% else %}—{% endfor %}</dd></div>
     </dl>
-    <details class="technical-rules"><summary>Techniniai audito kodai</summary><p>{{ item.rules or 'Nėra' }}. Kodai reikalingi rezultatui atsekti Excel PRICING RULES lape.</p></details>
+    <details class="technical-rules"><summary>Techniniai audito kodai</summary><p>{% for rule in rule_explanations %}<a href="#rule-{{ rule.id }}">{{ rule.id }} · {{ rule.title }}</a>{% if not loop.last %}<br>{% endif %}{% else %}Nėra{% endfor %}</p></details>
     {% if item.status != 'BLOCKED' %}
       <div class="price-equation" aria-label="Galutinės kainos formulė">
         <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) }}</strong></div><b>+</b>
@@ -79,8 +79,8 @@
     {% if sku_search.tariffs %}
       <details class="trace-details" open><summary>Pritaikyti tarifai ir kategorijų taisyklės · {{ sku_search.tariffs|length }} eilutės</summary>
         <div class="tariff-links"><span>Tarifai keičiami centralizuotai:</span><a class="secondary" href="{{ url_for('pricing_rules') }}#bom-categories">BOM kategorijų tarifai</a><a class="secondary" href="{{ url_for('pricing_rules') }}#business-categories">FPACK, HRD, APACK ir Shelf tarifai</a></div>
-        <div class="table-wrap"><table><thead><tr><th>Taikymo lygis</th><th>Taisyklė / kategorija</th><th>Daugiklis</th><th>Pritaikyta suma</th><th>Taisyklės ID</th></tr></thead><tbody>
-          {% for row in sku_search.tariffs %}<tr><td>{{ row['Source'] or '—' }}</td><td><strong>{{ row['Input / Component / Rule'] }}</strong></td><td>{{ row['Qty / Multiplier'] if row['Qty / Multiplier'] is not none else '—' }}</td><td>{{ '%.4f €'|format(row['Amount']) if row['Amount'] is number else '—' }}</td><td>{{ row['Rule ID'] }}</td></tr>{% endfor %}
+        <div class="table-wrap"><table><thead><tr><th>Taikymo lygis</th><th>Kategorija</th><th>Daugiklis</th><th>Pritaikyta suma</th><th>Kas pritaikyta</th></tr></thead><tbody>
+          {% for row in sku_search.tariffs %}<tr><td>{{ row['Source'] or '—' }}</td><td><strong>{{ row['Input / Component / Rule'] }}</strong></td><td>{{ row['Qty / Multiplier'] if row['Qty / Multiplier'] is not none else '—' }}</td><td>{{ '%.4f €'|format(row['Amount']) if row['Amount'] is number else '—' }}</td><td><a class="rule-link" href="#rule-R003"><strong>Kategorijos darbų ir aptarnavimo tarifai</strong></a><span class="rule-plus">+</span><a class="rule-link" href="#rule-R004"><strong>Bendra priedų korekcija</strong></a><small class="field-help">Techninis auditas: {{ row['Rule ID'] }}</small></td></tr>{% endfor %}
         </tbody></table></div>
       </details>
     {% endif %}
@@ -127,6 +127,13 @@
   <div class="policy-row"><span class="policy-order">1</span><div><strong>Paruošta faktinė pirkimo / perdavimo kaina</strong><p>Naudojama paskutinė Odoo pirkimo kaina, o jei SKU turi patvirtintą korekciją — pakoreguota „New Purchase Price“.</p></div><span class="state ready">Pirmas pasirinkimas</span></div>
   <div class="policy-row"><span class="policy-order">2</span><div><strong>Rekursyvus BOM skaičiavimas</strong><p>Jei tiesioginės kainos nėra, produkto savikaina sudedama iš BOM komponentų kainų ir kiekių.</p></div><span class="state running">Kai nėra tiesioginės</span></div>
   <div class="policy-row"><span class="policy-order">3</span><div><strong>BLOCKED, jei nėra nei kainos, nei BOM</strong><p>Spėjama kaina nenaudojama. Odoo Standard Price nėra atsarginis šaltinis.</p></div><span class="state fail">Nestebima tyliai</span></div>
+</div>
+
+<section id="pricing-rule-reference" class="section-head"><div><p class="eyebrow">Taisyklių žodynas</p><h2>Ką reiškia R001–R007</h2></div><p>R kodai naudojami tik auditui ir atsekamumui. Skaičiavime taikoma čia aprašyta verslo logika.</p></section>
+<div class="panel rule-catalog">
+  {% for rule in rule_catalog %}
+    <article id="rule-{{ rule.id }}"><span>{{ rule.id }}</span><div><strong>{{ rule.title }}</strong><p>{{ rule.explanation }}</p></div></article>
+  {% endfor %}
 </div>
 
 <section class="section-head"><div><p class="eyebrow">Detalus valdymas</p><h2>Kur valdomos išimtys ir priskyrimai</h2></div></section>

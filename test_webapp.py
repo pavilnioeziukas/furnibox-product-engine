@@ -140,6 +140,10 @@ def test_pricing_control_searches_latest_run_trace_and_blockers(monkeypatch, tmp
     assert "Komponentų savikaina pagal BOM" in ok_page
     assert "Taikoma tik priedams. Komponentų savikaina nemažinama." in ok_page
     assert "Techniniai audito kodai" in ok_page
+    assert "Ką reiškia R001–R007" in ok_page
+    assert "Kategorijos darbų ir aptarnavimo tarifai" in ok_page
+    assert 'href="#rule-R003"' in ok_page
+    assert 'href="#rule-R004"' in ok_page
     assert "Atidaryti kategorijų konfigūraciją" in ok_page
     assert "FPACK, HRD, APACK ir Shelf tarifai" in ok_page
     assert '/pricing-rules#bom-categories' in ok_page

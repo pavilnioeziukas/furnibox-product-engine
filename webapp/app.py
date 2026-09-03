@@ -1353,6 +1353,10 @@ def pricing_control():
         pricing_job=pricing_job,
         sku_search=sku_search,
         rule_explanations=_rule_explanations(sku_search["match"]),
+        rule_catalog=[
+            {"id": rule_id, "title": values[0], "explanation": values[1]}
+            for rule_id, values in PRICING_RULE_LABELS.items()
+        ],
         lifecycle_job=_latest_job_for("product_lifecycle_audit"),
         parameter_updated_at=parameter_updated_at,
     )
