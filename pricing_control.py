@@ -319,6 +319,9 @@ def _category_trace(workbook) -> dict[str, list[dict]]:
                 "multiplier": values[columns["Multiplier"] - 1],
                 "addons": values[columns["Add-ons Total"] - 1],
                 "adjusted_addons": values[columns["Adjusted Add-ons"] - 1],
+                "calculation": _text(
+                    values[columns["Calculation Basis"] - 1]
+                ) if "Calculation Basis" in columns else "",
             }
         )
     return result
@@ -498,7 +501,10 @@ def _write_trace(workbook, results: list[dict]) -> None:
                     detail["level"],
                     "CALCULATED",
                     (
-                        f"Raw add-ons {detail['addons']}; adjusted add-ons "
+                        (detail["calculation"] + "; ")
+                        if detail["calculation"] else ""
+                    ) + (
+                        f"raw add-ons {detail['addons']}; adjusted add-ons "
                         f"{detail['adjusted_addons']}."
                     ),
                 ]

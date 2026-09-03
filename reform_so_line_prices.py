@@ -1566,6 +1566,7 @@ def calculate_boms(
             )
 
         for item in items:
+            item_fpack_detail_cost = 0.0
             if not item.sku:
                 issues.append(
                     "Leaf components have no "
@@ -1681,12 +1682,18 @@ def calculate_boms(
                     )
 
                     if (
-                        text(top).upper().startswith("FPACK-")
+                        (
+                            text(top).upper().startswith("FPACK-")
+                            or text(item.sku).upper().startswith("FPACK-")
+                        )
                         and unit_price is not None
                         and text(leaf["source"]).casefold()
                         == "cabinet part calculation".casefold()
                     ):
-                        fpack_detail_cost += total_qty * unit_price
+                        leaf_cost = leaf_qty * unit_price
+                        item_fpack_detail_cost += leaf_cost
+                        if text(top).upper().startswith("FPACK-"):
+                            fpack_detail_cost += total_qty * unit_price
 
             else:
                 component_details.append(
@@ -1788,15 +1795,22 @@ def calculate_boms(
                 )
 
             else:
-                applied.append(
-                    breakdown(
-                        rules[
-                            item_key
-                        ],
-                        multiplier,
-                        level,
-                    )
+                item_breakdown = breakdown(
+                    rules[item_key],
+                    multiplier,
+                    level,
                 )
+                if text(item.sku).upper().startswith("FPACK-"):
+                    labour = fpack_labour_cost(item_fpack_detail_cost) * multiplier
+                    item_breakdown["addons"] = (
+                        labour,
+                        *item_breakdown["addons"][1:],
+                    )
+                    item_breakdown["calculation"] = (
+                        "FPACK packing labour = MIN(10, MAX(4, "
+                        f"{item_fpack_detail_cost:.4f} / 9.8)) × {multiplier:g}"
+                    )
+                applied.append(item_breakdown)
 
         top_key = key(
             top
@@ -1837,6 +1851,17 @@ def calculate_boms(
                 fpack_labour_cost(fpack_detail_cost),
                 *addon_values[1:],
             )
+            for applied_row in reversed(applied):
+                if key(applied_row["rule"].sku) == top_key:
+                    applied_row["addons"] = (
+                        addon_values[0],
+                        *applied_row["addons"][1:],
+                    )
+                    applied_row["calculation"] = (
+                        "FPACK packing labour = MIN(10, MAX(4, "
+                        f"{fpack_detail_cost:.4f} / 9.8))"
+                    )
+                    break
 
         addon_total = sum(
             addon_values
@@ -2404,6 +2429,7 @@ def build_reform_so_line_prices(
             "Add-ons Total",
             "Adjustment Rate",
             "Adjusted Add-ons",
+            "Calculation Basis",
         ]
     )
 
@@ -2431,6 +2457,7 @@ def build_reform_so_line_prices(
                     1
                     + adjustment
                 ),
+                row.get("calculation", "Category tariff sum"),
             ]
         )
 

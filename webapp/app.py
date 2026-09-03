@@ -1257,6 +1257,8 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
             row for row in result["trace"]
             if str(row.get("Step Type") or "").upper() == "MATERIAL"
         ]
+        for row in result["materials"]:
+            row["Source Label"] = _price_source_label(row.get("Source"))
         result["tariffs"] = [
             row for row in result["trace"]
             if str(row.get("Step Type") or "").upper() == "PRICING ADD-ON"
@@ -1274,6 +1276,22 @@ def _search_latest_pricing(job: dict[str, Any] | None, query: str) -> dict[str, 
         if len(result["suggestions"]) == 20:
             break
     return result
+
+
+def _price_source_label(source: Any) -> str:
+    labels = {
+        "CABINET PART CALCULATION": "Apskaičiuota Cabinet Part kaina",
+        "APPROVED PURCHASE PRICE ADJUSTMENT": "Patvirtinta koreguota pirkimo kaina",
+        "APPROVED PURCHASE PRICE ADJUSTMENT × REFORM MARKUP": (
+            "Patvirtinta koreguota pirkimo kaina × Reform koeficientas"
+        ),
+        "LAST PURCHASE PRICE × REFORM MARKUP": (
+            "Paskutinė pirkimo kaina × Reform koeficientas"
+        ),
+        "LAST PURCHASE PRICE": "Paskutinė pirkimo kaina",
+    }
+    normalized = str(source or "").strip().upper()
+    return labels.get(normalized, str(source or "").strip())
 
 
 PRICING_RULE_LABELS = {

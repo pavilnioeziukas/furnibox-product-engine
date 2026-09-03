@@ -130,6 +130,28 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertAlmostEqual(rows[0]["cost"], 51.0)
         self.assertAlmostEqual(rows[0]["final"], 56.1)
 
+    def test_nested_fpack_replaces_static_tariff_with_tamara_labour(self):
+        top = "EUB-C-CAB01-BAS003"
+        fpack = "FPACK-EU-CAB01-BAS003"
+        part = "CABINET-PART"
+        rules = {
+            key(top): self.pricing_rule(top),
+            key(fpack): self.pricing_rule(fpack, assembly=0.1),
+        }
+        rows, details = calculate_boms(
+            {top: ("CABINET", [Item(fpack, 1)])},
+            {key(part): ("Part", 49.0, "CABINET PART CALCULATION")},
+            rules,
+            adjustment=-0.07,
+            graph={key(top): [(fpack, 1)], key(fpack): [(part, 1)]},
+        )
+        self.assertEqual(rows[0]["status"], "COMPLETE")
+        self.assertAlmostEqual(rows[0]["addons"][0], 5.0)
+        self.assertAlmostEqual(rows[0]["adjustment"], -0.35)
+        fpack_detail = next(row for row in details if row["rule"].sku == fpack)
+        self.assertAlmostEqual(fpack_detail["addons"][0], 5.0)
+        self.assertIn("MIN(10, MAX(4", fpack_detail["calculation"])
+
     def test_generated_manufacture_children_are_component_cost_only(self):
         apack = "APACK-EU-C-CAB01-BAS001-A"
         part = "CON7X50"

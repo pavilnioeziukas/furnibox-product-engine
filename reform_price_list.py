@@ -80,6 +80,7 @@ def load_component_prices(path: Path) -> list[dict]:
             raise ValueError(f"Komponentų kainose kartojasi SKU: {sku}")
         seen.add(key)
         row = {name: values[column - 1] for name, column in columns.items()}
+        row["Has Approved Adjustment"] = key in adjustments
         row["Adjusted Purchase Price"] = adjustments.get(
             key, row["Real Purchase Price"]
         )
@@ -155,10 +156,18 @@ def build_reform_price_list(
         sku = str(row["Internal Reference"]).strip()
         if sku.casefold() in cabinet_skus:
             continue
+        source = (
+            "APPROVED PURCHASE PRICE ADJUSTMENT"
+            if row.get("Has Approved Adjustment")
+            else "LAST PURCHASE PRICE"
+        )
+        factor = row["Markup Factor"]
+        if isinstance(factor, (int, float)) and factor != 1:
+            source += " × REFORM MARKUP"
         prices.append([
-            sku, row["Name"], "LAST PURCHASE PRICE", row["Vendor"],
+            sku, row["Name"], source, row["Vendor"],
             row["Real Purchase Price"], row["Adjusted Purchase Price"],
-            row["Markup Factor"], None, "",
+            factor, None, "",
         ])
         excel_row = prices.max_row
         prices.cell(excel_row, 8).value = f"=F{excel_row}*G{excel_row}"

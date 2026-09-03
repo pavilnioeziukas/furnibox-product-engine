@@ -64,6 +64,10 @@ class ReformPriceListTests(unittest.TestCase):
              11.5,
             )
             component_row = rows["ACCS-1"]
+            self.assertEqual(
+                prices.cell(component_row, headers["Price Source"]).value,
+                "APPROVED PURCHASE PRICE ADJUSTMENT × REFORM MARKUP",
+            )
             self.assertEqual(prices.cell(component_row, headers["Adjusted Furnibox Purchase Price"]).value, 2.75)
             self.assertEqual(prices.cell(component_row, headers["Reform Markup Factor"]).value, 1.05)
             self.assertEqual(result["DIAGNOSTICS"]["B2"].value, "PART-1")
