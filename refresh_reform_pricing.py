@@ -47,6 +47,14 @@ def write_job_result_marker(output_dir: Path, status: str, return_code: int) -> 
     temporary.replace(marker)
 
 
+def report_result_step(step: int, total: int, title: str) -> None:
+    """Expose post-calculation progress in the live job log."""
+    print(
+        f"\n=== Rezultatų paruošimas {step}/{total}: {title} ===",
+        flush=True,
+    )
+
+
 def run_step(title: str, *arguments: str) -> None:
     print(f"\n=== {title} ===", flush=True)
     result = subprocess.run(
@@ -922,7 +930,9 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "--rules", str(rules_path), "--output-dir", str(candidate_dir),
         )
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
+        report_result_step(1, 7, "Tikrinamos kainos ir BLOCKED pozicijos")
         statuses, blocked = read_pricing_status(candidate)
+        report_result_step(2, 7, "Kuriamas kainodaros grandinės auditas")
         write_pricing_chain_audit(
             candidate,
             cabinet_part_prices,
@@ -931,6 +941,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 target_reconciliation
             ),
         )
+        report_result_step(3, 7, "Kuriama Furnix detalių kainų peržiūra")
         write_furnix_parts_price_review(
             cabinet_part_prices,
             PRODUCTION_DIR / "Last_Purchase_Prices.xlsx",
@@ -967,6 +978,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
+        report_result_step(4, 7, "Kuriama Tamaros produktų klasifikavimo peržiūra")
         if target_dataset.is_file() and target_reconciliation.is_file():
             write_tamara_product_classification_review(
                 target_dataset,
@@ -976,6 +988,11 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             )
 
         if blocked:
+            report_result_step(
+                5,
+                7,
+                "Ruošiamas saugus COMPLETE_ONLY failas be BLOCKED pozicijų",
+            )
             write_blocker_report(
                 output_dir / "Reform_Pricing_BLOCKED.xlsx", statuses, blocked
             )
@@ -985,6 +1002,11 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 partial_path,
                 blocked,
             )
+            report_result_step(
+                6,
+                7,
+                "Kainoraštis papildomas kontrolės lapais ir paieškos indeksu",
+            )
             enrich_pricing_workbook(
                 partial_path,
                 git_commit=git_commit,
@@ -992,6 +1014,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 generated_at=generated_at,
                 search_index=output_dir / "Pricing_Explain_Index.sqlite",
             )
+            report_result_step(7, 7, "Publikuojami atsisiuntimo failai")
             write_furnibox_purchase_prices(
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
                 output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
@@ -1004,14 +1027,21 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 cabinet_part_prices,
                 output_dir / "Cabinet_Parts_Pricing.xlsx",
             )
-            print(f"\nSUSTABDYTA: {len(blocked)} BLOCKED pozicijos.")
+            print(f"\nKAINODAROS REZULTATAS: {len(blocked)} BLOCKED pozicijos.")
             print(
                 "Pilnas galutinis failas nepateiktas; "
                 "sukurtas COMPLETE_ONLY failas be BLOCKED pozicijų."
             )
             write_job_result_marker(output_dir, "BLOCKED", 2)
+            print("=== Rezultatų paruošimas baigtas ===", flush=True)
             return 2
 
+        report_result_step(5, 7, "Ruošiamas pilnas galutinis kainoraštis")
+        report_result_step(
+            6,
+            7,
+            "Kainoraštis papildomas kontrolės lapais ir paieškos indeksu",
+        )
         enrich_pricing_workbook(
             candidate,
             git_commit=git_commit,
@@ -1019,6 +1049,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             generated_at=generated_at,
             search_index=output_dir / "Pricing_Explain_Index.sqlite",
         )
+        report_result_step(7, 7, "Publikuojami atsisiuntimo failai")
         write_furnibox_purchase_prices(
             PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
             output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
@@ -1037,6 +1068,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
     print("Parengtos faktinės, Furnibox (Tamara) pirkimo ir Reform pardavimo kainos.")
     print("Odoo nekeistas.")
     write_job_result_marker(output_dir, "PASS", 0)
+    print("=== Rezultatų paruošimas baigtas ===", flush=True)
     return 0
 
 
