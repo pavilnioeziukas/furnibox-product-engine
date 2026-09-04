@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Bootstraps · {{ product_engine.app_name }}{% endblock %}
+{% block content %}
+<section class="hero"><div><p class="eyebrow">Odoo Tools · laikini sprendimai</p><h1>Bootstrap valdymas</h1><p>Matykite, ar laikinas Odoo veiksmas įdiegtas, ir saugiai jį įdiekite arba pašalinkite. Produkto kodas lieka GitHub, o Odoo laikomas tik tada, kai jo reikia.</p></div></section>
+<section><div class="section-head"><div><p class="eyebrow">Bootstrap</p><h2>Delivered quantity taisymas</h2></div><p>{{ action_name }}</p></div>
+<div class="bootstrap-grid">{% for environment in environments %}<article class="bootstrap-card">
+<div class="panel-head"><div><p class="eyebrow">{{ environment.label }}</p><h2>{{ environment.label }}</h2></div><span class="state {{ environment.state }}">{{ environment.state }}</span></div>
+{% if environment.detail %}<p class="muted">{{ environment.detail }}</p>{% endif %}{% if environment.action_id %}<p class="muted">Odoo veiksmo ID: {{ environment.action_id }}</p>{% endif %}
+<div class="bootstrap-actions">
+<form method="post" action="{{ url_for('change_delivered_quantity_bootstrap', environment=environment.key, operation='install') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% if environment.key == 'production' %}<label>Patvirtinimas<input name="production_confirmation" placeholder="PRODUCTION" autocomplete="off"></label>{% endif %}<button class="primary" type="submit">Įdiegti / atnaujinti</button></form>
+<form method="post" action="{{ url_for('change_delivered_quantity_bootstrap', environment=environment.key, operation='uninstall') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% if environment.key == 'production' %}<label>Patvirtinimas<input name="production_confirmation" placeholder="PRODUCTION" autocomplete="off"></label>{% endif %}<button class="danger" type="submit">Pašalinti</button></form>
+</div>{% if environment.key == 'production' %}<p class="bootstrap-warning">Production veiksmai keičia Odoo konfigūraciją. Prieš vykdydami įrašykite PRODUCTION.</p>{% endif %}</article>{% endfor %}</div></section>
+<section><div class="section-head"><div><p class="eyebrow">Auditas</p><h2>Paskutiniai veiksmai</h2></div></div><div class="table-wrap"><table><thead><tr><th>Laikas</th><th>Aplinka</th><th>Veiksmas</th><th>Rezultatas</th></tr></thead><tbody>{% for item in audit %}<tr><td>{{ item.created_at }}</td><td>{{ item.environment }}</td><td>{{ item.operation }}</td><td>{{ item.result }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Veiksmų dar nebuvo.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
