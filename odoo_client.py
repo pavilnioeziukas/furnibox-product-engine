@@ -50,6 +50,24 @@ class OdooClient:
             offset += batch_size
         return rows
 
+    def execute(self, model, method, args=None, kwargs=None):
+        """Execute an authenticated Odoo model method.
+
+        Mutating tools use this explicit method so every write remains visible in
+        the calling use case instead of being hidden inside a generic repository.
+        """
+        if self.uid is None:
+            self.authenticate()
+        return self.models.execute_kw(
+            self.settings.db,
+            self.uid,
+            self.settings.api_key,
+            model,
+            method,
+            args or [],
+            kwargs or {},
+        )
+
     def ensure_external_ids(self, model, record_ids, batch_size=500):
         """Sugeneruoja trūkstamus Odoo ``__export__`` ID per standartinį eksportą.
 

@@ -193,6 +193,22 @@ if (
 
 
 BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
+    "resolve_bom_archive_blockers": {
+        "title": "Išspręsti BOM archyvavimo blokatorius",
+        "description": (
+            "Pagal vieną ar kelis produkto kodus saugiai laikinai nunulina tik "
+            "nepristatytas ir neišrašytas SO eilutes, archyvuoja aktyvius BOM ir "
+            "visada atkuria pradinius kiekius. Dalinai įvykdytos eilutės sustabdo operaciją."
+        ),
+        "script": "run_resolve_bom_archive_blockers.py",
+        "requires_upload": False,
+        "requires_so_number": True,
+        "requires_confirmation": True,
+        "confirmation_label": "Patvirtinu laikinus SO kiekių pakeitimus, BOM archyvavimą ir kiekių atkūrimą",
+        "input_label": "Produktų kodai arba BOM ID (atskirti tarpais ar kableliais)",
+        "input_placeholder": "EUB-P-ACC02-MIS804, EUB-P-ACC02-MIS805",
+        "args": ["--queries", "{so_number}", "--output-dir", "{output_dir}", "--apply"],
+    },
     "bom_archive_blockers": {
         "title": "Patikrinti BOM archyvavimo blokatorius",
         "description": (
@@ -2779,6 +2795,9 @@ def start_job(
             400,
             f"Įveskite {action.get('input_label', 'SO numerį')}.",
         )
+
+    if action.get("requires_confirmation") and request.form.get("confirm_apply") != "yes":
+        abort(400, "Prieš keičiant Odoo būtina pažymėti patvirtinimo lauką.")
 
     job_id = (
         uuid.uuid4()
