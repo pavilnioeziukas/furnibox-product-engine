@@ -67,11 +67,9 @@ BOOTSTRAP_ENVIRONMENTS = {
     "stage": "Stage",
     "production": "Production",
 }
-BOOTSTRAP_MANAGER_ENABLED = (
-    bool(SETTINGS.web_password)
-    and os.getenv("PRODUCT_ENGINE_BOOTSTRAP_MANAGER_ENABLED", "true").strip().lower()
-    in {"1", "true", "yes", "on"}
-)
+# The manager is available only behind the application's password-protected session.
+# Production mutations still require an additional typed confirmation.
+BOOTSTRAP_MANAGER_ENABLED = bool(SETTINGS.web_password)
 
 UPLOAD_DIR = STATE_DIR / "uploads"
 CHUNK_UPLOAD_DIR = UPLOAD_DIR / ".chunks"
