@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import secrets
+import signal
 import shutil
 import sqlite3
 import subprocess
@@ -483,6 +484,11 @@ _active_processes: dict[
 
 _reserved_jobs: set[str] = set()
 
+_stop_requested: set[str] = set()
+
+JOB_RESULT_MARKER = ".product-engine-result.json"
+TERMINAL_JOB_STATUSES = {"PASS", "BLOCKED", "FAIL", "ERROR", "STOPPED"}
+
 
 def utc_now() -> str:
     return datetime.now(
@@ -601,6 +607,73 @@ def write_job(
     )
 
 
+def discover_job_files(output_dir: Path) -> list[dict[str, str]]:
+    """Return only user-facing files already published for a job."""
+    if not output_dir.exists():
+        return []
+    return [
+        {"name": path.name, "path": str(path)}
+        for path in sorted(output_dir.iterdir())
+        if path.is_file() and not path.name.startswith(".")
+    ]
+
+
+def read_job_result_marker(output_dir: Path) -> dict[str, Any] | None:
+    marker = output_dir / JOB_RESULT_MARKER
+    try:
+        result = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if result.get("status") not in {"PASS", "BLOCKED"}:
+        return None
+    if not isinstance(result.get("return_code"), int):
+        return None
+    expected_code = 0 if result["status"] == "PASS" else 2
+    if result["return_code"] != expected_code:
+        return None
+    return result
+
+
+def recover_interrupted_jobs() -> list[str]:
+    """Resolve persisted non-terminal jobs left behind by a process restart."""
+    recovered = []
+    with _jobs_lock:
+        protected = set(_reserved_jobs) | set(_active_processes)
+
+    for job_dir in RUN_DIR.iterdir():
+        if not job_dir.is_dir() or job_dir.name in protected:
+            continue
+        try:
+            job = read_job(job_dir)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if job.get("status") not in {"QUEUED", "RUNNING", "STOPPING"}:
+            continue
+
+        output_dir = job_dir / "files"
+        marker = read_job_result_marker(output_dir)
+        files = discover_job_files(output_dir)
+        if marker is not None:
+            job.update(
+                status=marker["status"],
+                return_code=marker["return_code"],
+                finished_at=marker.get("finished_at") or utc_now(),
+                files=files,
+            )
+            job.pop("error", None)
+        else:
+            (output_dir / "Pricing_Explain_Index.sqlite").unlink(missing_ok=True)
+            job.update(
+                status="ERROR",
+                finished_at=utc_now(),
+                files=discover_job_files(output_dir),
+                error="Paleidimas nutrūko perkraunant aplikaciją.",
+            )
+        write_job(job_dir, job)
+        recovered.append(job_dir.name)
+    return recovered
+
+
 def list_jobs() -> list[dict[str, Any]]:
     jobs = []
 
@@ -647,8 +720,9 @@ def latest_upload() -> Path | None:
 
 def prune_completed_jobs(keep_per_action: int = 2) -> list[str]:
     """Delete only old completed run directories inside RUN_DIR."""
+    just_recovered = set(recover_interrupted_jobs())
     grouped: dict[str, list[tuple[str, Path]]] = {}
-    protected = set(_reserved_jobs) | set(_active_processes)
+    protected = set(_reserved_jobs) | set(_active_processes) | just_recovered
     latest_target = latest_full_target_dataset()
     if latest_target is not None:
         protected.add(latest_target.parent.parent.name)
@@ -662,20 +736,6 @@ def prune_completed_jobs(keep_per_action: int = 2) -> list[str]:
         try:
             job = read_job(job_dir)
         except (OSError, json.JSONDecodeError):
-            continue
-        if job.get("status") in {"QUEUED", "RUNNING"}:
-            # A persisted running job that is not protected by the current
-            # process cannot still be running after an application restart.
-            # Remove only its disposable partial search index, which can be
-            # large enough to block the next read-only export.
-            partial_index = job_dir / "files" / "Pricing_Explain_Index.sqlite"
-            partial_index.unlink(missing_ok=True)
-            job.update(
-                status="FAIL",
-                finished_at=utc_now(),
-                error="Paleidimas nutrūko perkraunant aplikaciją.",
-            )
-            write_job(job_dir, job)
             continue
         grouped.setdefault(text := str(job.get("action") or "unknown"), []).append(
             (str(job.get("created_at") or ""), job_dir)
@@ -958,19 +1018,30 @@ def run_job(
             "w",
             encoding="utf-8",
         ) as log:
-            process = subprocess.Popen(
-                command,
-                cwd=BASE_DIR,
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-
             with _jobs_lock:
-                _active_processes[
-                    job_id
-                ] = process
+                process = None
+                if job_id not in _stop_requested:
+                    process = subprocess.Popen(
+                        command,
+                        cwd=BASE_DIR,
+                        env=env,
+                        stdout=log,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        start_new_session=True,
+                    )
+                    _active_processes[
+                        job_id
+                    ] = process
+
+            if process is None:
+                job.update(
+                    status="STOPPED",
+                    return_code=None,
+                    finished_at=utc_now(),
+                    files=discover_job_files(output_dir),
+                )
+                return
 
             return_code = (
                 process.wait()
@@ -992,6 +1063,7 @@ def run_job(
         ):
             if (
                 path.is_file()
+                and not path.name.startswith(".")
                 and str(path)
                 not in known_paths
             ):
@@ -1003,25 +1075,38 @@ def run_job(
                 )
 
         blocked_return_codes = set(action.get("blocked_return_codes", []))
-        job.update(
-            status=(
-                "PASS"
-                if return_code == 0
+        with _jobs_lock:
+            was_stopped = job_id in _stop_requested
+        marker = read_job_result_marker(output_dir)
+        status = (
+            "STOPPED"
+            if was_stopped
+            else (
+                marker["status"]
+                if marker is not None
                 else (
-                    "BLOCKED"
-                    if return_code in blocked_return_codes
-                    else "FAIL"
+                    "PASS"
+                    if return_code == 0
+                    else (
+                        "BLOCKED"
+                        if return_code in blocked_return_codes
+                        else "FAIL"
+                    )
                 )
-            ),
+            )
+        )
+        job.update(
+            status=status,
             return_code=return_code,
             finished_at=utc_now(),
             files=files,
         )
 
-    except Exception as exc:
+    except BaseException as exc:
         job.update(
             status="ERROR",
             finished_at=utc_now(),
+            files=discover_job_files(output_dir),
             error=str(exc),
         )
 
@@ -1036,10 +1121,25 @@ def run_job(
                 job_id
             )
 
+            _stop_requested.discard(
+                job_id
+            )
+
+        if job.get("status") not in TERMINAL_JOB_STATUSES:
+            job.update(
+                status="ERROR",
+                finished_at=utc_now(),
+                files=discover_job_files(output_dir),
+                error="Paleidimas baigėsi be galutinės būsenos.",
+            )
+
         write_job(
             job_dir,
             job,
         )
+
+
+recover_interrupted_jobs()
 
 
 @app.get("/")
@@ -2960,19 +3060,57 @@ def job_api(
 def stop_job(
     job_id: str,
 ):
+    job_dir = RUN_DIR / secure_filename(job_id)
+    if not (job_dir / "job.json").exists():
+        abort(404)
+
     with _jobs_lock:
+        job = read_job(job_dir)
+        if job.get("status") in TERMINAL_JOB_STATUSES:
+            return redirect(url_for("job_detail", job_id=job_id))
+        _stop_requested.add(job_id)
         process = (
             _active_processes.get(
                 job_id
             )
         )
+        job.update(
+            status="STOPPING" if process and process.poll() is None else "STOPPED",
+            stop_requested_at=utc_now(),
+        )
+        if job["status"] == "STOPPED":
+            job["finished_at"] = utc_now()
+            _reserved_jobs.discard(job_id)
+        write_job(job_dir, job)
 
-    if (
-        process
-        and process.poll()
-        is None
-    ):
-        process.terminate()
+    if process and process.poll() is None:
+        termination_error = None
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=5)
+        except ProcessLookupError:
+            pass
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                termination_error = exc
+        except OSError as exc:
+            termination_error = exc
+
+        job = read_job(job_dir)
+        if termination_error is not None:
+            job.update(
+                status="ERROR",
+                finished_at=utc_now(),
+                error=f"Nepavyko sustabdyti paleidimo: {termination_error}",
+            )
+            write_job(job_dir, job)
+        elif job.get("status") not in TERMINAL_JOB_STATUSES:
+            job.update(status="STOPPED", finished_at=utc_now())
+            write_job(job_dir, job)
 
     return redirect(
         url_for(
