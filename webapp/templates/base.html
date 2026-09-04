@@ -21,6 +21,9 @@
         <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
         <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
       {% endif %}
+      {% if bootstrap_manager_enabled %}
+        <a href="{{ url_for('bootstraps') }}">Bootstraps</a>
+      {% endif %}
     </nav>
     {% if session.get('authenticated') %}
       <form method="post" action="{{ url_for('logout') }}"><button class="link-button">Atsijungti</button></form>
