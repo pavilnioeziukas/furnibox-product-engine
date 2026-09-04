@@ -56,6 +56,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
                 patch("refresh_reform_pricing.write_furnix_parts_price_review"),
                 patch("refresh_reform_pricing.write_pricing_chain_audit"),
+                patch("refresh_reform_pricing.enrich_pricing_workbook"),
                 patch("refresh_reform_pricing.shutil.copy2"),
             ):
                 self.assertEqual(refresh(bom, output), 0)
@@ -77,6 +78,11 @@ class RefreshReformPricingTests(unittest.TestCase):
                 result["target_reconciliation"]["bom_statuses"]["BLOCKED"],
                 46,
             )
+            marker = json.loads(
+                (output / ".product-engine-result.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(marker["status"], "PASS")
+            self.assertEqual(marker["return_code"], 0)
 
     def test_blocked_refresh_publishes_safe_complete_only_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -118,6 +124,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 ) as purchase_writer,
                 patch("refresh_reform_pricing.write_furnix_parts_price_review"),
                 patch("refresh_reform_pricing.write_pricing_chain_audit"),
+                patch("refresh_reform_pricing.enrich_pricing_workbook"),
                 patch("refresh_reform_pricing.shutil.copy2") as copy_file,
             ):
                 self.assertEqual(refresh(bom, output), 2)
@@ -143,6 +150,11 @@ class RefreshReformPricingTests(unittest.TestCase):
                 result["partial_file"],
                 "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx",
             )
+            marker = json.loads(
+                (output / ".product-engine-result.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(marker["status"], "BLOCKED")
+            self.assertEqual(marker["return_code"], 2)
 
     def test_pricing_chain_audit_checks_primary_rollup(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -25,6 +25,26 @@ from pricing_control import enrich_pricing_workbook
 BASE_DIR = Path(__file__).resolve().parent
 PRODUCTION_DIR = BASE_DIR / "output" / "production"
 RULES_PATH = BASE_DIR / "web_state" / "shared_data" / "so_pricing_rules.json"
+JOB_RESULT_MARKER = ".product-engine-result.json"
+
+
+def write_job_result_marker(output_dir: Path, status: str, return_code: int) -> None:
+    """Atomically record that every advertised result has been published."""
+    marker = output_dir / JOB_RESULT_MARKER
+    temporary = marker.with_suffix(marker.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(
+            {
+                "status": status,
+                "return_code": return_code,
+                "finished_at": datetime.now().astimezone().isoformat(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    temporary.replace(marker)
 
 
 def run_step(title: str, *arguments: str) -> None:
@@ -989,6 +1009,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
                 "Pilnas galutinis failas nepateiktas; "
                 "sukurtas COMPLETE_ONLY failas be BLOCKED pozicijų."
             )
+            write_job_result_marker(output_dir, "BLOCKED", 2)
             return 2
 
         enrich_pricing_workbook(
@@ -1015,6 +1036,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
     print("\nREFORM KAINODARA ATNAUJINTA: 0 BLOCKED")
     print("Parengtos faktinės, Furnibox (Tamara) pirkimo ir Reform pardavimo kainos.")
     print("Odoo nekeistas.")
+    write_job_result_marker(output_dir, "PASS", 0)
     return 0
 
 

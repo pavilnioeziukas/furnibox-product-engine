@@ -37,6 +37,7 @@ def test_unresolved_bom_type_error_lists_skus_and_reasons():
             reform_lines={},
             type_catalog=catalog,
             operation_templates={},
+            shelf_pp_templates={},
         )
 
     assert str(error.value).splitlines() == [

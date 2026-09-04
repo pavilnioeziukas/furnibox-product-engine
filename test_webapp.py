@@ -368,5 +368,164 @@ def test_job_retention_never_deletes_running_or_latest_target(monkeypatch, tmp_p
     webapp.prune_completed_jobs(keep_per_action=0)
     assert target_job.exists()
     assert running.exists()
-    assert webapp.read_job(running)["status"] == "FAIL"
+    assert webapp.read_job(running)["status"] == "ERROR"
     assert not (running / "files" / "Pricing_Explain_Index.sqlite").exists()
+
+
+def test_interrupted_completed_job_is_recovered_with_downloads(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    job_dir = webapp.RUN_DIR / "completed"
+    files_dir = job_dir / "files"
+    files_dir.mkdir(parents=True)
+    (files_dir / "Reform_SO_Line_Prices.xlsx").write_bytes(b"prices")
+    (files_dir / webapp.JOB_RESULT_MARKER).write_text(
+        json.dumps({
+            "status": "PASS",
+            "return_code": 0,
+            "finished_at": "2026-09-04T10:00:00+00:00",
+        }),
+        encoding="utf-8",
+    )
+    webapp.write_job(job_dir, {
+        "id": "completed",
+        "action": "refresh_reform_pricing",
+        "title": "Atnaujinti Reform kainodarą",
+        "status": "RUNNING",
+        "created_at": "2026-09-04T09:00:00+00:00",
+        "files": [],
+    })
+
+    assert webapp.recover_interrupted_jobs() == ["completed"]
+    job = webapp.read_job(job_dir)
+    assert job["status"] == "PASS"
+    assert job["return_code"] == 0
+    assert [item["name"] for item in job["files"]] == [
+        "Reform_SO_Line_Prices.xlsx"
+    ]
+
+
+def test_run_job_records_error_even_for_base_exception(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    job_id = "baseexception"
+    job_dir = webapp.RUN_DIR / job_id
+    job_dir.mkdir()
+    webapp.write_job(job_dir, {
+        "id": job_id,
+        "action": "odoo_snapshot",
+        "title": "Snapshot",
+        "status": "QUEUED",
+        "created_at": webapp.utc_now(),
+        "files": [],
+    })
+    webapp._reserved_jobs.add(job_id)
+    monkeypatch.setattr(webapp.subprocess, "Popen", lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()))
+
+    webapp.run_job(job_id, "odoo_snapshot", None)
+
+    job = webapp.read_job(job_dir)
+    assert job["status"] == "ERROR"
+    assert job["finished_at"]
+    assert job_id not in webapp._reserved_jobs
+
+
+def test_stop_job_terminates_process_group_and_sets_terminal_status(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    job_id = "stoppable"
+    job_dir = webapp.RUN_DIR / job_id
+    job_dir.mkdir()
+    webapp.write_job(job_dir, {
+        "id": job_id,
+        "action": "odoo_snapshot",
+        "title": "Snapshot",
+        "status": "RUNNING",
+        "created_at": webapp.utc_now(),
+        "files": [],
+    })
+
+    class Process:
+        pid = 1234
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            return -15
+
+    webapp._active_processes[job_id] = Process()
+    signals = []
+    monkeypatch.setattr(webapp.os, "killpg", lambda pid, sig: signals.append((pid, sig)))
+
+    response = webapp.app.test_client().post(f"/jobs/{job_id}/stop")
+
+    assert response.status_code == 302
+    assert signals == [(1234, webapp.signal.SIGTERM)]
+    job = webapp.read_job(job_dir)
+    assert job["status"] == "STOPPED"
+    assert job["finished_at"]
+
+
+def test_stop_requested_before_process_start_prevents_launch(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    job_id = "queuedstop"
+    job_dir = webapp.RUN_DIR / job_id
+    job_dir.mkdir()
+    webapp.write_job(job_dir, {
+        "id": job_id,
+        "action": "odoo_snapshot",
+        "title": "Snapshot",
+        "status": "QUEUED",
+        "created_at": webapp.utc_now(),
+        "files": [],
+    })
+    webapp._reserved_jobs.add(job_id)
+    webapp._stop_requested.add(job_id)
+
+    def unexpected_launch(*args, **kwargs):
+        raise AssertionError("Sustabdytas procesas neturi būti paleistas")
+
+    monkeypatch.setattr(webapp.subprocess, "Popen", unexpected_launch)
+
+    webapp.run_job(job_id, "odoo_snapshot", None)
+
+    job = webapp.read_job(job_dir)
+    assert job["status"] == "STOPPED"
+    assert job["finished_at"]
+    assert job_id not in webapp._reserved_jobs
+    assert job_id not in webapp._stop_requested
+
+
+def test_stop_job_escalates_to_kill_and_still_finishes(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    job_id = "forcedstop"
+    job_dir = webapp.RUN_DIR / job_id
+    job_dir.mkdir()
+    webapp.write_job(job_dir, {
+        "id": job_id,
+        "action": "odoo_snapshot",
+        "title": "Snapshot",
+        "status": "RUNNING",
+        "created_at": webapp.utc_now(),
+        "files": [],
+    })
+
+    class Process:
+        pid = 4321
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            raise webapp.subprocess.TimeoutExpired("snapshot", timeout)
+
+    webapp._active_processes[job_id] = Process()
+    signals = []
+    monkeypatch.setattr(webapp.os, "killpg", lambda pid, sig: signals.append((pid, sig)))
+
+    response = webapp.app.test_client().post(f"/jobs/{job_id}/stop")
+
+    assert response.status_code == 302
+    assert signals == [
+        (4321, webapp.signal.SIGTERM),
+        (4321, webapp.signal.SIGKILL),
+    ]
+    assert webapp.read_job(job_dir)["status"] == "STOPPED"
