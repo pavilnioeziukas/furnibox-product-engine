@@ -40,8 +40,8 @@
       <p>{{ action.description }}</p>
       <form method="post" action="{{ url_for('start_job', action_key=key) }}">
         {% if action.requires_so_number|default(false) %}
-          <label for="so-number-{{ key }}">SO numeris</label>
-          <input id="so-number-{{ key }}" name="so_number" type="text" placeholder="DE262627062REG" autocomplete="off" required>
+          <label for="so-number-{{ key }}">{{ action.input_label|default('SO numeris') }}</label>
+          <input id="so-number-{{ key }}" name="so_number" type="text" placeholder="{{ action.input_placeholder|default('DE262627062REG') }}" autocomplete="off" required>
         {% endif %}
         <button class="primary" type="submit" {% if action.requires_upload and not upload %}disabled{% endif %}>Paleisti</button>
       </form>

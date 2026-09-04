@@ -180,6 +180,20 @@ if (
 
 
 BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
+    "bom_archive_blockers": {
+        "title": "Patikrinti BOM archyvavimo blokatorius",
+        "description": (
+            "Pagal BOM arba jo pagrindinį produktą parodo susijusias SO eilutes, "
+            "kiekius, realius blokatorius ir saugų veiksmą. Komponentų "
+            "savarankiški pardavimai neįtraukiami; Odoo duomenys nekeičiami."
+        ),
+        "script": "run_bom_archive_blocker_check.py",
+        "requires_upload": False,
+        "requires_so_number": True,
+        "input_label": "BOM ID, BOM nuoroda arba pagrindinio produkto kodas",
+        "input_placeholder": "EUB-P-ACC02-MIS806 arba 48385",
+        "args": ["--query", "{so_number}", "--output-dir", "{output_dir}"],
+    },
     "mo_component_consumption_audit": {
         "title": "Audituoti užbaigtų MO komponentų sunaudojimą",
         "description": (
@@ -2750,7 +2764,7 @@ def start_job(
     ):
         abort(
             400,
-            "Įveskite SO numerį.",
+            f"Įveskite {action.get('input_label', 'SO numerį')}.",
         )
 
     job_id = (
