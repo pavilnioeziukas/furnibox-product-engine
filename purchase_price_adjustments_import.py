@@ -11,6 +11,11 @@ SOURCE_SKU_COLUMN = "Invoice lines/Product/Internal Reference"
 SOURCE_REAL_PRICE_COLUMN = "Reali pirkimo kaina"
 SOURCE_ADJUSTED_PRICE_COLUMN = "Adjustint kaina"
 
+GENERATED_SHEET = "TAMARA ADJUSTMENTS"
+GENERATED_SKU_COLUMN = "Internal Reference"
+GENERATED_REAL_PRICE_COLUMN = "Real Purchase Price (reference)"
+GENERATED_ADJUSTED_PRICE_COLUMN = "Adjusted Purchase Price"
+
 
 @dataclass(frozen=True)
 class PurchasePriceAdjustmentCandidate:
@@ -65,14 +70,25 @@ def load_purchase_price_excel_adjustments(
         read_only=True,
     )
 
-    sheet = workbook.active
+    if GENERATED_SHEET in workbook.sheetnames:
+        sheet = workbook[GENERATED_SHEET]
+    else:
+        sheet = workbook.active
     columns = _headers(sheet)
 
-    required_columns = (
-        SOURCE_SKU_COLUMN,
-        SOURCE_REAL_PRICE_COLUMN,
-        SOURCE_ADJUSTED_PRICE_COLUMN,
-    )
+    if {
+        GENERATED_SKU_COLUMN,
+        GENERATED_ADJUSTED_PRICE_COLUMN,
+    }.issubset(columns):
+        sku_column = GENERATED_SKU_COLUMN
+        real_price_column = GENERATED_REAL_PRICE_COLUMN
+        adjusted_price_column = GENERATED_ADJUSTED_PRICE_COLUMN
+    else:
+        sku_column = SOURCE_SKU_COLUMN
+        real_price_column = SOURCE_REAL_PRICE_COLUMN
+        adjusted_price_column = SOURCE_ADJUSTED_PRICE_COLUMN
+
+    required_columns = (sku_column, adjusted_price_column)
 
     for required in required_columns:
         if required not in columns:
@@ -87,7 +103,7 @@ def load_purchase_price_excel_adjustments(
     for row_number in range(2, sheet.max_row + 1):
         raw_sku = sheet.cell(
             row_number,
-            columns[SOURCE_SKU_COLUMN],
+            columns[sku_column],
         ).value
 
         if raw_sku in (None, ""):
@@ -97,7 +113,7 @@ def load_purchase_price_excel_adjustments(
 
         raw_adjusted_price = sheet.cell(
             row_number,
-            columns[SOURCE_ADJUSTED_PRICE_COLUMN],
+            columns[adjusted_price_column],
         ).value
 
         if raw_adjusted_price in (None, ""):
@@ -107,23 +123,32 @@ def load_purchase_price_excel_adjustments(
             duplicates.add(sku)
             continue
 
-        excel_real_price = _to_float(
-            sheet.cell(
-                row_number,
-                columns[SOURCE_REAL_PRICE_COLUMN],
-            ).value,
-            field_name=SOURCE_REAL_PRICE_COLUMN,
-            sku=sku,
-            allow_empty=True,
-        )
+        excel_real_price = None
+        if real_price_column in columns:
+            excel_real_price = _to_float(
+                sheet.cell(
+                    row_number,
+                    columns[real_price_column],
+                ).value,
+                field_name=real_price_column,
+                sku=sku,
+                allow_empty=True,
+            )
 
         adjusted_price = _to_float(
             raw_adjusted_price,
-            field_name=SOURCE_ADJUSTED_PRICE_COLUMN,
+            field_name=adjusted_price_column,
             sku=sku,
         )
 
         assert adjusted_price is not None
+
+        # Zero cannot produce a releasable component price and must not
+        # overwrite a newer positive Odoo purchase price. Treat it as an
+        # unprovided Tamara price; the pricing engine will use its normal
+        # fallback and report BLOCKED if that fallback is also non-positive.
+        if adjusted_price <= 0:
+            continue
 
         result[sku] = {
             "excel_real_price": excel_real_price,
