@@ -49,10 +49,29 @@ from purchase_price_adjustments_import import (
     summarize_preview,
 )
 from webapp.product_engine import ProductEngineSettings, load_actions
+from odoo_tools import OdooConfig
+from odoo_tools.bootstraps.sale_delivered_manual import (
+    ACTION_NAME as DELIVERED_ACTION_NAME,
+    WRITE_CONFIRMATION,
+    BootstrapClient,
+    install as install_delivered_bootstrap,
+    status as delivered_bootstrap_status,
+    uninstall as uninstall_delivered_bootstrap,
+)
 
 
 SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
 STATE_DIR = SETTINGS.state_dir
+BOOTSTRAP_AUDIT_FILE = STATE_DIR / "bootstrap-audit.jsonl"
+BOOTSTRAP_ENVIRONMENTS = {
+    "stage": "Stage",
+    "production": "Production",
+}
+BOOTSTRAP_MANAGER_ENABLED = (
+    bool(SETTINGS.web_password)
+    and os.getenv("PRODUCT_ENGINE_BOOTSTRAP_MANAGER_ENABLED", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
 UPLOAD_DIR = STATE_DIR / "uploads"
 CHUNK_UPLOAD_DIR = UPLOAD_DIR / ".chunks"
@@ -444,7 +463,7 @@ def auth_enabled() -> bool:
 
 @app.context_processor
 def product_engine_context() -> dict[str, Any]:
-    return {"product_engine": SETTINGS}
+    return {"product_engine": SETTINGS, "bootstrap_manager_enabled": BOOTSTRAP_MANAGER_ENABLED}
 
 
 @app.before_request
@@ -2480,6 +2499,116 @@ def download(
         as_attachment=True,
         download_name=path.name,
     )
+
+
+
+def _bootstrap_config(environment: str) -> OdooConfig:
+    if environment not in BOOTSTRAP_ENVIRONMENTS:
+        abort(404)
+    prefix = "ODOO_STAGE_" if environment == "stage" else "ODOO_"
+    values = {
+        "url": os.getenv(prefix + "URL", "").strip().rstrip("/"),
+        "database": (
+            os.getenv(prefix + "DATABASE") or os.getenv(prefix + "DB", "")
+        ).strip(),
+        "username": (
+            os.getenv(prefix + "USERNAME") or os.getenv(prefix + "LOGIN", "")
+        ).strip(),
+        "api_key": os.getenv(prefix + "API_KEY", "").strip(),
+    }
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        raise ValueError(
+            f"{BOOTSTRAP_ENVIRONMENTS[environment]} aplinkai trūksta nustatymų: "
+            + ", ".join(missing)
+        )
+    return OdooConfig(**values)
+
+
+def _require_bootstrap_manager() -> None:
+    if not BOOTSTRAP_MANAGER_ENABLED:
+        abort(404)
+
+
+def _read_bootstrap_audit() -> list[dict[str, Any]]:
+    if not BOOTSTRAP_AUDIT_FILE.exists():
+        return []
+    entries = []
+    for line in BOOTSTRAP_AUDIT_FILE.read_text(encoding="utf-8").splitlines():
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return list(reversed(entries[-30:]))
+
+
+def _write_bootstrap_audit(environment: str, operation: str, result: str) -> None:
+    entry = {
+        "created_at": utc_now(),
+        "environment": environment,
+        "operation": operation,
+        "result": result,
+        "actor": request.remote_addr or "unknown",
+    }
+    BOOTSTRAP_AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with BOOTSTRAP_AUDIT_FILE.open("a", encoding="utf-8") as target:
+        target.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+@app.get("/bootstraps")
+def bootstraps():
+    _require_bootstrap_manager()
+    csrf_token = session.setdefault("bootstrap_csrf", secrets.token_urlsafe(32))
+    environments = []
+    for key, label in BOOTSTRAP_ENVIRONMENTS.items():
+        try:
+            state = delivered_bootstrap_status(
+                BootstrapClient(_bootstrap_config(key))
+            )
+        except Exception as exc:
+            state = {"state": "error", "detail": str(exc)}
+        environments.append({"key": key, "label": label, **state})
+    return render_template(
+        "bootstraps.html",
+        environments=environments,
+        action_name=DELIVERED_ACTION_NAME,
+        csrf_token=csrf_token,
+        audit=_read_bootstrap_audit(),
+    )
+
+
+@app.post("/bootstraps/delivered-quantity/<environment>/<operation>")
+def change_delivered_quantity_bootstrap(environment: str, operation: str):
+    _require_bootstrap_manager()
+    if environment not in BOOTSTRAP_ENVIRONMENTS or operation not in {"install", "uninstall"}:
+        abort(404)
+    if not secrets.compare_digest(
+        request.form.get("csrf_token", ""),
+        session.get("bootstrap_csrf", ""),
+    ):
+        abort(400, "Neteisingas saugos raktas. Atnaujinkite puslapį.")
+    if environment == "production" and request.form.get("production_confirmation") != "PRODUCTION":
+        flash("Production veiksmui įrašykite PRODUCTION.")
+        return redirect(url_for("bootstraps"))
+
+    try:
+        client = BootstrapClient(_bootstrap_config(environment))
+        if operation == "install":
+            result = install_delivered_bootstrap(client, WRITE_CONFIRMATION)
+            message = f"{BOOTSTRAP_ENVIRONMENTS[environment]}: bootstrap įdiegtas (ID {result})."
+        else:
+            result = uninstall_delivered_bootstrap(client, WRITE_CONFIRMATION)
+            message = (
+                f"{BOOTSTRAP_ENVIRONMENTS[environment]}: bootstrap pašalintas."
+                if result else
+                f"{BOOTSTRAP_ENVIRONMENTS[environment]}: bootstrap nebuvo įdiegtas."
+            )
+        _write_bootstrap_audit(environment, operation, "success")
+        flash(message)
+    except Exception as exc:
+        _write_bootstrap_audit(environment, operation, f"error: {exc}")
+        flash(f"Veiksmas nepavyko: {exc}")
+    return redirect(url_for("bootstraps"))
 
 
 @app.get("/health")
