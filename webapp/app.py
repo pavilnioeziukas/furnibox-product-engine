@@ -70,6 +70,7 @@ from odoo_tools.bootstraps.sale_delivered_manual import (
 
 SETTINGS = ProductEngineSettings.from_env(BASE_DIR)
 STATE_DIR = SETTINGS.state_dir
+SHARED_DATA_DIR = SETTINGS.shared_data_dir
 BOOTSTRAP_AUDIT_FILE = STATE_DIR / "bootstrap-audit.jsonl"
 BOOTSTRAP_ENVIRONMENTS = {"stage": "Stage", "production": "Production"}
 # Available only behind the Product Engine password-protected session.
@@ -80,8 +81,7 @@ CHUNK_UPLOAD_DIR = UPLOAD_DIR / ".chunks"
 RUN_DIR = STATE_DIR / "runs"
 
 PRODUCTION_DATASET_DIR = (
-    STATE_DIR
-    / "shared_data"
+    SHARED_DATA_DIR
     / "validated_datasets"
     / "production"
 )
@@ -91,25 +91,21 @@ PRODUCTION_DATASET_PATH = (
 )
 
 SO_PRICING_CONFIG_PATH = (
-    STATE_DIR
-    / "shared_data"
+    SHARED_DATA_DIR
     / "so_pricing_rules.json"
 )
 
 CABINET_PARTS_PARAMETERS_PATH = (
-    STATE_DIR
-    / "shared_data"
+    SHARED_DATA_DIR
     / "cabinet_parts_price_parameters.json"
 )
 
 PURCHASE_PRICE_ADJUSTMENTS_PATH = (
-    STATE_DIR
-    / "shared_data"
+    SHARED_DATA_DIR
     / "purchase_price_adjustments.json"
 )
 LEGACY_PURCHASE_PRICE_ADJUSTMENTS_PATH = (
-    STATE_DIR
-    / "shared_data"
+    SHARED_DATA_DIR
     / "tamara_adjustments.json"
 )
 PURCHASE_PRICE_IMPORT_DIR = (
@@ -989,14 +985,13 @@ def run_job(
         "PYTHONUTF8"
     ] = "1"
 
-    shared_data = str(
-        STATE_DIR
-        / "shared_data"
-    )
+    shared_data = str(SHARED_DATA_DIR)
 
-    env.setdefault("PRODUCT_ENGINE_SHARED_DATA_DIR", shared_data)
-    env.setdefault("FURNIBOX_SHARED_DATA", shared_data)
-    env.setdefault("FURNIBOX_SHARED_DATA_DIR", shared_data)
+    # A job must read the exact same persisted pricing registry that the web
+    # application writes.  Do not retain stale process-level aliases here.
+    env["PRODUCT_ENGINE_SHARED_DATA_DIR"] = shared_data
+    env["FURNIBOX_SHARED_DATA"] = shared_data
+    env["FURNIBOX_SHARED_DATA_DIR"] = shared_data
 
     log_path = (
         job_dir

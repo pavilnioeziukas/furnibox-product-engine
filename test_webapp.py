@@ -184,6 +184,17 @@ def test_pricing_search_explains_target_product_outside_result(monkeypatch, tmp_
     assert "aktualiame Target Dataset" in match["issues"]
 
 
+def test_configured_shared_data_is_the_authoritative_registry(monkeypatch, tmp_path):
+    shared = tmp_path / "persistent-shared"
+    monkeypatch.setenv("PRODUCT_ENGINE_SHARED_DATA_DIR", str(shared))
+    webapp = load_webapp(monkeypatch, tmp_path)
+
+    assert webapp.SHARED_DATA_DIR == shared.resolve()
+    assert webapp.PURCHASE_PRICE_ADJUSTMENTS_PATH == (
+        shared / "purchase_price_adjustments.json"
+    ).resolve()
+
+
 def test_furnix_profile_can_expose_only_selected_addon(monkeypatch, tmp_path):
     webapp = load_webapp(monkeypatch, tmp_path)
     monkeypatch.setenv("PRODUCT_ENGINE_BRAND", "Furnix")
