@@ -11,10 +11,27 @@ config_stub = types.ModuleType("config")
 config_stub.load_settings = lambda: None
 sys.modules.setdefault("config", config_stub)
 
-from last_purchase_prices import write_purchase_prices
+from last_purchase_prices import resolve_shared_data_dir, write_purchase_prices
 
 
 class ComponentPriceWorkbookTests(unittest.TestCase):
+    def test_product_engine_shared_data_path_has_priority(self):
+        from unittest.mock import patch
+
+        with patch.dict(
+            "os.environ",
+            {
+                "PRODUCT_ENGINE_SHARED_DATA_DIR": "/tmp/canonical-shared",
+                "FURNIBOX_SHARED_DATA": "/tmp/stale-shared",
+                "FURNIBOX_SHARED_DATA_DIR": "/tmp/other-stale-shared",
+            },
+            clear=False,
+        ):
+            self.assertEqual(
+                resolve_shared_data_dir(),
+                Path("/tmp/canonical-shared"),
+            )
+
     def test_adjustment_without_purchase_history_is_included_as_reform_price(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             output = Path(temporary_directory) / "Last_Purchase_Prices.xlsx"
@@ -47,6 +64,38 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
             self.assertEqual(prices["I2"].value, "='PURCHASE PRICE ADJUSTMENTS'!B2")
             self.assertEqual(prices["J2"].value, 1.0)
             self.assertEqual(prices["K2"].value, '=IF(I2="",G2,I2)*J2')
+
+    def test_tamara_master_prices_override_zero_odoo_prices_for_hrd_components(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output = Path(temporary_directory) / "Last_Purchase_Prices.xlsx"
+            rows = []
+            for sku in ("7001730", "3284903"):
+                row = {column: "" for column in [
+                    "Internal Reference", "Name", "Product Category/Name",
+                    "Purchase Order", "Vendor", "Ordered Quantity",
+                    "Last Purchase Price", "Order Date",
+                ]}
+                row["Internal Reference"] = sku
+                row["Vendor"] = "Reform Supply & Logistics, UAB"
+                row["Last Purchase Price"] = 0
+                rows.append(row)
+
+            write_purchase_prices(
+                output,
+                rows,
+                {"url": "x", "db": "x", "login": "x", "uid": 1},
+                purchase_price_adjustments={
+                    "7001730": {"adjusted_purchase_price": 1.48},
+                    "3284903": {"adjusted_purchase_price": 0.04},
+                },
+            )
+
+            workbook = load_workbook(output, data_only=False)
+            adjustments = workbook["PURCHASE PRICE ADJUSTMENTS"]
+            self.assertEqual(adjustments["B2"].value, 1.48)
+            self.assertEqual(adjustments["B3"].value, 0.04)
+            self.assertEqual(adjustments["C2"].value, 0)
+            self.assertEqual(adjustments["C3"].value, 0)
 
     def test_adjustment_matching_purchase_sku_is_case_insensitive(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
