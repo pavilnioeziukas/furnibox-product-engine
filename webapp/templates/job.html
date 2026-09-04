@@ -87,7 +87,23 @@
     </div>
 
     {% if job.status in ['QUEUED','RUNNING'] %}
-    <form method="post" action="{{ url_for('stop_job', job_id=job.id) }}">
+    <div id="run-guidance" class="run-guidance">
+      <p class="eyebrow">Dabar vyksta</p>
+      <strong id="current-step">Ruošiamasi vykdyti užduotį…</strong>
+      <p id="wait-guidance">
+        Palaukite, kol būsena pasikeis į PASS, BLOCKED arba ERROR.
+      </p>
+      <p class="stop-guidance">
+        Po 9/9 dar ruošiami galutiniai failai ir auditai. Stabdykite tik jei
+        žurnalas visiškai nesikeičia bent 15 minučių. Nutraukus rezultatas gali
+        būti nepateiktas.
+      </p>
+    </div>
+    <form
+      method="post"
+      action="{{ url_for('stop_job', job_id=job.id) }}"
+      onsubmit="return confirm('Tikrai sustabdyti? Nutraukus šio paleidimo rezultatas gali būti nepateiktas.')"
+    >
       <button class="danger" type="submit">Sustabdyti</button>
     </form>
     {% endif %}
@@ -139,6 +155,18 @@
   }
 
   th { white-space: nowrap; }
+
+  .run-guidance {
+    margin-top: 20px;
+    padding: 16px;
+    border: 1px solid #c9d8ff;
+    border-radius: 10px;
+    background: #f2f6ff;
+  }
+
+  .run-guidance strong { display: block; margin: 6px 0 10px; }
+  .run-guidance p { margin: 8px 0 0; line-height: 1.45; }
+  .run-guidance .stop-guidance { color: var(--muted, #666); font-size: .9rem; }
 
   @media (max-width: 760px) {
     .supply-metrics { grid-template-columns: repeat(2, 1fr); }
@@ -267,6 +295,24 @@ renderSupplyReport();
 {% if job.status in ['QUEUED','RUNNING'] %}
 const endpoint = {{ url_for('job_api', job_id=job.id)|tojson }};
 
+function updateRunGuidance(job) {
+  const log = job.log || '';
+  const stages = [...log.matchAll(/^===\s+(.+?)\s+===$/gm)];
+  const latest = stages.length ? stages[stages.length - 1][1] : '';
+  const currentStep = document.querySelector('#current-step');
+  const waitGuidance = document.querySelector('#wait-guidance');
+
+  currentStep.textContent = latest || (
+    job.status === 'QUEUED'
+      ? 'Užduotis laukia paleidimo.'
+      : 'Užduotis vykdoma.'
+  );
+
+  waitGuidance.textContent = latest.startsWith('Rezultatų paruošimas')
+    ? 'Skaičiavimas baigtas. Dabar ruošiami atsisiuntimo failai — palaukite.'
+    : 'Skaičiavimas vyksta — palaukite, kol būsena pasikeis į PASS, BLOCKED arba ERROR.';
+}
+
 async function refresh() {
   const response = await fetch(endpoint);
   const job = await response.json();
@@ -274,6 +320,7 @@ async function refresh() {
   document.querySelector('#status').textContent = `Vykdymas: ${job.status}`;
   document.querySelector('#status').className = `state ${job.status.toLowerCase()}`;
   document.querySelector('#log').textContent = job.log || '';
+  updateRunGuidance(job);
 
   if (['QUEUED', 'RUNNING'].includes(job.status)) {
     setTimeout(refresh, 1500);
@@ -282,6 +329,10 @@ async function refresh() {
   }
 }
 
+updateRunGuidance({
+  status: {{ job.status|tojson }},
+  log: {{ log|tojson }}
+});
 refresh();
 {% endif %}
 </script>

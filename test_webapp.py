@@ -212,6 +212,16 @@ def test_supply_result_separates_mo_and_catalog_statuses():
     assert "Catalog–PO:" in template
 
 
+def test_running_job_explains_post_processing_and_safe_stop():
+    template = (Path(__file__).parent / "webapp" / "templates" / "job.html").read_text(
+        encoding="utf-8"
+    )
+    assert "Po 9/9 dar ruošiami galutiniai failai ir auditai" in template
+    assert "žurnalas visiškai nesikeičia bent 15 minučių" in template
+    assert "updateRunGuidance" in template
+    assert "Tikrai sustabdyti?" in template
+
+
 def test_upload_accepts_xlsx_and_rejects_other_files(monkeypatch, tmp_path):
     webapp = load_webapp(monkeypatch, tmp_path)
     client = webapp.app.test_client()
