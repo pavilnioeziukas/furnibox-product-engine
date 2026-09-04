@@ -18,12 +18,21 @@ from purchase_price_adjustments import load_adjustments
 
 
 BASE_DIR = Path(__file__).resolve().parent
-SHARED_DATA_DIR = Path(
-    os.getenv(
-        "FURNIBOX_SHARED_DATA",
-        BASE_DIR / "web_state" / "shared_data",
+
+
+def resolve_shared_data_dir() -> Path:
+    """Resolve the shared registry consistently with the web application."""
+    configured = (
+        os.getenv("PRODUCT_ENGINE_SHARED_DATA_DIR")
+        or os.getenv("FURNIBOX_SHARED_DATA")
+        or os.getenv("FURNIBOX_SHARED_DATA_DIR")
     )
-).resolve()
+    return Path(
+        configured or BASE_DIR / "web_state" / "shared_data"
+    ).resolve()
+
+
+SHARED_DATA_DIR = resolve_shared_data_dir()
 PURCHASE_PRICE_ADJUSTMENTS_PATH = SHARED_DATA_DIR / "purchase_price_adjustments.json"
 REFORM_VENDOR_NAME = "Reform Supply & Logistics, UAB"
 REFORM_VENDOR_MARKUP_FACTOR = 1.05
