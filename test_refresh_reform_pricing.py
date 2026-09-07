@@ -7,6 +7,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 
 from refresh_reform_pricing import (
+    blocked_component_price_requirements,
     read_pricing_status,
     read_current_sales_prices,
     refresh,
@@ -20,6 +21,30 @@ from refresh_reform_pricing import (
 
 
 class RefreshReformPricingTests(unittest.TestCase):
+    def test_extracts_component_price_requirements_from_blockers(self):
+        result = blocked_component_price_requirements([
+            {
+                "sku": "HRD-001",
+                "issues": (
+                    "Missing component price: PART-A; "
+                    "Non-positive component price: PART-B (0)"
+                ),
+            },
+            {
+                "sku": "HRD-002",
+                "issues": "Non-positive component price: PART-B (0)",
+            },
+            {
+                "sku": "HRD-003",
+                "issues": "PRODUCTION_ODOO_BOM_NOT_IN_TARGET_DATASET",
+            },
+        ])
+
+        self.assertEqual(result, {
+            "PART-A": {"HRD-001"},
+            "PART-B": {"HRD-001", "HRD-002"},
+        })
+
     def test_refresh_passes_generated_target_dataset_to_pricing(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -426,6 +451,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 "Vendor / Supply Source", "Real Furnibox Purchase Price",
                 "Furnibox (Tamara) Purchase Price", "Reform Markup Factor",
                 "Reform Purchase Price", "Status / BOM Source",
+                "System Review", "Tamara Decision", "Tamara Comment",
             ])
             self.assertEqual(result.cell(2, 6).value, 12)
             self.assertEqual(result.cell(2, 7).value, 1.05)
@@ -460,6 +486,58 @@ class RefreshReformPricingTests(unittest.TestCase):
             published = load_workbook(destination, data_only=True, read_only=True)
             self.assertEqual(published["CABINET PARTS"]["A2"].value, "PART-FURNIX")
             self.assertEqual(published["COMPONENTS"]["A2"].value, "COMP-1")
+            published.close()
+
+    def test_purchase_report_adds_missing_blocker_components_for_tamara(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / "source.xlsx"
+            destination = base / "purchase.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "REFORM PRICE LIST"
+            sheet.append([
+                "Internal Reference", "Name", "Price Source",
+                "Vendor / Supply Source", "Real Furnibox Purchase Price",
+                "Adjusted Furnibox Purchase Price", "Reform Markup Factor",
+                "Reform Purchase Price", "Status / BOM Source",
+            ])
+            sheet.append([
+                "3503786", "Hinge", "LAST PURCHASE PRICE", "Vendor",
+                0, 0, 1, 0, "",
+            ])
+            workbook.save(source)
+
+            write_furnibox_purchase_prices(
+                source,
+                destination,
+                [
+                    {
+                        "sku": "UNI-P-ACC01-HRD002",
+                        "issues": "Non-positive component price: 3503786 (0)",
+                    },
+                    {
+                        "sku": "FPACK-WTP92-HRD001",
+                        "issues": "Missing component price: M0450161SPUS",
+                    },
+                ],
+            )
+
+            published = load_workbook(destination, data_only=True)
+            rows = {
+                row[0].value: [cell.value for cell in row]
+                for row in published["COMPONENTS"].iter_rows(min_row=2)
+            }
+            self.assertIn("3503786", rows)
+            self.assertIn("M0450161SPUS", rows)
+            self.assertEqual(rows["M0450161SPUS"][5], None)
+            self.assertIn("UNI-P-ACC01-HRD002", rows["3503786"][9])
+            self.assertIn("FPACK-WTP92-HRD001", rows["M0450161SPUS"][9])
+            self.assertEqual(rows["M0450161SPUS"][8], "MISSING PRICE")
+            self.assertEqual(
+                published["COMPONENTS"].data_validations.count,
+                1,
+            )
             published.close()
 
     def test_exports_full_tamara_product_classification_review(self):
