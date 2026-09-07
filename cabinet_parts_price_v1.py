@@ -132,6 +132,8 @@ def is_cabinet_part_classification(product: dict) -> bool:
         "CABINET PARTS",
         "SHELF PART",
         "SHELF PARTS",
+        "PANEL PART",
+        "PANEL PARTS",
     }
     classifications = {
         canon(part)
@@ -150,11 +152,18 @@ def load_target_cabinet_parts(path: Path) -> dict[str, str]:
     only from BOM parent rows, so the Target Dataset is authoritative here.
     """
     document = json.loads(path.read_text(encoding="utf-8"))
+    bom_skus = {
+        canon(product.get("sku"))
+        for product in document.get("products") or []
+    }
     result: dict[str, str] = {}
     for product in document.get("product_catalog") or []:
         sku = str(product.get("sku") or "").strip()
         if (
             sku
+            and not product.get("has_bom")
+            and canon(sku) not in bom_skus
+            and not canon(sku).endswith("-PP")
             and is_cabinet_part_classification(product)
             and parse_dimensions(sku) is not None
         ):
@@ -252,9 +261,10 @@ def load_new_products(ws) -> tuple[dict[str, str], dict[str, tuple[int | float, 
         if (
             sku
             and action == "CREATE PRODUCT"
+            and not canon(sku).endswith("-PP")
             and any(
                 part_category in category
-                for part_category in ("CABINET PART", "SHELF PART")
+                for part_category in ("CABINET PART", "SHELF PART", "PANEL PART")
             )
             and parsed
         ):
@@ -349,6 +359,7 @@ def load_odoo_cabinet_parts(
     Included Odoo product categories:
     - CABINET PART
     - SHELF PART
+    - PANEL PART
 
     Products are later filtered by parse_dimensions(), so only
     dimensional SKU that can actually be calculated enter pricing.
@@ -366,6 +377,8 @@ def load_odoo_cabinet_parts(
     pricing_category_names = {
         "CABINET PART",
         "SHELF PART",
+        "PANEL PART",
+        "PANEL PARTS",
     }
 
     category_ids = sorted(
@@ -392,7 +405,7 @@ def load_odoo_cabinet_parts(
     if not category_ids:
         raise ValueError(
             "Odoo nerastos Furnix detalių kategorijos: "
-            "CABINET PART arba SHELF PART."
+            "CABINET PART, SHELF PART arba PANEL PART."
         )
 
     rows = client.search_read_all(
@@ -443,6 +456,11 @@ def load_odoo_cabinet_parts(
                     "trūksta Internal Reference",
                 )
             )
+            continue
+
+        # Shelf prepack assemblies use recursive BOM pricing, never the
+        # dimensional-part formula even if Odoo retains a part category.
+        if sku_key.endswith("-PP"):
             continue
 
         # Cabinet Parts formula requires dimensions in SKU.

@@ -12,6 +12,7 @@ from cabinet_parts_price_v1 import (
     calculate_unit_price,
     furnix_transfer_price,
     load_target_cabinet_parts,
+    load_odoo_cabinet_parts,
     parse_dimensions,
 )
 
@@ -48,6 +49,42 @@ class CabinetPartPriceCalculationTests(unittest.TestCase):
 
 
 class CabinetPartPriceWorkbookTests(unittest.TestCase):
+    def test_target_panel_leaf_is_priced_but_assemblies_are_not(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "target.json"
+            path.write_text(json.dumps({
+                "products": [{"sku": "EU-PNL-2000X600-WW-ASSEMBLY"}],
+                "product_catalog": [
+                    {"sku": "EU-PNL-2000X600-WW", "part_group": "PANEL PART", "has_bom": False},
+                    {"sku": "US-PCL-914X686-BB", "product_type": "All / PANEL PARTS"},
+                    {"sku": "EU-SREW-SHELF-163X340-BB-PP", "part_group": "SHELF PART"},
+                    {"sku": "EU-PNL-2000X600-WW-ASSEMBLY", "part_group": "PANEL PART"},
+                    {"sku": "OTHER-200X300-WW", "part_group": "CABINET PART", "has_bom": True},
+                    {"sku": "BOLT-200X300-WW", "part_group": "FASTENERS"},
+                ],
+            }), encoding="utf-8")
+            self.assertEqual(set(load_target_cabinet_parts(path)), {
+                "EU-PNL-2000X600-WW", "US-PCL-914X686-BB",
+            })
+
+    def test_odoo_panel_category_and_prepack_filter(self):
+        class ReadOnlyClient:
+            def search_read_all(self, model, domain, fields, **kwargs):
+                if model == "product.category":
+                    return [{"id": 42, "name": "PANEL PART", "complete_name": "All / PANEL PART"}]
+                if model == "product.product":
+                    assert domain == [["categ_id", "in", [42]]]
+                    return [
+                        {"id": 1, "default_code": "EU-PNL-2000X600-WW", "standard_price": 0, "active": True},
+                        {"id": 2, "default_code": "US-PCL-914X686-BB", "standard_price": 28.83, "active": True},
+                        {"id": 3, "default_code": "EU-SREW-SHELF-163X340-BB-PP", "standard_price": 1, "active": True},
+                    ]
+                raise AssertionError(f"Unexpected Odoo operation: {model}")
+
+        prices, duplicates, errors = load_odoo_cabinet_parts(ReadOnlyClient())
+        self.assertEqual(set(prices), {"EU-PNL-2000X600-WW", "US-PCL-914X686-BB"})
+        self.assertEqual((duplicates, errors), ({}, []))
+
     def test_target_catalog_prices_all_dimensional_srew_cabinet_parts(self):
         colors = ("BB", "NO", "WW")
         skus = []

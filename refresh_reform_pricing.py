@@ -990,9 +990,19 @@ def read_current_sales_prices(path: Path) -> dict[str, float]:
     return result
 
 
-def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) -> int:
+def refresh(
+    bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH,
+    production_bom_scope: Path | None = None,
+) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     PRODUCTION_DIR.mkdir(parents=True, exist_ok=True)
+    pricing_scope_snapshot = None
+    if production_bom_scope is not None:
+        pricing_scope_snapshot = json.loads(production_bom_scope.read_text(encoding="utf-8"))
+        production_bom_scope = output_dir / "Production_Pricing_Scope.json"
+        production_bom_scope.write_text(
+            json.dumps(pricing_scope_snapshot, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
 
     reform_map = PRODUCTION_DIR / "Reform_MAP.xlsx"
     odoo_map = PRODUCTION_DIR / "Odoo_MAP.xlsx"
@@ -1036,6 +1046,10 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
 
     with tempfile.TemporaryDirectory(prefix="reform-pricing-") as temporary:
         candidate_dir = Path(temporary)
+        scope_arguments = (
+            ("--production-bom-scope", str(production_bom_scope))
+            if production_bom_scope is not None else ()
+        )
         run_step(
             "9/9 Galutinės Reform pardavimo kainos",
             "reform_so_line_prices.py", "--bom-input", str(bom_input),
@@ -1043,6 +1057,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "--production-bom-map", str(odoo_map),
             "--price-input", str(PRODUCTION_DIR / "Reform_Final_Prices.xlsx"),
             "--rules", str(rules_path), "--output-dir", str(candidate_dir),
+            *scope_arguments,
         )
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
         report_result_step(1, 7, "Tikrinamos kainos ir BLOCKED pozicijos")
@@ -1088,6 +1103,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             "pricing_run_id": run_id,
             "git_commit": git_commit,
             "odoo_changed": False,
+            "supplemental_production_pricing_scope": pricing_scope_snapshot,
         }
         (output_dir / "Reform_Pricing_Result.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -1194,10 +1210,11 @@ def main() -> None:
     parser.add_argument("--bom-input", required=True, type=Path)
     parser.add_argument("--rules", type=Path, default=RULES_PATH)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--production-bom-scope", type=Path)
     args = parser.parse_args()
     if not args.bom_input.exists():
         raise FileNotFoundError(args.bom_input)
-    raise SystemExit(refresh(args.bom_input, args.output_dir, args.rules))
+    raise SystemExit(refresh(args.bom_input, args.output_dir, args.rules, args.production_bom_scope))
 
 
 if __name__ == "__main__":
