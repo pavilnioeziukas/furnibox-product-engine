@@ -1025,7 +1025,12 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         "map_comparison_v5.py", "--reform", str(reform_map), "--odoo", str(odoo_map),
         "--products", str(detection), "--bom-input", str(bom_input), "--output", str(comparison),
     )
-    run_step("6/9 Cabinet ir Shelf detalių kainos", "cabinet_parts_price_v1.py")
+    run_step(
+        "6/9 Cabinet ir Shelf detalių kainos",
+        "cabinet_parts_price_v1.py",
+        "--target-dataset",
+        str(target_dataset),
+    )
     run_step("7/9 Naujausios pirkimo kainos", "last_purchase_prices.py")
     run_step("8/9 Bendras Reform pirkimo kainų šaltinis", "reform_price_list.py")
 

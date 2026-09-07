@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import tempfile
 import unittest
 
@@ -10,6 +11,8 @@ from cabinet_parts_price_v1 import (
     build_workbook,
     calculate_unit_price,
     furnix_transfer_price,
+    load_target_cabinet_parts,
+    parse_dimensions,
 )
 
 
@@ -45,6 +48,94 @@ class CabinetPartPriceCalculationTests(unittest.TestCase):
 
 
 class CabinetPartPriceWorkbookTests(unittest.TestCase):
+    def test_target_catalog_prices_all_dimensional_srew_cabinet_parts(self):
+        colors = ("BB", "NO", "WW")
+        skus = []
+        for length in (1800, 2000, 2200, 2400):
+            skus.extend(f"EU-FILLER-SREW-{length}X75-{color}" for color in colors)
+        for length in (1763, 1963, 2163, 2363):
+            skus.extend(f"EU-FRONT-SREW-{length}X382-{color}" for color in colors)
+            skus.extend(f"EU-MIDSTIFF-SREW-{length}X75-{color}" for color in colors)
+        for length in (2032, 2249):
+            skus.extend(f"US-FILLER-SREW-{length}X75-{color}" for color in colors)
+        for length in (1995, 2249):
+            skus.extend(f"US-FRONT-SREW-{length}X449-{color}" for color in colors)
+            skus.extend(f"US-MIDSTIFF-SREW-{length}X75-{color}" for color in colors)
+        self.assertEqual(len(skus), 54)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            base = Path(temporary_directory)
+            source = base / "MAP_Comparison.xlsx"
+            target_dataset = base / "Furnibox_Target_Dataset.json"
+            output = base / "prices.xlsx"
+
+            wb = Workbook()
+            wb.active.title = "NEW BOM LINES"
+            wb.active.append([
+                "Parent SKU", "Component SKU", "Quantity", "Required Action",
+            ])
+            wb.save(source)
+            target_dataset.write_text(
+                json.dumps({
+                    "product_catalog": [
+                        {
+                            "sku": sku,
+                            "product_type": "",
+                            "part_group": "CABINET PART",
+                        }
+                        for sku in skus
+                    ] + [
+                        {
+                            "sku": "US-VENRAIL-875-BB",
+                            "product_type": "CABINET PARTS",
+                            "part_group": "",
+                        },
+                        {
+                            "sku": "US-VENRAIL-875-WW",
+                            "product_type": "CABINET PARTS",
+                            "part_group": "",
+                        },
+                    ],
+                }),
+                encoding="utf-8",
+            )
+
+            target_parts = load_target_cabinet_parts(target_dataset)
+            self.assertEqual(set(target_parts), set(skus))
+            self.assertNotIn("US-VENRAIL-875-BB", target_parts)
+            self.assertNotIn("US-VENRAIL-875-WW", target_parts)
+
+            rows, unique_parts, fpack_count, diagnostics = build_workbook(
+                source,
+                output,
+                target_dataset_path=target_dataset,
+            )
+            self.assertEqual((rows, unique_parts, fpack_count, diagnostics), (0, 54, 0, 0))
+
+            result = load_workbook(output, data_only=True, read_only=True)
+            prices = result["CABINET PART PRICES"]
+            headers = {cell.value: cell.column for cell in prices[1]}
+            actual = {
+                prices.cell(row, headers["Internal Reference"]).value:
+                prices.cell(row, headers["Furnix Sales Price to Furnibox"]).value
+                for row in range(2, prices.max_row + 1)
+            }
+            self.assertEqual(set(actual), set(skus))
+            for sku in skus:
+                dimensions = parse_dimensions(sku)
+                self.assertIsNotNone(dimensions)
+                calculation = calculate_unit_price(sku, dimensions)
+                expected_cost = round(
+                    calculation.unit_price,
+                    DEFAULT_PARAMETERS.output_decimals,
+                )
+                expected_price = round(
+                    furnix_transfer_price(expected_cost)[1],
+                    DEFAULT_PARAMETERS.output_decimals,
+                )
+                self.assertAlmostEqual(actual[sku], expected_price, places=4)
+            result.close()
+
     def test_workbook_contains_calculated_unique_prices_and_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             source = Path(temporary_directory) / "MAP_Comparison.xlsx"
