@@ -90,6 +90,17 @@ class RefreshReformPricingTests(unittest.TestCase):
             self.assertIn("Pilnas Furnibox Target Dataset", calls[0][0])
             self.assertIn("--local-only", calls[0][1])
             self.assertIn("reconciliation", calls[1][0].lower())
+            cabinet_step = next(
+                args
+                for title, args in calls
+                if "Cabinet ir Shelf" in title
+            )
+            self.assertIn("--target-dataset", cabinet_step)
+            cabinet_dataset_index = cabinet_step.index("--target-dataset") + 1
+            self.assertEqual(
+                Path(cabinet_step[cabinet_dataset_index]),
+                output / "Furnibox_Target_Dataset.json",
+            )
             pricing_args = calls[-1][1]
             self.assertIn("--dataset", pricing_args)
             dataset_index = pricing_args.index("--dataset") + 1

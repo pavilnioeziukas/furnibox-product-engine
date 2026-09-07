@@ -12,8 +12,10 @@ Odoo duomenų nekeičia.
 
 from __future__ import annotations
 
+import argparse
 from collections import defaultdict
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -121,6 +123,43 @@ def parse_dimensions(sku: str) -> tuple[int | float, int | float] | None:
 
 def parse_color(sku: str) -> str:
     return canon(sku).rsplit("-", 1)[-1]
+
+
+def is_cabinet_part_classification(product: dict) -> bool:
+    """Return whether Target Dataset classifies a product for panel pricing."""
+    accepted = {
+        "CABINET PART",
+        "CABINET PARTS",
+        "SHELF PART",
+        "SHELF PARTS",
+    }
+    classifications = {
+        canon(part)
+        for field in ("product_type", "part_group")
+        for part in str(product.get(field) or "").replace("\\", "/").split("/")
+        if str(part).strip()
+    }
+    return bool(classifications & accepted)
+
+
+def load_target_cabinet_parts(path: Path) -> dict[str, str]:
+    """Load every calculable Cabinet/Shelf Part from the full Target catalog.
+
+    Component-only products keep their classification in ``part_group``.  The
+    legacy MAP comparison loses that classification because it takes Category
+    only from BOM parent rows, so the Target Dataset is authoritative here.
+    """
+    document = json.loads(path.read_text(encoding="utf-8"))
+    result: dict[str, str] = {}
+    for product in document.get("product_catalog") or []:
+        sku = str(product.get("sku") or "").strip()
+        if (
+            sku
+            and is_cabinet_part_classification(product)
+            and parse_dimensions(sku) is not None
+        ):
+            result[canon(sku)] = sku
+    return result
 
 
 def calculate_unit_price(
@@ -876,6 +915,7 @@ def build_workbook(
     output_path: Path,
     parameters: PriceParameters = DEFAULT_PARAMETERS,
     odoo_client: OdooClient | None = None,
+    target_dataset_path: Path | None = None,
 ) -> tuple[int, int, int, int]:
     source_wb = load_workbook(source_path, read_only=False, data_only=False)
     required_sheets = {"NEW BOM LINES"}
@@ -890,7 +930,20 @@ def build_workbook(
         source_wb["NEW BOM LINES"], set(explicit_skus)
     )
 
-    new_component_skus = {canon(component) for _, component, _ in new_lines}
+    target_cabinet_parts: dict[str, str] = {}
+    if target_dataset_path is not None:
+        target_cabinet_parts = load_target_cabinet_parts(target_dataset_path)
+        for key, sku in target_cabinet_parts.items():
+            parsed = parse_dimensions(sku)
+            if parsed is None:
+                continue
+            cabinet_part_skus[key] = sku
+            dimensions[key] = parsed
+
+    new_component_skus = (
+        {canon(component) for _, component, _ in new_lines}
+        | set(target_cabinet_parts)
+    )
     existing_lines: list[tuple[str, str, float]] = []
     odoo_bom_errors: list[tuple[str, str]] = []
     odoo_prices: dict[str, OdooProductPrice] = {}
@@ -1055,6 +1108,16 @@ def build_workbook(
 def main() -> None:
     from config import load_settings
 
+    parser = argparse.ArgumentParser(
+        description="Apskaičiuoti Cabinet ir Shelf detalių kainas"
+    )
+    parser.add_argument(
+        "--target-dataset",
+        type=Path,
+        help="Pilnas Furnibox Target Dataset su product_catalog klasifikacija.",
+    )
+    args = parser.parse_args()
+
     print(f"Versija: {SCRIPT_VERSION}")
     settings = load_settings()
     output_dir = environment_output_dir(BASE_DIR)
@@ -1077,6 +1140,7 @@ def main() -> None:
         output_path,
         parameters=parameters,
         odoo_client=client,
+        target_dataset_path=args.target_dataset,
     )
 
     print("CABINET PARTS SAVIKAINOS APSKAIČIUOTOS IR PALYGINTOS SU ODOO")
