@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -612,7 +613,29 @@ def write_furnix_parts_price_review(
     workbook.save(destination)
 
 
-def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
+def blocked_component_price_requirements(blocked) -> dict[str, set[str]]:
+    """Return leaf component SKUs whose price blocks one or more top BOMs."""
+    requirements: dict[str, set[str]] = {}
+    for blocker in blocked or []:
+        top_sku = str(blocker.get("sku") or "").strip()
+        for issue in str(blocker.get("issues") or "").split(";"):
+            issue = issue.strip()
+            component_sku = ""
+            if issue.startswith("Missing component price:"):
+                component_sku = issue.split(":", 1)[1].strip()
+            elif issue.startswith("Non-positive component price:"):
+                component_sku = issue.split(":", 1)[1].strip()
+                component_sku = re.sub(r"\s+\([^()]*\)$", "", component_sku)
+            if component_sku:
+                requirements.setdefault(component_sku, set()).add(top_sku)
+    return requirements
+
+
+def write_furnibox_purchase_prices(
+    source: Path,
+    destination: Path,
+    blocked=None,
+) -> None:
     """Publish Furnix cabinet parts and bought components on separate sheets."""
     source_workbook = load_workbook(source, data_only=True, read_only=True)
     source_sheet = source_workbook["REFORM PRICE LIST"]
@@ -637,8 +660,17 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
         "CABINET PARTS": result.create_sheet("CABINET PARTS"),
         "COMPONENTS": result.create_sheet("COMPONENTS"),
     }
+    price_requirements = blocked_component_price_requirements(blocked)
+    price_requirements_by_key = {
+        sku.casefold(): blocked_tops
+        for sku, blocked_tops in price_requirements.items()
+    }
+    published_skus = set()
     for sheet in sheets.values():
-        sheet.append([output_name for _, output_name in selected])
+        sheet.append(
+            [output_name for _, output_name in selected]
+            + ["System Review", "Tamara Decision", "Tamara Comment"]
+        )
     for row in rows:
         published_row = [
             row[columns[source_name]]
@@ -660,8 +692,38 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
             == "CABINET PART CALCULATION"
             else sheets["COMPONENTS"]
         )
+        published_sku = str(published_row[0] or "").strip()
+        published_skus.add(published_sku.casefold())
+        blocked_tops = price_requirements_by_key.get(published_sku.casefold())
+        if blocked_tops:
+            system_review = (
+                "PRICE OR BOM REVIEW REQUIRED — blocks: "
+                + ", ".join(sorted(blocked_tops))
+            )
+        else:
+            system_review = "AVAILABLE FOR REVIEW"
+        published_row.extend([system_review, "", ""])
         target_sheet.append(published_row)
     source_workbook.close()
+
+    for component_sku in sorted(price_requirements, key=str.casefold):
+        if component_sku.casefold() in published_skus:
+            continue
+        blocked_tops = ", ".join(sorted(price_requirements[component_sku]))
+        sheets["COMPONENTS"].append([
+            component_sku,
+            "",
+            "MISSING PRICE",
+            "",
+            None,
+            None,
+            1.0,
+            None,
+            "MISSING PRICE",
+            f"PRICE OR BOM REVIEW REQUIRED — blocks: {blocked_tops}",
+            "",
+            "",
+        ])
 
     header_fill = PatternFill("solid", fgColor="1F5A44")
     for sheet in sheets.values():
@@ -683,8 +745,40 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
                 cell.number_format = '0.0000 [$€-x-euro2]'
         sheet.column_dimensions["G"].width = 22
         sheet.column_dimensions["I"].width = 30
+        sheet.column_dimensions["J"].width = 54
+        sheet.column_dimensions["K"].width = 24
+        sheet.column_dimensions["L"].width = 54
         for cell in sheet["G"][1:]:
             cell.number_format = "0.0000"
+        for row_number in range(2, sheet.max_row + 1):
+            sheet.cell(row_number, 6).fill = PatternFill("solid", fgColor="FFF2CC")
+            sheet.cell(row_number, 11).fill = PatternFill("solid", fgColor="FFF2CC")
+            sheet.cell(row_number, 12).fill = PatternFill("solid", fgColor="FFF2CC")
+            sheet.cell(row_number, 10).alignment = Alignment(wrap_text=True)
+            sheet.cell(row_number, 12).alignment = Alignment(wrap_text=True)
+        if sheet.max_row >= 2:
+            decision_validation = DataValidation(
+                type="list",
+                formula1='"NO CHANGE,PRICE UPDATED,NOT PURCHASED,NEED INFO"',
+                allow_blank=True,
+            )
+            decision_validation.error = "Pasirinkite vieną iš pateiktų sprendimų."
+            decision_validation.errorTitle = "Neteisingas sprendimas"
+            sheet.add_data_validation(decision_validation)
+            decision_validation.add(f"K2:K{sheet.max_row}")
+            for decision, color in (
+                ("NO CHANGE", "E2F0D9"),
+                ("PRICE UPDATED", "DDEBF7"),
+                ("NOT PURCHASED", "F4CCCC"),
+                ("NEED INFO", "FFF2CC"),
+            ):
+                sheet.conditional_formatting.add(
+                    f"A2:L{sheet.max_row}",
+                    FormulaRule(
+                        formula=[f'$K2="{decision}"'],
+                        fill=PatternFill("solid", fgColor=color),
+                    ),
+                )
 
     info = result.create_sheet("INFO")
     info.append(["Parameter", "Value"])
@@ -702,6 +796,22 @@ def write_furnibox_purchase_prices(source: Path, destination: Path) -> None:
         "Purchase price shown to Reform after applying the markup factor",
     ])
     info.append(["Odoo changed", "NO"])
+    info.append([
+        "Review scope",
+        "All products with Odoo purchase history, all approved Tamara-only prices, "
+        "all calculated Cabinet Parts, and every BOM leaf currently blocked by a "
+        "missing or non-positive component price.",
+    ])
+    info.append([
+        "Tamara workflow",
+        "Review every row; edit only Furnibox (Tamara) Purchase Price, select a "
+        "Tamara Decision, and explain changes in Tamara Comment.",
+    ])
+    info.append([
+        "Import safety",
+        "Only positive prices changed from the Real Furnibox Purchase Price are "
+        "imported as corrections; unchanged and zero prices are ignored.",
+    ])
     result.save(destination)
 
 
@@ -1018,6 +1128,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
             write_furnibox_purchase_prices(
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
                 output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
+                blocked,
             )
             shutil.copy2(
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
@@ -1053,6 +1164,7 @@ def refresh(bom_input: Path, output_dir: Path, rules_path: Path = RULES_PATH) ->
         write_furnibox_purchase_prices(
             PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
             output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
+            blocked,
         )
         shutil.copy2(
             PRODUCTION_DIR / "Reform_Final_Prices.xlsx",

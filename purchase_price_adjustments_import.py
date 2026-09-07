@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isclose
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,15 @@ GENERATED_SHEET = "TAMARA ADJUSTMENTS"
 GENERATED_SKU_COLUMN = "Internal Reference"
 GENERATED_REAL_PRICE_COLUMN = "Real Purchase Price (reference)"
 GENERATED_ADJUSTED_PRICE_COLUMN = "Adjusted Purchase Price"
+
+REPORT_SHEETS = (
+    "COMPONENTS",
+    "CABINET PARTS",
+    "FURNIBOX PURCHASE PRICES",
+)
+REPORT_SKU_COLUMN = "Internal Reference"
+REPORT_REAL_PRICE_COLUMN = "Real Furnibox Purchase Price"
+REPORT_ADJUSTED_PRICE_COLUMN = "Furnibox (Tamara) Purchase Price"
 
 
 @dataclass(frozen=True)
@@ -71,89 +81,123 @@ def load_purchase_price_excel_adjustments(
     )
 
     if GENERATED_SHEET in workbook.sheetnames:
-        sheet = workbook[GENERATED_SHEET]
+        import_sheets = [(
+            workbook[GENERATED_SHEET],
+            GENERATED_SKU_COLUMN,
+            GENERATED_REAL_PRICE_COLUMN,
+            GENERATED_ADJUSTED_PRICE_COLUMN,
+            False,
+        )]
     else:
-        sheet = workbook.active
-    columns = _headers(sheet)
-
-    if {
-        GENERATED_SKU_COLUMN,
-        GENERATED_ADJUSTED_PRICE_COLUMN,
-    }.issubset(columns):
-        sku_column = GENERATED_SKU_COLUMN
-        real_price_column = GENERATED_REAL_PRICE_COLUMN
-        adjusted_price_column = GENERATED_ADJUSTED_PRICE_COLUMN
-    else:
-        sku_column = SOURCE_SKU_COLUMN
-        real_price_column = SOURCE_REAL_PRICE_COLUMN
-        adjusted_price_column = SOURCE_ADJUSTED_PRICE_COLUMN
-
-    required_columns = (sku_column, adjusted_price_column)
-
-    for required in required_columns:
-        if required not in columns:
-            workbook.close()
-            raise ValueError(
-                f"Pirkimo kain? Excel faile nerastas stulpelis: {required}"
-            )
+        report_sheets = [
+            workbook[name]
+            for name in REPORT_SHEETS
+            if name in workbook.sheetnames
+        ]
+        if report_sheets:
+            import_sheets = [
+                (
+                    sheet,
+                    REPORT_SKU_COLUMN,
+                    REPORT_REAL_PRICE_COLUMN,
+                    REPORT_ADJUSTED_PRICE_COLUMN,
+                    True,
+                )
+                for sheet in report_sheets
+            ]
+        else:
+            import_sheets = [(
+                workbook.active,
+                SOURCE_SKU_COLUMN,
+                SOURCE_REAL_PRICE_COLUMN,
+                SOURCE_ADJUSTED_PRICE_COLUMN,
+                False,
+            )]
 
     result: dict[str, dict[str, float | None]] = {}
     duplicates: set[str] = set()
 
-    for row_number in range(2, sheet.max_row + 1):
-        raw_sku = sheet.cell(
-            row_number,
-            columns[sku_column],
-        ).value
+    for (
+        sheet,
+        sku_column,
+        real_price_column,
+        adjusted_price_column,
+        changed_values_only,
+    ) in import_sheets:
+        columns = _headers(sheet)
+        required_columns = (sku_column, adjusted_price_column)
+        if changed_values_only:
+            required_columns += (real_price_column,)
 
-        if raw_sku in (None, ""):
-            continue
+        for required in required_columns:
+            if required not in columns:
+                workbook.close()
+                raise ValueError(
+                    "Pirkimo kain? Excel faile nerastas stulpelis "
+                    f"'{required}' lape '{sheet.title}'."
+                )
 
-        sku = str(raw_sku).strip()
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            raw_sku = row[columns[sku_column] - 1]
 
-        raw_adjusted_price = sheet.cell(
-            row_number,
-            columns[adjusted_price_column],
-        ).value
+            if raw_sku in (None, ""):
+                continue
 
-        if raw_adjusted_price in (None, ""):
-            continue
+            sku = str(raw_sku).strip()
 
-        if sku in result:
-            duplicates.add(sku)
-            continue
+            raw_adjusted_price = row[columns[adjusted_price_column] - 1]
 
-        excel_real_price = None
-        if real_price_column in columns:
-            excel_real_price = _to_float(
-                sheet.cell(
-                    row_number,
-                    columns[real_price_column],
-                ).value,
-                field_name=real_price_column,
+            if raw_adjusted_price in (None, ""):
+                continue
+
+            if sku in result:
+                duplicates.add(sku)
+                continue
+
+            excel_real_price = None
+            if real_price_column in columns:
+                excel_real_price = _to_float(
+                    row[columns[real_price_column] - 1],
+                    field_name=real_price_column,
+                    sku=sku,
+                    allow_empty=True,
+                )
+
+            adjusted_price = _to_float(
+                raw_adjusted_price,
+                field_name=adjusted_price_column,
                 sku=sku,
-                allow_empty=True,
             )
 
-        adjusted_price = _to_float(
-            raw_adjusted_price,
-            field_name=adjusted_price_column,
-            sku=sku,
-        )
+            assert adjusted_price is not None
 
-        assert adjusted_price is not None
+            # Zero cannot produce a releasable component price and must not
+            # overwrite a newer positive Odoo purchase price. Treat it as an
+            # unprovided Tamara price; the pricing engine will use its normal
+            # fallback and report BLOCKED if that fallback is also non-positive.
+            if adjusted_price <= 0:
+                continue
 
-        # Zero cannot produce a releasable component price and must not
-        # overwrite a newer positive Odoo purchase price. Treat it as an
-        # unprovided Tamara price; the pricing engine will use its normal
-        # fallback and report BLOCKED if that fallback is also non-positive.
-        if adjusted_price <= 0:
-            continue
+            # The published Furnibox report shows an effective price on every
+            # row. Importing all of them would freeze ordinary Odoo prices as
+            # explicit Tamara overrides. In report mode, accept only values
+            # that Tamara actually changed from the displayed reference price.
+            if (
+                changed_values_only
+                and excel_real_price is not None
+                and isclose(
+                    adjusted_price,
+                    excel_real_price,
+                    rel_tol=0,
+                    abs_tol=1e-9,
+                )
+            ):
+                continue
 
-        result[sku] = {
-            "excel_real_price": excel_real_price,
-            "new_adjustment": adjusted_price,
-        }
+            result[sku] = {
+                "excel_real_price": excel_real_price,
+                "new_adjustment": adjusted_price,
+            }
 
     workbook.close()
 
