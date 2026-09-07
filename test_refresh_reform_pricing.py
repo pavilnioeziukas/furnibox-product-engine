@@ -52,6 +52,9 @@ class RefreshReformPricingTests(unittest.TestCase):
             bom.write_bytes(b"source")
             output = base / "result"
             calls = []
+            scope_path = base / "scope.json"
+            scope = {"schema_version": 1, "purpose": "pricing_only", "skus": ["LEGACY"]}
+            scope_path.write_text(json.dumps(scope), encoding="utf-8")
 
             def fake_run_step(title, *args):
                 calls.append((title, args))
@@ -85,7 +88,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 patch("refresh_reform_pricing.report_result_step") as progress,
                 patch("refresh_reform_pricing.shutil.copy2"),
             ):
-                self.assertEqual(refresh(bom, output), 0)
+                self.assertEqual(refresh(bom, output, production_bom_scope=scope_path), 0)
 
             self.assertIn("Pilnas Furnibox Target Dataset", calls[0][0])
             self.assertIn("--local-only", calls[0][1])
@@ -102,6 +105,10 @@ class RefreshReformPricingTests(unittest.TestCase):
                 output / "Furnibox_Target_Dataset.json",
             )
             pricing_args = calls[-1][1]
+            self.assertEqual(
+                pricing_args[pricing_args.index("--production-bom-scope") + 1],
+                str(output / "Production_Pricing_Scope.json"),
+            )
             self.assertIn("--dataset", pricing_args)
             dataset_index = pricing_args.index("--dataset") + 1
             self.assertEqual(
@@ -111,6 +118,7 @@ class RefreshReformPricingTests(unittest.TestCase):
             result = json.loads(
                 (output / "Reform_Pricing_Result.json").read_text(encoding="utf-8")
             )
+            self.assertEqual(result["supplemental_production_pricing_scope"], scope)
             self.assertEqual(
                 result["target_reconciliation"]["bom_statuses"]["BLOCKED"],
                 46,

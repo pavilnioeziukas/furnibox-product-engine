@@ -362,6 +362,8 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
             str(SO_PRICING_CONFIG_PATH),
             "--output-dir",
             "{output_dir}",
+            "--production-bom-scope",
+            str(BASE_DIR / "manifest" / "production_pricing_scope.json"),
         ],
     },
     "so_line_prices": {

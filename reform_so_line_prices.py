@@ -31,6 +31,7 @@ from bom_import_manufacture_v5 import (
 )
 from bom_import_pilot_v1 import calculate_levels
 from manifest.manifest_writer import calculate_file_hash
+from pricing_bom_scope import supplement_pricing_graph
 
 
 PRICE_FILE = "Reform_Final_Prices.xlsx"
@@ -836,6 +837,7 @@ def load_reform_boms(
     rules=None,
     dataset_path: Path | None = None,
     production_bom_path: Path | None = None,
+    production_bom_scope: Path | None = None,
 ):
     """
     Build pricing input and preserve the full Reform BOM graph.
@@ -980,7 +982,16 @@ def load_reform_boms(
                 ),
             }
 
+    supplemental_skus = set()
+    if production_bom_scope is not None:
+        if target_dataset is None:
+            raise ValueError("Supplemental pricing BOMs require the authoritative Target Dataset.")
+        graph, supplemental_skus = supplement_pricing_graph(
+            graph, pricing_products, production_bom_scope, production_bom_path,
+        )
+
     result = PricingBomMap()
+    result.supplemental_skus = supplemental_skus
     empty_bom_issues = {}
 
     for product in pricing_products.values():
@@ -3406,6 +3417,7 @@ def build_from_application_config(
     output_path: Path,
     dataset_path: Path | None = None,
     production_bom_path: Path | None = None,
+    production_bom_scope: Path | None = None,
 ):
     document = load_config(
         config_path
@@ -3470,6 +3482,7 @@ def build_from_application_config(
         rules=rules,
         dataset_path=dataset_path,
         production_bom_path=production_bom_path,
+        production_bom_scope=production_bom_scope,
     )
 
     bom_rows, details = (
@@ -3539,6 +3552,11 @@ def main():
     )
 
     parser.add_argument(
+        "--production-bom-scope", type=Path,
+        help="Explicit pricing-only SKU scope for supplemental Production BOMs; never changes Target or Odoo.",
+    )
+
+    parser.add_argument(
         "--price-input",
         type=Path,
         default=(
@@ -3601,6 +3619,7 @@ def main():
         output,
         dataset_path=args.dataset,
         production_bom_path=args.production_bom_map,
+        production_bom_scope=args.production_bom_scope,
     )
 
     print(
