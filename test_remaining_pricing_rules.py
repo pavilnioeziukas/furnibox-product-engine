@@ -20,6 +20,16 @@ def component(sku, group, **extra):
 
 
 class RemainingPricingRulesTests(unittest.TestCase):
+    def test_shelf_pack_market_overrides_reference_and_component_hints(self):
+        for market, expected, wrong in [('EU', '25.1', '26.1'), ('US', '26.1', '25.1')]:
+            with self.subTest(market=market):
+                sku = f'{market}-SREW-SHELF-CORNER-R_LEFT-963X564-BB-PP'
+                dataset = {'products': [{'sku': sku, 'product_type': 'SHELF PREPACK',
+                            'components': [{'sku': 'L0377', 'quantity': 1}]}]}
+                rules, _ = apply_target_business_category_rules({}, dataset, empty_config(),
+                              reference={key(sku): f'8+{wrong}'})
+                self.assertEqual(rules[key(sku)].category_id, f'8+{expected}')
+
     def test_pricing_exclusions_do_not_remove_graph_dependencies(self):
         graph = {'fpack-wtp92-hrd001': [('050119021', 4)]}
         items = [('FPACK-WTP92-HRD001',), ('FPACK-WTP92-HRD001-A',),

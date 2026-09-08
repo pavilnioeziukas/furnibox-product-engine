@@ -726,15 +726,20 @@ def apply_target_business_category_rules(
         if normalized.startswith("FPACK-"):
             assign(sku, _fpack_market_expression(sku, exact_expression))
             continue
-        if exact_expression:
-            assign(sku, exact_expression)
-            continue
-
         if product_type == "SHELF PREPACK" or (
             normalized.endswith("-PP") and "SHELF" in normalized
         ):
-            pack = _target_market_pack_code(product, "25.1", "26.1")
-            assign(sku, f"{_shelf_pp_base_category(sku)}+{pack}")
+            pack = _target_top_market_pack_code(sku, "25.1", "26.1")
+            # The explicit market rule overrides historical reference mistakes.
+            # Preserve all non-packaging categories from an exact expression.
+            expression = exact_expression or _shelf_pp_base_category(sku)
+            categories = [c.strip() for c in expression.split("+")
+                          if c.strip() not in {"25.1", "26.1"}]
+            assign(sku, "+".join([*categories, pack]))
+            continue
+
+        if exact_expression:
+            assign(sku, exact_expression)
             continue
 
         if normalized.startswith("APACK-"):
