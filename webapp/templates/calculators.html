@@ -2,7 +2,9 @@
 {% block title %}{{ 'Panelių' if kind == 'panel' else 'Lentynų' }} skaičiuoklė{% endblock %}
 {% block content %}
 <style>.calc-fields{display:flex;flex-wrap:wrap;gap:18px;margin:18px 0}.calc-fields label{display:flex;flex-direction:column;gap:6px;max-width:270px}.calc-fields input,.calc-fields select{padding:9px;border:1px solid #a9b5be;border-radius:6px;width:180px}.calculator-table{max-height:550px;overflow:auto}.calc-warning{background:#fff2cc;padding:12px}.calc-result{font-size:28px;font-weight:700}.topnav{flex-wrap:wrap}.calc-row-select{max-width:100%;padding:10px}</style>
-<section class="page-head"><h1>{{ 'Panelių' if kind == 'panel' else 'Lentynų' }} skaičiuoklė</h1></section>
+<section class="page-head"><h1>{{ 'Panelių skaičiuoklė' if kind == 'panel' else 'Lentynos medinės dalies skaičiuoklė' }}</h1></section>
+{% if kind == 'shelf' %}{% include 'shelf_navigation.html' %}{% endif %}
+{% if family %}<h2>Tipas: {{ family }}</h2>{% endif %}
 <p>Keiskite tarifus ir pasirinktos eilutės duomenis, tada spauskite „Skaičiuoti“. Pakeitimai galioja šiam skaičiavimui. SO kainodarai jie automatiškai netaikomi.</p>
 {% if kind == 'panel' %}
 <p>Viso = bazė K + pakuotė W + papildomas darbas X. Bazė = (medžiagos tarifas + bazinis darbas) × plotas + fiksuota dalis. −7 % netaikoma.</p>
@@ -15,9 +17,9 @@
 <details><summary>Skaičiavimo šaltinis</summary><p>{{ data.source }}{% if data.sheet %} / {{ data.sheet }}{% endif %}</p></details>
 {% if error %}<p role="alert" class="calc-warning">{{ error }}</p>{% endif %}
 <section class="panel">
-<form method="get"><label for="row">Produktas / šaltinio eilutė</label><select class="calc-row-select" id="row" name="row">{% for item in data.rows %}<option value="{{ loop.index0 }}" {{ 'selected' if loop.index0 == selected else '' }}>{{ item.sku }}{% if item.source_row %} · eil. {{ item.source_row }} · {{ item.kind }}{% endif %}</option>{% endfor %}</select> <button class="secondary">Pasirinkti</button></form>
+<form method="get"><input type="hidden" name="family" value="{{ family }}"><label for="row">Produktas / šaltinio eilutė</label><select class="calc-row-select" id="row" name="row">{% for index,item in available_rows %}<option value="{{ index }}" {{ 'selected' if index == selected else '' }}>{{ item.sku }}{% if item.source_row %} · eil. {{ item.source_row }} · {{ item.kind }}{% endif %}</option>{% endfor %}</select> <button class="secondary">Pasirinkti</button></form>
 {% if row.issues %}<p class="calc-warning">{{ row.issues|join('. ') }}.</p>{% endif %}
-<form method="post"><input name="row" type="hidden" value="{{ selected }}">
+<form method="post"><input type="hidden" name="family" value="{{ family }}"><input name="row" type="hidden" value="{{ selected }}">
 <h2>Tarifai</h2><div class="calc-fields">
 {% set labels = {'WW':'WW medžiaga, €/m²','BB':'BB medžiaga, €/m²','NO':'NO medžiaga, €/m²','work':'Bazinis darbas, €/m²','fixed':'Fiksuota dalis, €/vnt.','packaging':'Pakuotė, €/m²','extra_work':'Papildomas darbas, €/m²'} %}
 {% for key,value in rates.items() %}<label>{{ labels.get(key,key ~ ', €/m²') }}<input name="rate_{{ key }}" type="number" min="0" step="any" value="{{ value }}" required></label>{% endfor %}</div>
