@@ -6,6 +6,20 @@ import shelf_workbook
 
 calculators = Blueprint('calculators', __name__)
 
+FAMILIES = [('PAPR','Paprastos lentynos','Medinė dalis pagal plotą, tipo tarifą ir pakuotę.'),
+            ('FIX','FIX','Fiksuotų lentynų medinės dalies skaičiavimas.'),
+            ('FIXVEN','FIXVEN','FIXVEN lentynų medinės dalies skaičiavimas.'),
+            ('OVEN','OVEN','OVEN lentynų medinės dalies skaičiavimas.'),
+            ('CORNER','CORNER','Kampinių lentynų medinės dalies skaičiavimas.'),
+            ('ROD','ROD','Gamyba, profilis, montavimas ir pakuotė.'),
+            ('LED','LED','Gamyba, LED profilis, montavimas ir pakuotė.'),
+            ('LEDROD','LED + ROD','Atskiras LED + ROD lentynų išskaidymas.')]
+
+
+@calculators.get('/calculators/shelves')
+def shelf_home():
+    return render_template('shelf_home.html',families=FAMILIES)
+
 
 @calculators.route('/shelf-workbook', methods=['GET', 'POST'])
 def shelf_file():
@@ -19,6 +33,10 @@ def shelf_file():
     elif view=='legacy':rows=shelf_workbook.legacy_results(data)
     elif view=='led':rows=shelf_workbook.led_results(data)
     elif view=='purchase':rows=data['purchase']
+    family=request.args.get('family','')
+    if family:
+        if view!='led' or family not in ('LED','ROD','LEDROD'):abort(400)
+        rows=[r for r in rows if r['kind']=={'LED':'tik LED','ROD':'ROD','LEDROD':'LED+ROD'}[family]]
     if query:rows=[r for r in rows if query.casefold() in str(r).casefold()]
     if view in ('bom','led') and rows:
         detail=next((r for r in rows if r['sku']==selected),rows[0] if not selected else None)
@@ -53,7 +71,7 @@ def shelf_file():
         pages=max(1,(len(rows)+49)//50);page=min(page,pages);rows=rows[(page-1)*50:page*50]
     related=shelf_workbook.evidence(query) if view=='related' and query else None
     return render_template('shelf_workbook.html',data=data,view=view,query=query,rows=rows,detail=detail,error=error,
-                           sheet=sheet,page=page,pages=pages,related=related,logical_rates=defaults('shelf'))
+                           sheet=sheet,page=page,pages=pages,related=related,logical_rates=defaults('shelf'),family=family)
 
 
 @calculators.route('/calculators/<kind>', methods=['GET', 'POST'])
@@ -63,9 +81,13 @@ def calculator(kind):
     data = source(kind)
     rates = defaults(kind)
     values = request.form if request.method == 'POST' else request.args
+    family=values.get('family','')
+    if family and (kind!='shelf' or family not in {r[0] for r in FAMILIES}):abort(400)
+    available_rows=[(i,r)for i,r in enumerate(data['rows'])if not family or r['kind']=='SREW-SHELF-'+family]
+    if not available_rows:abort(404)
     try:
-        index = int(values.get('row', 0))
-        if index < 0 or index >= len(data['rows']):
+        index = int(values.get('row', available_rows[0][0]))
+        if index not in {i for i,r in available_rows}:
             abort(400)
     except ValueError:
         abort(400)
@@ -87,7 +109,7 @@ def calculator(kind):
                     for key in ('packaging', 'cardboard'):
                         row[key] = None if values.get(key, '') == '' else number(values[key], key)
         result = calculate(kind, row, rates)
-        for item in data['rows']:
+        for _,item in available_rows:
             results.append((item, calculate(kind, item, rates)))
         if values.get('action') == 'export' and request.method == 'POST':
             output = io.StringIO(newline='')
@@ -102,4 +124,4 @@ def calculator(kind):
     except ValueError as exc:
         error = str(exc)
     return render_template('calculators.html', kind=kind, data=data, rates=rates, row=row,
-                           selected=index, result=result, results=results, error=error)
+                           selected=index, result=result, results=results, error=error,available_rows=available_rows,family=family)

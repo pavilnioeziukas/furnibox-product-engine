@@ -70,3 +70,28 @@ def test_pages_post_export_and_auth(monkeypatch,tmp_path):
     monkeypatch.setattr(webapp,'auth_enabled',lambda:True)
     assert c.get('/calculators/panel').status_code==302
     assert c.post('/calculators/shelf',data={}).status_code==302
+
+
+def test_separate_workspaces_and_family_filters(monkeypatch,tmp_path):
+    from test_webapp import load_webapp
+    c=load_webapp(monkeypatch,tmp_path).app.test_client()
+    home=c.get('/calculators/shelves').get_data(as_text=True)
+    assert 'LED + ROD' in home and 'Panelių skaičiuoklė' in home
+    for family in ('PAPR','FIX','FIXVEN','OVEN','CORNER'):
+        response=c.get('/calculators/shelf?family='+family)
+        assert response.status_code==200
+        text=response.get_data(as_text=True)
+        assert 'Tipas: '+family in text
+        assert 'name="family" value="'+family+'"' in text
+    for family,kind in [('LED','tik LED'),('ROD','ROD'),('LEDROD','LED+ROD')]:
+        response=c.get('/shelf-workbook?view=led&family='+family)
+        assert response.status_code==200
+        assert 'Tipas: '+family in response.get_data(as_text=True)
+    assert c.get('/calculators/panel?family=LED').status_code==400
+    assert c.get('/calculators/shelf?family=INVALID').status_code==400
+    assert c.get('/calculators/shelf?family=FIX&row=0').status_code==400
+    rates={'rate_'+k:v for k,v in defaults('shelf').items()}
+    first=next(i for i,r in enumerate(source('shelf')['rows'])if r['kind']=='SREW-SHELF-FIX')
+    response=c.post('/calculators/shelf',data=dict(rates,family='FIX',row=first,action='export'))
+    assert response.status_code==200
+    assert len(response.get_data(as_text=True).splitlines())==49

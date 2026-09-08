@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Lentynų skaičiuoklė{% endblock %}
+{% block content %}
+<h1>Lentynų skaičiuoklė</h1>
+<p>Pasirinkite lentynos tipą arba skaičiuokite visą komplektą pagal BOM.</p>
+{% include 'shelf_navigation.html' %}
+<div class="shelf-types">
+{% for key,label,description in families %}
+<article class="panel"><h2>{{ label }}</h2><p>{{ description }}</p>
+{% if key in ['LED','ROD','LEDROD'] %}<a class="secondary" href="{{ url_for('calculators.shelf_file',view='led',family=key) }}">Skaičiuoti {{ label }}</a>
+{% else %}<a class="secondary" href="{{ url_for('calculators.calculator',kind='shelf',family=key) }}">Skaičiuoti {{ label }}</a>{% endif %}
+</article>{% endfor %}
+</div>
+<section class="panel"><h2>Viso komplekto kaina</h2><p>224 BOM su komponentų kiekiais ir pirkimo kainomis. Pasikartojančios šaltinio eilutės pažymėtos patikrai.</p><a class="primary" href="{{ url_for('calculators.shelf_file',view='bom') }}">Atidaryti BOM skaičiuoklę</a></section>
+<section class="panel"><h2>Palyginimas ir kainų šaltiniai</h2><p><a href="{{ url_for('calculators.shelf_file',view='legacy') }}">309 ankstesni komplektai</a> · <a href="{{ url_for('calculators.shelf_file',view='purchase') }}">Pirkimo kainos</a> · <a href="{{ url_for('calculators.shelf_file',view='related') }}">Ryšiai pagal kodą</a></p></section>
+<p>Tarifų pakeitimai galioja pasirinktam skaičiavimui. Rezultatai automatiškai neperkeliami į SO kainodarą.</p>
+<style>.shelf-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin:24px 0}.shelf-types .panel{display:flex;flex-direction:column;align-items:flex-start}.shelf-types p{flex:1}</style>
+{% endblock %}

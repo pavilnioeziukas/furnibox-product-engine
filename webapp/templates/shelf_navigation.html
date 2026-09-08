@@ -1,0 +1,9 @@
+<nav class="shelf-workspace-nav" aria-label="Lentynų skaičiuoklės skiltys">
+  <a href="{{ url_for('calculators.shelf_home') }}">Lentynų pradžia</a>
+  <a href="{{ url_for('calculators.calculator',kind='shelf') }}">Medinė dalis</a>
+  <a href="{{ url_for('calculators.shelf_file',view='bom') }}">Visas komplektas / BOM</a>
+  <a href="{{ url_for('calculators.shelf_file',view='led') }}">LED / ROD</a>
+  <a href="{{ url_for('calculators.shelf_file',view='rates') }}">Lentynų tarifai</a>
+  <a href="{{ url_for('calculators.shelf_file',view='source') }}">Šaltiniai ir formulės</a>
+</nav>
+<style>.shelf-workspace-nav{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;padding:14px;background:#e7efe9;border-radius:8px}.topnav{flex-wrap:wrap}</style>
