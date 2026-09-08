@@ -3542,6 +3542,9 @@ def build_from_application_config(
             target_dataset,
             document,
         )
+        from order_line_pricing import apply as apply_order_line_pricing
+        prices, rules, order_line_tops = apply_order_line_pricing(prices, rules, target_dataset, document)
+        authoritative_rule_tops.update(order_line_tops)
         component_cost_only_tops = (
             component_cost_only_manufacture_products(
                 target_dataset
@@ -3558,7 +3561,7 @@ def build_from_application_config(
     )
 
     unified.cover_missing(registry, list(prices) + list(graph) +
-        [item.sku for _, items in boms.values() for item in items])
+        [item.sku for _, items in boms.values() for item in items], calculator_snapshot)
     prices = unified.prepare(prices, registry)
 
     bom_rows, details = (

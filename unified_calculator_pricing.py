@@ -78,10 +78,48 @@ def prepare(prices, registry):
     return prices
 
 
-def cover_missing(registry, skus):
+def dimensional_shelf_recipe(sku, settings):
+    """Apply the published family formula to new dimensions, not new prices.
+
+    R/S are inherited only when all populated source rows of the same market
+    and family agree. LED/ROD require their dedicated cost breakdown.
+    Source-specific extra multipliers are never generalized to new sizes.
+    """
+    match = re.fullmatch(r'(EU|US)-SREW-SHELF-(?:(FIXVEN|FIX|OVEN|CORNER)(?:-[A-Z_]+)?-)?'
+                         r'(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)-(WW|BB|NO)(-PP)?', sku.upper())
+    if not match:
+        return None
+    market, family, length, width, color, packed = match.groups()
+    family = 'SREW-SHELF-' + (family or 'PAPR')
+    reference = [r for r in source('shelf')['rows']
+                 if r['sku'].upper().startswith(market+'-') and r['kind'] == family
+                 and r['packaging'] is not None and r['cardboard'] is not None
+                 and not any('tip' in issue.casefold() for issue in r.get('issues', []))]
+    charges = {(r['packaging'], r['cardboard']) for r in reference}
+    if len(charges) != 1:
+        return None
+    packaging, cardboard = charges.pop()
+    row = dict(length=float(length.replace(',', '.')), width=float(width.replace(',', '.')),
+               kind=family, packaging=packaging, cardboard=cardboard, source_multiplier=1)
+    calculated = calculate('shelf', row, settings['shelf'])
+    parts = calculated['parts'][3:]
+    if not packed:
+        parts = parts[:1]
+    total = sum(v for _,v in parts)
+    if total <= 0:
+        return None
+    return dict(sku=sku, total=total, parts=parts, issue='',
+                origin=f'Lentynų skaičiuoklė: {family}, {row["length"]:g}×{row["width"]:g} mm; '
+                       f'R={packaging:g}, S={cardboard:g}; pagal tipo formulę')
+
+
+def cover_missing(registry, skus, settings=None):
+    if settings is None:
+        import calculator_settings
+        settings = calculator_settings.load()
     for sku in skus:
         if key(sku) not in registry and re.search(r'SREW-SHELF|^(?:EU|US)-(?:PNL|PCL)-|CAB01-(?:PNL|PCL)\d', sku, re.I):
-            registry[key(sku)] = dict(sku=sku, total=None, parts=[],
+            registry[key(sku)] = dimensional_shelf_recipe(sku, settings) or dict(sku=sku, total=None, parts=[],
                 origin='Panelių / lentynų skaičiuoklė',
                 issue='Nėra vienareikšmės šio SKU skaičiuoklės eilutės; sena kaina nenaudojama')
 

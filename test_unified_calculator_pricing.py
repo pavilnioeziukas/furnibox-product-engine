@@ -81,3 +81,70 @@ def test_settings_and_led_saved_for_next_so_run(tmp_path, monkeypatch):
     # Saving general rates must retain saved LED costs.
     client.post('/calculators/settings', data=form)
     assert unified.recipes(settings.load())[sku.casefold()]['total'] == 45
+
+
+@pytest.mark.parametrize('sku,area,rate,coefficient', [
+    ('EU-SREW-SHELF-CORNER-R_LEFT-963X564-WW-PP', .963*.564, 61, 1),
+    ('EU-SREW-SHELF-CORNER-RW_RIGHT-963X340-BB-PP', .963*.340, 61, 1),
+    ('US-SREW-SHELF-163 X339-WW-PP', .163*.339, 43.95, 3),
+    ('US-SREW-SHELF-FIX-878X339-NO-PP', .878*.339, 45.29, 1),
+])
+def test_new_dimensions_use_existing_family_formula(sku, area, rate, coefficient):
+    config = settings.validate({})
+    recipe = unified.dimensional_shelf_recipe(sku, config)
+    assert recipe['total'] == pytest.approx((area*rate-1.9)*coefficient+1.9)
+    config['shelf']['SREW-SHELF-'+('CORNER' if 'CORNER' in sku else 'FIX' if '-FIX-' in sku else 'PAPR')] += 2
+    assert unified.dimensional_shelf_recipe(sku, config)['total'] == pytest.approx(recipe['total']+area*2*coefficient)
+
+
+@pytest.mark.parametrize('sku', ['EU-SREW-SHELF-LED-999X564-WW-PP', 'EU-SREW-SHELF-ROD-999X564-WW-PP', 'EU-SREW-SHELF-UNKNOWN-999X564-WW-PP'])
+def test_no_generic_formula_for_unknown_or_led_breakdown(sku):
+    assert unified.dimensional_shelf_recipe(sku, settings.validate({})) is None
+
+
+def test_order_line_supplier_identity_preserves_existing_prices_and_bom():
+    from order_line_pricing import apply
+    from so_pricing_rules import load_config
+    from pathlib import Path
+    sku='EUB-P-ACC02-SLF200'; supplier='UTH1001'
+    dataset={'products':[dict(sku=sku, product_type='INTERIOR STORAGE', components=[dict(sku=supplier, quantity=1)])]}
+    original={sku.casefold(): ('Purchased shelf', 100., 'APPROVED PURCHASE PRICE ADJUSTMENT')}
+    config=load_config(Path(__file__).parent/'manifest/so_pricing_rules.json')
+    prices,rules,authoritative=apply(original,{},dataset,config)
+    assert prices[supplier.casefold()][1]==100
+    assert 'ORDER LINE row 2' in prices[supplier.casefold()][2]
+    assert rules[sku.casefold()].category_id=='6'
+    assert sku.casefold() in authoritative
+    assert supplier.casefold() not in original
+    prices2,_,_=apply({**original,supplier.casefold():('Existing supplier',90.,'LAST PURCHASE PRICE')},{},dataset,config)
+    assert prices2[supplier.casefold()][1]==90
+
+
+def test_confirmed_mechanism_adds_extra_components_once():
+    import reform_so_line_prices as engine
+    from order_line_pricing import apply
+    from so_pricing_rules import load_config
+    from pathlib import Path
+    sku='EUB-P-ACC02-MIS020'
+    children=[dict(sku='0217029966',quantity=1),dict(sku='MED4.5X50',quantity=8)]
+    dataset={'products':[dict(sku=sku,product_type='INTERIOR STORAGE',components=children)]}
+    config=load_config(Path(__file__).parent/'manifest/so_pricing_rules.json')
+    prices,rules,authoritative=apply({sku.casefold():('Mechanism',100.,'APPROVED PURCHASE PRICE ADJUSTMENT'),
+        'med4.5x50':('Screw',.025,'TEST')},{},dataset,config)
+    boms={sku:('INTERIOR STORAGE',[engine.Item(c['sku'],c['quantity'])for c in children])}
+    rows,_=engine.calculate_boms(boms,prices,rules,authoritative_rule_tops=authoritative)
+    assert rows[0]['status']=='COMPLETE'
+    assert rows[0]['cost']==pytest.approx(100.2)
+    assert rows[0]['final']==pytest.approx(100.2+5.04*.93)
+    assert next(x for x in rows[0]['component_details']if x['component']=='MED4.5X50')['total_qty']==8
+
+
+@pytest.mark.parametrize('second_fee,expected', [(1.,True),(2.,False)])
+def test_front_rules_require_unanimous_existing_prices(second_fee,expected):
+    from order_line_pricing import apply
+    from so_pricing_rules import PricingRule
+    rules={'a':PricingRule('A','','','',assembly=1.),'b':PricingRule('B','','','',assembly=second_fee)}
+    dataset={'products':[dict(sku=s,product_type='FRONT HARDWARE',components=[])for s in ('A','B','C')]}
+    _,after,_=apply({},rules,dataset,{})
+    assert ('c' in after)==expected
+    assert after['a']==rules['a']
