@@ -1,0 +1,734 @@
+{
+  "source": "Copy of Detaliu kainos perskaiciavimas.xlsx / PNL kainso; Sheet5",
+  "rows": [
+    {
+      "sku": "EUB-C-CAB01-PNL001",
+      "detail": "EU-PNL-800x600-WW",
+      "length": 800,
+      "width": 600,
+      "color": "WW",
+      "current": 16.05,
+      "sourceK": 17.07821052631579
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL002",
+      "detail": "EU-PNL-2000x600-WW",
+      "length": 2000,
+      "width": 600,
+      "color": "WW",
+      "current": 37.12,
+      "sourceK": 36.44052631578948
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL003",
+      "detail": "EU-PNL-2200x600-WW",
+      "length": 2200,
+      "width": 600,
+      "color": "WW",
+      "current": 40.63,
+      "sourceK": 39.667578947368426
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL004",
+      "detail": "EU-PNL-2400x600-WW",
+      "length": 2400,
+      "width": 600,
+      "color": "WW",
+      "current": 44.15,
+      "sourceK": 42.89463157894737
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL005",
+      "detail": "EU-PNL-2500x600-WW",
+      "length": 2500,
+      "width": 600,
+      "color": "WW",
+      "current": 45.9,
+      "sourceK": 44.50815789473684
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL006",
+      "detail": "EU-PNL-2500x950-WW",
+      "length": 2500,
+      "width": 950,
+      "color": "WW",
+      "current": 67.82,
+      "sourceK": 68.03875
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL007",
+      "detail": "EU-PNL-400x200-WW",
+      "length": 400,
+      "width": 200,
+      "color": "WW",
+      "current": 3.9,
+      "sourceK": 6.3213684210526315
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL008",
+      "detail": "EU-PNL-600x200-WW",
+      "length": 600,
+      "width": 200,
+      "color": "WW",
+      "current": 5.51,
+      "sourceK": 7.397052631578948
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL009",
+      "detail": "EU-PNL-800x200-WW",
+      "length": 800,
+      "width": 200,
+      "color": "WW",
+      "current": 7.13,
+      "sourceK": 8.472736842105263
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL010",
+      "detail": "EU-PNL-1000x200-WW",
+      "length": 1000,
+      "width": 200,
+      "color": "WW",
+      "current": 8.74,
+      "sourceK": 9.548421052631578
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL011",
+      "detail": "EU-PNL-2000x200-WW",
+      "length": 2000,
+      "width": 200,
+      "color": "WW",
+      "current": 16.82,
+      "sourceK": 14.926842105263159
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL012",
+      "detail": "EU-PNL-2200x200-WW",
+      "length": 2200,
+      "width": 200,
+      "color": "WW",
+      "current": 18.43,
+      "sourceK": 16.002526315789474
+    },
+    {
+      "sku": "USB-C-CAB01-PNL001",
+      "detail": "US-PNL-914x686-WW",
+      "length": 914,
+      "width": 686,
+      "color": "WW",
+      "current": 20.2,
+      "sourceK": 21.031457568421054
+    },
+    {
+      "sku": "USB-C-CAB01-PNL002",
+      "detail": "US-PNL-2184x686-WW",
+      "length": 2184,
+      "width": 686,
+      "color": "WW",
+      "current": 45.09,
+      "sourceK": 44.460397515789474
+    },
+    {
+      "sku": "USB-C-CAB01-PNL003",
+      "detail": "US-PNL-2438x686-WW",
+      "length": 2438,
+      "width": 686,
+      "color": "WW",
+      "current": 50.07,
+      "sourceK": 49.14618550526316
+    },
+    {
+      "sku": "USB-C-CAB01-PNL004",
+      "detail": "US-PNL-914x2438-WW",
+      "length": 914,
+      "width": 2438,
+      "color": "WW",
+      "current": 64.02,
+      "sourceK": 64.09453870526316
+    },
+    {
+      "sku": "USB-C-CAB01-PNL005",
+      "detail": "US-PNL-251x203-WW",
+      "length": 251,
+      "width": 203,
+      "color": "WW",
+      "current": 2.72,
+      "sourceK": 5.540233439473684
+    },
+    {
+      "sku": "USB-C-CAB01-PNL006",
+      "detail": "US-PNL-378x203-WW",
+      "length": 378,
+      "width": 203,
+      "color": "WW",
+      "current": 3.76,
+      "sourceK": 6.233538805263158
+    },
+    {
+      "sku": "USB-C-CAB01-PNL007",
+      "detail": "US-PNL-505x203-WW",
+      "length": 505,
+      "width": 203,
+      "color": "WW",
+      "current": 4.79,
+      "sourceK": 6.926844171052631
+    },
+    {
+      "sku": "USB-C-CAB01-PNL008",
+      "detail": "US-PNL-759x203-WW",
+      "length": 759,
+      "width": 203,
+      "color": "WW",
+      "current": 6.86,
+      "sourceK": 8.313454902631578
+    },
+    {
+      "sku": "USB-C-CAB01-PNL009",
+      "detail": "US-PNL-2029x203-WW",
+      "length": 2029,
+      "width": 203,
+      "color": "WW",
+      "current": 17.21,
+      "sourceK": 15.246508560526316
+    },
+    {
+      "sku": "USB-C-CAB01-PNL010",
+      "detail": "US-PNL-2283x203-WW",
+      "length": 2283,
+      "width": 203,
+      "color": "WW",
+      "current": 19.27,
+      "sourceK": 16.633119292105263
+    },
+    {
+      "sku": "EUB-C-CAB01-PCL001",
+      "detail": "EU-PCL-950x600-WW",
+      "length": 950,
+      "width": 600,
+      "color": "WW",
+      "current": 38.92,
+      "sourceK": 19.4985
+    },
+    {
+      "sku": "EUB-C-CAB01-PCL002",
+      "detail": "EU-PCL-2150x600-WW",
+      "length": 2150,
+      "width": 600,
+      "color": "WW",
+      "current": 56.02,
+      "sourceK": 38.86081578947368
+    },
+    {
+      "sku": "USB-C-CAB01-PCL001",
+      "detail": "US-PCL-914x686-WW",
+      "length": 914,
+      "width": 686,
+      "color": "WW",
+      "current": 40.15,
+      "sourceK": 21.031457568421054
+    },
+    {
+      "sku": "USB-C-CAB01-PCL002",
+      "detail": "US-PCL-2184x686-WW",
+      "length": 2184,
+      "width": 686,
+      "color": "WW",
+      "current": 60.31,
+      "sourceK": 44.460397515789474
+    },
+    {
+      "sku": "USB-C-CAB01-PCL003",
+      "detail": "US-PCL-2438x686-WW",
+      "length": 2438,
+      "width": 686,
+      "color": "WW",
+      "current": 64.35,
+      "sourceK": 49.14618550526316
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL001",
+      "detail": "EU-PNL-800x600-BB",
+      "length": 800,
+      "width": 600,
+      "color": "BB",
+      "current": 16.05,
+      "sourceK": 16.38936842105263
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL002",
+      "detail": "EU-PNL-2000x600-BB",
+      "length": 2000,
+      "width": 600,
+      "color": "BB",
+      "current": 37.12,
+      "sourceK": 34.71842105263158
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL003",
+      "detail": "EU-PNL-2200x600-BB",
+      "length": 2200,
+      "width": 600,
+      "color": "BB",
+      "current": 40.63,
+      "sourceK": 37.77326315789474
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL004",
+      "detail": "EU-PNL-2400x600-BB",
+      "length": 2400,
+      "width": 600,
+      "color": "BB",
+      "current": 44.15,
+      "sourceK": 40.828105263157894
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL005",
+      "detail": "EU-PNL-2500x600-BB",
+      "length": 2500,
+      "width": 600,
+      "color": "BB",
+      "current": 45.9,
+      "sourceK": 42.355526315789476
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL006",
+      "detail": "EU-PNL-2500x950-BB",
+      "length": 2500,
+      "width": 950,
+      "color": "BB",
+      "current": 67.82,
+      "sourceK": 64.63041666666666
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL007",
+      "detail": "EU-PNL-400x200-BB",
+      "length": 400,
+      "width": 200,
+      "color": "BB",
+      "current": 3.9,
+      "sourceK": 6.206561403508772
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL008",
+      "detail": "EU-PNL-600x200-BB",
+      "length": 600,
+      "width": 200,
+      "color": "BB",
+      "current": 5.51,
+      "sourceK": 7.224842105263158
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL009",
+      "detail": "EU-PNL-800x200-BB",
+      "length": 800,
+      "width": 200,
+      "color": "BB",
+      "current": 7.13,
+      "sourceK": 8.243122807017544
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL010",
+      "detail": "EU-PNL-1000x200-BB",
+      "length": 1000,
+      "width": 200,
+      "color": "BB",
+      "current": 8.74,
+      "sourceK": 9.26140350877193
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL011",
+      "detail": "EU-PNL-2000x200-BB",
+      "length": 2000,
+      "width": 200,
+      "color": "BB",
+      "current": 16.82,
+      "sourceK": 14.35280701754386
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL012",
+      "detail": "EU-PNL-2200x200-BB",
+      "length": 2200,
+      "width": 200,
+      "color": "BB",
+      "current": 18.43,
+      "sourceK": 15.371087719298245
+    },
+    {
+      "sku": "USB-C-CAB02-PNL001",
+      "detail": "US-PNL-914x686-BB",
+      "length": 914,
+      "width": 686,
+      "color": "BB",
+      "current": 20.2,
+      "sourceK": 20.131651828070176
+    },
+    {
+      "sku": "USB-C-CAB02-PNL002",
+      "detail": "US-PNL-2184x686-BB",
+      "length": 2184,
+      "width": 686,
+      "color": "BB",
+      "current": 45.09,
+      "sourceK": 42.31031465263158
+    },
+    {
+      "sku": "USB-C-CAB02-PNL003",
+      "detail": "US-PNL-2438x686-BB",
+      "length": 2438,
+      "width": 686,
+      "color": "BB",
+      "current": 50.07,
+      "sourceK": 46.74604721754386
+    },
+    {
+      "sku": "USB-C-CAB02-PNL004",
+      "detail": "US-PNL-914x2438-BB",
+      "length": 914,
+      "width": 2438,
+      "color": "BB",
+      "current": 64.02,
+      "sourceK": 60.89668681754386
+    },
+    {
+      "sku": "USB-C-CAB02-PNL005",
+      "detail": "US-PNL-251x203-BB",
+      "length": 251,
+      "width": 203,
+      "color": "BB",
+      "current": 2.72,
+      "sourceK": 5.467111414912281
+    },
+    {
+      "sku": "USB-C-CAB02-PNL006",
+      "detail": "US-PNL-378x203-BB",
+      "length": 378,
+      "width": 203,
+      "color": "BB",
+      "current": 3.76,
+      "sourceK": 6.123418784210526
+    },
+    {
+      "sku": "USB-C-CAB02-PNL007",
+      "detail": "US-PNL-505x203-BB",
+      "length": 505,
+      "width": 203,
+      "color": "BB",
+      "current": 4.79,
+      "sourceK": 6.779726153508772
+    },
+    {
+      "sku": "USB-C-CAB02-PNL008",
+      "detail": "US-PNL-759x203-BB",
+      "length": 759,
+      "width": 203,
+      "color": "BB",
+      "current": 6.86,
+      "sourceK": 8.092340892105263
+    },
+    {
+      "sku": "USB-C-CAB02-PNL009",
+      "detail": "US-PNL-2029x203-BB",
+      "length": 2029,
+      "width": 203,
+      "color": "BB",
+      "current": 17.21,
+      "sourceK": 14.655414585087719
+    },
+    {
+      "sku": "USB-C-CAB02-PNL010",
+      "detail": "US-PNL-2283x203-BB",
+      "length": 2283,
+      "width": 203,
+      "color": "BB",
+      "current": 19.27,
+      "sourceK": 15.96802932368421
+    },
+    {
+      "sku": "EUB-C-CAB02-PCL001",
+      "detail": "EU-PCL-950x600-BB",
+      "length": 950,
+      "width": 600,
+      "color": "BB",
+      "current": 38.92,
+      "sourceK": 18.6805
+    },
+    {
+      "sku": "EUB-C-CAB02-PCL002",
+      "detail": "EU-PCL-2150x600-BB",
+      "length": 2150,
+      "width": 600,
+      "color": "BB",
+      "current": 56.02,
+      "sourceK": 37.00955263157895
+    },
+    {
+      "sku": "USB-C-CAB02-PCL001",
+      "detail": "US-PCL-914x686-BB",
+      "length": 914,
+      "width": 686,
+      "color": "BB",
+      "current": 40.15,
+      "sourceK": 20.131651828070176
+    },
+    {
+      "sku": "USB-C-CAB02-PCL002",
+      "detail": "US-PCL-2184x686-BB",
+      "length": 2184,
+      "width": 686,
+      "color": "BB",
+      "current": 60.31,
+      "sourceK": 42.31031465263158
+    },
+    {
+      "sku": "USB-C-CAB02-PCL003",
+      "detail": "US-PCL-2438x686-BB",
+      "length": 2438,
+      "width": 686,
+      "color": "BB",
+      "current": 64.35,
+      "sourceK": 46.74604721754386
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL001",
+      "detail": "EU-PNL-800x600-NO",
+      "length": 800,
+      "width": 600,
+      "color": "NO",
+      "current": 16.05,
+      "sourceK": 17.07821052631579
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL002",
+      "detail": "EU-PNL-2000x600-NO",
+      "length": 2000,
+      "width": 600,
+      "color": "NO",
+      "current": 37.12,
+      "sourceK": 36.44052631578948
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL003",
+      "detail": "EU-PNL-2200x600-NO",
+      "length": 2200,
+      "width": 600,
+      "color": "NO",
+      "current": 40.63,
+      "sourceK": 39.667578947368426
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL004",
+      "detail": "EU-PNL-2400x600-NO",
+      "length": 2400,
+      "width": 600,
+      "color": "NO",
+      "current": 44.15,
+      "sourceK": 42.89463157894737
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL005",
+      "detail": "EU-PNL-2500x600-NO",
+      "length": 2500,
+      "width": 600,
+      "color": "NO",
+      "current": 45.9,
+      "sourceK": 44.50815789473684
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL006",
+      "detail": "EU-PNL-2500x950-NO",
+      "length": 2500,
+      "width": 950,
+      "color": "NO",
+      "current": 67.82,
+      "sourceK": 68.03875
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL007",
+      "detail": "EU-PNL-400x200-NO",
+      "length": 400,
+      "width": 200,
+      "color": "NO",
+      "current": 3.9,
+      "sourceK": 6.3213684210526315
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL008",
+      "detail": "EU-PNL-600x200-NO",
+      "length": 600,
+      "width": 200,
+      "color": "NO",
+      "current": 5.51,
+      "sourceK": 7.397052631578948
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL009",
+      "detail": "EU-PNL-800x200-NO",
+      "length": 800,
+      "width": 200,
+      "color": "NO",
+      "current": 7.13,
+      "sourceK": 8.472736842105263
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL010",
+      "detail": "EU-PNL-1000x200-NO",
+      "length": 1000,
+      "width": 200,
+      "color": "NO",
+      "current": 8.74,
+      "sourceK": 9.548421052631578
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL011",
+      "detail": "EU-PNL-2000x200-NO",
+      "length": 2000,
+      "width": 200,
+      "color": "NO",
+      "current": 16.82,
+      "sourceK": 14.926842105263159
+    },
+    {
+      "sku": "EUB-C-CAB03-PNL012",
+      "detail": "EU-PNL-2200x200-NO",
+      "length": 2200,
+      "width": 200,
+      "color": "NO",
+      "current": 18.43,
+      "sourceK": 16.002526315789474
+    },
+    {
+      "sku": "USB-C-CAB03-PNL001",
+      "detail": "US-PNL-914x686-NO",
+      "length": 914,
+      "width": 686,
+      "color": "NO",
+      "current": 20.2,
+      "sourceK": 21.031457568421054
+    },
+    {
+      "sku": "USB-C-CAB03-PNL002",
+      "detail": "US-PNL-2184x686-NO",
+      "length": 2184,
+      "width": 686,
+      "color": "NO",
+      "current": 45.09,
+      "sourceK": 44.460397515789474
+    },
+    {
+      "sku": "USB-C-CAB03-PNL003",
+      "detail": "US-PNL-2438x686-NO",
+      "length": 2438,
+      "width": 686,
+      "color": "NO",
+      "current": 50.07,
+      "sourceK": 49.14618550526316
+    },
+    {
+      "sku": "USB-C-CAB03-PNL004",
+      "detail": "US-PNL-914x2438-NO",
+      "length": 914,
+      "width": 2438,
+      "color": "NO",
+      "current": 64.02,
+      "sourceK": 64.09453870526316
+    },
+    {
+      "sku": "USB-C-CAB03-PNL005",
+      "detail": "US-PNL-251x203-NO",
+      "length": 251,
+      "width": 203,
+      "color": "NO",
+      "current": 2.72,
+      "sourceK": 5.540233439473684
+    },
+    {
+      "sku": "USB-C-CAB03-PNL006",
+      "detail": "US-PNL-378x203-NO",
+      "length": 378,
+      "width": 203,
+      "color": "NO",
+      "current": 3.76,
+      "sourceK": 6.233538805263158
+    },
+    {
+      "sku": "USB-C-CAB03-PNL007",
+      "detail": "US-PNL-505x203-NO",
+      "length": 505,
+      "width": 203,
+      "color": "NO",
+      "current": 4.79,
+      "sourceK": 6.926844171052631
+    },
+    {
+      "sku": "USB-C-CAB03-PNL008",
+      "detail": "US-PNL-759x203-NO",
+      "length": 759,
+      "width": 203,
+      "color": "NO",
+      "current": 6.86,
+      "sourceK": 8.313454902631578
+    },
+    {
+      "sku": "USB-C-CAB03-PNL009",
+      "detail": "US-PNL-2029x203-NO",
+      "length": 2029,
+      "width": 203,
+      "color": "NO",
+      "current": 17.21,
+      "sourceK": 15.246508560526316
+    },
+    {
+      "sku": "USB-C-CAB03-PNL010",
+      "detail": "US-PNL-2283x203-NO",
+      "length": 2283,
+      "width": 203,
+      "color": "NO",
+      "current": 19.27,
+      "sourceK": 16.633119292105263
+    },
+    {
+      "sku": "EUB-C-CAB03-PCL001",
+      "detail": "EU-PCL-950x600-NO",
+      "length": 950,
+      "width": 600,
+      "color": "NO",
+      "current": 38.92,
+      "sourceK": 19.4985
+    },
+    {
+      "sku": "EUB-C-CAB03-PCL002",
+      "detail": "EU-PCL-2150x600-NO",
+      "length": 2150,
+      "width": 600,
+      "color": "NO",
+      "current": 56.02,
+      "sourceK": 38.86081578947368
+    },
+    {
+      "sku": "USB-C-CAB03-PCL001",
+      "detail": "US-PCL-914x686-NO",
+      "length": 914,
+      "width": 686,
+      "color": "NO",
+      "current": 40.15,
+      "sourceK": 21.031457568421054
+    },
+    {
+      "sku": "USB-C-CAB03-PCL002",
+      "detail": "US-PCL-2184x686-NO",
+      "length": 2184,
+      "width": 686,
+      "color": "NO",
+      "current": 60.31,
+      "sourceK": 44.460397515789474
+    },
+    {
+      "sku": "USB-C-CAB03-PCL003",
+      "detail": "US-PCL-2438x686-NO",
+      "length": 2438,
+      "width": 686,
+      "color": "NO",
+      "current": 64.35,
+      "sourceK": 49.14618550526316
+    }
+  ]
+}

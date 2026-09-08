@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Panelių' if kind == 'panel' else 'Lentynų' }} skaičiuoklė{% endblock %}
+{% block content %}
+<style>.calc-fields{display:flex;flex-wrap:wrap;gap:18px;margin:18px 0}.calc-fields label{display:flex;flex-direction:column;gap:6px;max-width:270px}.calc-fields input,.calc-fields select{padding:9px;border:1px solid #a9b5be;border-radius:6px;width:180px}.calculator-table{max-height:550px;overflow:auto}.calc-warning{background:#fff2cc;padding:12px}.calc-result{font-size:28px;font-weight:700}.topnav{flex-wrap:wrap}.calc-row-select{max-width:100%;padding:10px}</style>
+<section class="page-head"><h1>{{ 'Panelių' if kind == 'panel' else 'Lentynų' }} skaičiuoklė</h1></section>
+<p>Keiskite tarifus ir pasirinktos eilutės duomenis, tada spauskite „Skaičiuoti“. Pakeitimai galioja šiam skaičiavimui. SO kainodarai jie automatiškai netaikomi.</p>
+{% if kind == 'panel' %}
+<p>Viso = bazė K + pakuotė W + papildomas darbas X. Bazė = (medžiagos tarifas + bazinis darbas) × plotas + fiksuota dalis. −7 % netaikoma.</p>
+<p>Failo „Sheet5“ kainos skirtos palyginimui. PNL001 faile yra 16,05 €, o pateiktoje dabartinės kainos nuotraukoje – 19,42 €.</p>
+{% else %}
+<p>Medinė dalis U = (plotas × tipo tarifas − pakuotė − kartonas) × koeficientas. Koeficientas: iki 0,1 m² – 3; nuo 0,1 iki 0,2 m² – 1,5; nuo 0,2 m² – 1. Viso = U + R + S.</p>
+<p class="calc-warning">Šaltinyje yra pasikartojančių kodų, tipų neatitikimų ir nepilnų pakuotės duomenų. Eilutės išsaugotos atskirai. Prieš naudojant pažymėtas kainas reikia patikrinti jų duomenis.</p>
+{% endif %}
+<details><summary>Skaičiavimo šaltinis</summary><p>{{ data.source }}{% if data.sheet %} / {{ data.sheet }}{% endif %}</p></details>
+{% if error %}<p role="alert" class="calc-warning">{{ error }}</p>{% endif %}
+<section class="panel">
+<form method="get"><label for="row">Produktas / šaltinio eilutė</label><select class="calc-row-select" id="row" name="row">{% for item in data.rows %}<option value="{{ loop.index0 }}" {{ 'selected' if loop.index0 == selected else '' }}>{{ item.sku }}{% if item.source_row %} · eil. {{ item.source_row }} · {{ item.kind }}{% endif %}</option>{% endfor %}</select> <button class="secondary">Pasirinkti</button></form>
+{% if row.issues %}<p class="calc-warning">{{ row.issues|join('. ') }}.</p>{% endif %}
+<form method="post"><input name="row" type="hidden" value="{{ selected }}">
+<h2>Tarifai</h2><div class="calc-fields">
+{% set labels = {'WW':'WW medžiaga, €/m²','BB':'BB medžiaga, €/m²','NO':'NO medžiaga, €/m²','work':'Bazinis darbas, €/m²','fixed':'Fiksuota dalis, €/vnt.','packaging':'Pakuotė, €/m²','extra_work':'Papildomas darbas, €/m²'} %}
+{% for key,value in rates.items() %}<label>{{ labels.get(key,key ~ ', €/m²') }}<input name="rate_{{ key }}" type="number" min="0" step="any" value="{{ value }}" required></label>{% endfor %}</div>
+<h2>Pasirinktos eilutės duomenys</h2><div class="calc-fields">
+<label>Ilgis, mm<input name="length" type="number" step="any" min="0.001" value="{{ row.length }}" required></label>
+<label>Plotis, mm<input name="width" type="number" step="any" min="0.001" value="{{ row.width }}" required></label>
+{% if kind == 'panel' %}<label>Spalva<select name="color">{% for color in ['WW','BB','NO'] %}<option {{ 'selected' if color == row.color else '' }}>{{ color }}</option>{% endfor %}</select></label>
+{% else %}<label>Lentynos tipas<select name="kind">{% for key in rates %}<option {{ 'selected' if key == row.kind else '' }}>{{ key }}</option>{% endfor %}</select></label>
+<label>Pakuotė, €<input name="packaging" type="number" step="any" min="0" value="{{ row.packaging if row.packaging is not none else '' }}"></label>
+<label>Kartonas, €<input name="cardboard" type="number" step="any" min="0" value="{{ row.cardboard if row.cardboard is not none else '' }}"></label>{% endif %}
+</div><button class="primary" name="action" value="calculate">Skaičiuoti</button> <button class="secondary" name="action" value="export">Atsisiųsti visų eilučių CSV su šiais tarifais</button>
+<p>Visų eilučių lentelė ir CSV naudoja bendrus tarifus bei pradines kiekvienos eilutės reikšmes. Pasirinktos eilutės matmenų pakeitimai matomi tik jos skaičiavime.</p></form>
+</section>
+{% if result %}<section class="panel"><h2>{{ row.sku }}</h2><p>Plotas: {{ '%.6f'|format(result.area) }} m²</p>
+{% if result.total is not none %}<p class="calc-result">Viso: {{ '%.4f'|format(result.total) }} €</p><table><thead><tr><th>Dalis</th><th>Reikšmė</th></tr></thead><tbody>{% for label,value in result.parts %}<tr><td>{{ label }}</td><td>{{ '%.4f'|format(value) }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="calc-warning">{{ result.message }}</p>{% endif %}</section>{% endif %}
+<h2>Visos šaltinio eilutės ({{ results|length }})</h2><div class="table-wrap calculator-table"><table><thead><tr><th>SKU</th><th>Šaltinio eil.</th><th>Viso, €</th><th>Pastabos</th></tr></thead><tbody>{% for item,calculated in results %}<tr><td>{{ item.sku }}</td><td>{{ item.source_row|default(loop.index+1) }}</td><td>{{ '%.4f'|format(calculated.total) if calculated.total is not none else 'Trūksta duomenų' }}</td><td>{{ item.issues|default([])|join('. ') }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}
