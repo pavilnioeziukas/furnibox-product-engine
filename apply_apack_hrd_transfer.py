@@ -267,6 +267,13 @@ def transform_dataset(
                 f"Transformacijos kontrolė nepraėjo: {component_sku}."
             )
 
+    from apack_hrd_allocation import apply_allocation
+    explicit_changed, allocation_audit = apply_allocation(products)
+    changed_products.update(explicit_changed)
+    for sku in explicit_changed:
+        refresh_product_hash(products[sku])
+    output["explicit_component_allocation"] = allocation_audit
+
     output["dataset_id"] = str(uuid.uuid4())
     output["created_at_utc"] = datetime.now(timezone.utc).isoformat()
     batch_reference = str(output.get("batch_reference") or "").strip()
