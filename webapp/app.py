@@ -123,6 +123,8 @@ MAX_UPLOAD_BYTES = SETTINGS.max_upload_mb * 1024 * 1024
 
 
 app = Flask(__name__)
+from webapp.calculators import calculators
+app.register_blueprint(calculators)
 
 app.secret_key = SETTINGS.web_secret or secrets.token_hex(32)
 
