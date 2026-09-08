@@ -8,6 +8,7 @@
 <p>Viso = bazė K + pakuotė W + papildomas darbas X. Bazė = (medžiagos tarifas + bazinis darbas) × plotas + fiksuota dalis. −7 % netaikoma.</p>
 <p>Failo „Sheet5“ kainos skirtos palyginimui. PNL001 faile yra 16,05 €, o pateiktoje dabartinės kainos nuotraukoje – 19,42 €.</p>
 {% else %}
+<p><a href="{{ url_for('calculators.shelf_file') }}">Visas lentynų failas: BOM, LED / ROD, pirkimo kainos ir ankstesni skaičiavimai</a></p>
 <p>Medinė dalis U = (plotas × tipo tarifas − pakuotė − kartonas) × koeficientas. Koeficientas: iki 0,1 m² – 3; nuo 0,1 iki 0,2 m² – 1,5; nuo 0,2 m² – 1. Viso = U + R + S.</p>
 <p class="calc-warning">Šaltinyje yra pasikartojančių kodų, tipų neatitikimų ir nepilnų pakuotės duomenų. Eilutės išsaugotos atskirai. Prieš naudojant pažymėtas kainas reikia patikrinti jų duomenis.</p>
 {% endif %}
@@ -30,7 +31,7 @@
 </div><button class="primary" name="action" value="calculate">Skaičiuoti</button> <button class="secondary" name="action" value="export">Atsisiųsti visų eilučių CSV su šiais tarifais</button>
 <p>Visų eilučių lentelė ir CSV naudoja bendrus tarifus bei pradines kiekvienos eilutės reikšmes. Pasirinktos eilutės matmenų pakeitimai matomi tik jos skaičiavime.</p></form>
 </section>
-{% if result %}<section class="panel"><h2>{{ row.sku }}</h2><p>Plotas: {{ '%.6f'|format(result.area) }} m²</p>
+{% if result %}<section class="panel"><h2>{{ row.sku }}</h2>{% if kind == 'shelf' %}<p><a href="{{ url_for('calculators.shelf_file',view='related',q=row.sku) }}">Šios detalės kainos, LED išskaidymas ir visi susiję komplektai kituose lapuose</a></p>{% endif %}<p>Plotas: {{ '%.6f'|format(result.area) }} m²</p>
 {% if result.total is not none %}<p class="calc-result">Viso: {{ '%.4f'|format(result.total) }} €</p><table><thead><tr><th>Dalis</th><th>Reikšmė</th></tr></thead><tbody>{% for label,value in result.parts %}<tr><td>{{ label }}</td><td>{{ '%.4f'|format(value) }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="calc-warning">{{ result.message }}</p>{% endif %}</section>{% endif %}
 <h2>Visos šaltinio eilutės ({{ results|length }})</h2><div class="table-wrap calculator-table"><table><thead><tr><th>SKU</th><th>Šaltinio eil.</th><th>Viso, €</th><th>Pastabos</th></tr></thead><tbody>{% for item,calculated in results %}<tr><td>{{ item.sku }}</td><td>{{ item.source_row|default(loop.index+1) }}</td><td>{{ '%.4f'|format(calculated.total) if calculated.total is not none else 'Trūksta duomenų' }}</td><td>{{ item.issues|default([])|join('. ') }}</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}
