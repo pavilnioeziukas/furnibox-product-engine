@@ -5,7 +5,7 @@
 <section class="page-head"><h1>{{ 'Panelių skaičiuoklė' if kind == 'panel' else 'Lentynos medinės dalies skaičiuoklė' }}</h1></section>
 {% if kind == 'shelf' %}{% include 'shelf_navigation.html' %}{% endif %}
 {% if family %}<h2>Tipas: {{ family }}</h2>{% endif %}
-<p>Keiskite tarifus ir pasirinktos eilutės duomenis, tada spauskite „Skaičiuoti“. Pakeitimai galioja šiam skaičiavimui. SO kainodarai jie automatiškai netaikomi.</p>
+<p>Keiskite tarifus ir pasirinktos eilutės duomenis, tada spauskite „Skaičiuoti“. Šio puslapio pakeitimai yra bandymas. <a href="/calculators/settings">Išsaugoti bendrus tarifus ir galutinį antkainį SO kainodarai</a>. Pradiniai tarifai čia sutampa su bendrais išsaugotais tarifais.</p>
 {% if kind == 'panel' %}
 <p>Viso = bazė K + pakuotė W + papildomas darbas X. Bazė = (medžiagos tarifas + bazinis darbas) × plotas + fiksuota dalis. −7 % netaikoma.</p>
 <p>Failo „Sheet5“ kainos skirtos palyginimui. PNL001 faile yra 16,05 €, o pateiktoje dabartinės kainos nuotraukoje – 19,42 €.</p>
