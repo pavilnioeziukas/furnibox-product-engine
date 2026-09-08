@@ -60,8 +60,9 @@ def test_pricing_control_explains_inputs_and_source_priority(monkeypatch, tmp_pa
     assert "Odoo nekeičiamas" in text
     assert "Nustatomas produkto kainodaros tipas" in text
     assert "Perkamas komponentas" in text
-    assert "Cabinet / Shelf Part" in text
-    assert "APACK / HRD-A / Shelf-PP" in text
+    assert "Cabinet Part" in text
+    assert "Panelių, lentynų ir galutinio antkainio logika" in text
+    assert "APACK / HRD-A" in text
     assert "MIN(10 €, MAX(4 €, Cabinet Parts savikaina ÷ 9,8))" in text
     assert "Ne BOM produktas" in text
 

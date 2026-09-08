@@ -122,7 +122,8 @@
   </div>
 </form>
 
-<section class="section-head"><div><p class="eyebrow">Algoritmas</p><h2>Kainos šaltinių pasirinkimo tvarka</h2></div><p>Šios eilutės nėra papildomi įvedimai — tai dabar galiojanti skaičiavimo sutartis.</p></section>
+<section class="panel"><h2>Panelių, lentynų ir galutinio antkainio logika</h2><p>Panelių komplektas: K + W + X; žaliava: K. Lentynos medinė dalis: U; jos pakuotė: U + R + S. LED / ROD: devynių C:K kainos dalių suma. Šios formulės pakeičia seną pakuotės skaičiavimą – pakuotė ir darbai antrą kartą nepridedami, −7 % skaičiuoklės sumai netaikoma.</p><p>Visos pozicijos pabaigoje gauna vieną galutinį antkainį. <a href="/calculators/settings">Keisti bendrus tarifus ir antkainį</a>. Neišspręstas panelės arba lentynos atitikmuo blokuoja kainą.</p></section>
+<section class="section-head"><div><p class="eyebrow">Algoritmas</p><h2>Kainos šaltinių pasirinkimo tvarka</h2></div><p>Panelėms ir lentynoms pirmiausia taikomos atskiros skaičiuoklės. Žemiau aprašyta kitų komponentų kainos šaltinių tvarka.</p></section>
 <div class="panel source-policy">
   <div class="policy-row"><span class="policy-order">1</span><div><strong>Paruošta faktinė pirkimo / perdavimo kaina</strong><p>Naudojama paskutinė Odoo pirkimo kaina, o jei SKU turi patvirtintą korekciją — pakoreguota „New Purchase Price“.</p></div><span class="state ready">Pirmas pasirinkimas</span></div>
   <div class="policy-row"><span class="policy-order">2</span><div><strong>Rekursyvus BOM skaičiavimas</strong><p>Jei tiesioginės kainos nėra, produkto savikaina sudedama iš BOM komponentų kainų ir kiekių.</p></div><span class="state running">Kai nėra tiesioginės</span></div>
@@ -161,7 +162,7 @@
       <p><strong>Rezultatas:</strong> ši kaina įeina į BOM kaip komponento vieneto savikaina.</p>
     </article>
     <article>
-      <p class="eyebrow">Cabinet / Shelf Part</p><h3>Detalių kaina pagal matmenis</h3>
+      <p class="eyebrow">Cabinet Part</p><h3>Detalių kaina pagal matmenis</h3>
       <p><strong>Įprasta detalė:</strong> plotas × apdirbimo tarifas + plotas × WW/BB/NO medžiagos tarifas + mažos detalės priedas.</p>
       <p><strong>BACK detalė:</strong> plotas × BACK tarifas + mažos detalės priedas.</p>
       <p><strong>Perėjimas:</strong> pridedamas Furnix → Furnibox antkainis; gauta kaina BOM'e naudojama kaip <em>Cabinet Part Calculation</em>.</p>
@@ -173,7 +174,7 @@
       <p><strong>Korekcija:</strong> bendra {{ '%g'|format(config.adjustment_rate * 100) }} % korekcija taikoma tik priedams, ne komponentų savikainai.</p>
     </article>
     <article>
-      <p class="eyebrow">APACK / HRD-A / Shelf-PP</p><h3>Vidinio gamybos produkto kelias</h3>
+      <p class="eyebrow">APACK / HRD-A</p><h3>Vidinio gamybos produkto kelias</h3>
       <p><strong>Savikaina:</strong> komponentai paimami iš vidinės MANUFACTURE BOM ir įtraukiami rekursyviai.</p>
       <p><strong>Apsauga:</strong> vidinių vaikų pardavimo priedai antrą kartą nepridedami.</p>
       <p><strong>Perėjimas:</strong> produkto lygio kategorijos tarifai pritaikomi ten, kur jie priklauso pagal galutinio produkto taisyklę.</p>
@@ -192,7 +193,7 @@
     </article>
   </div>
   <div class="map-arrow">↓</div>
-  <div class="map-engine"><strong>2. Sudedama galutinė Reform SO kaina</strong><span>Komponentų arba pirkimo savikaina + taikomi darbų ir aptarnavimo priedai + priedų korekcija.</span></div>
+  <div class="map-engine"><strong>2. Sudedama galutinė Reform SO kaina</strong><span>(Komponentų arba skaičiuoklės savikaina + taikomi priedai + jų korekcija) × (1 + galutinis antkainis / 100). Antkainis taikomas vieną kartą.</span></div>
   <div class="map-arrow">↓</div>
   <div class="map-decision">
     <div class="map-good"><strong>APSKAIČIUOTA</strong><small>Visos reikalingos kainos ir taisyklės rastos; rezultatas patenka į kainoraštį ir PRICE TRACE.</small></div>
@@ -212,7 +213,7 @@
     <li><strong>BOM savikaina.</strong> Kai tiesioginės kainos nėra, komponentų savikaina skaičiuojama rekursyviai pagal kiekius.</li>
     <li><strong>Kainodaros taisyklės.</strong> Pridedami SKU kategorijai priskirti surinkimo, sandėliavimo, pakavimo ir kiti tarifai.</li>
     <li><strong>Saugiklis.</strong> Jei nėra nei patikimos kainos, nei išsprendžiamo BOM, pozicija pažymima BLOCKED; Standard Price nenaudojama.</li>
-    <li><strong>Išleidimas.</strong> Esant BLOCKED pateikiamas tik COMPLETE_ONLY failas; pilnas kainoraštis pateikiamas tik kai BLOCKED = 0.</li>
+    <li><strong>Išleidimas.</strong> REVIEW_ALL pateikia visas pozicijas su neišspręstomis priežastimis, COMPLETE_ONLY – tik apskaičiuotas kainas. Pilnas galutinis kainoraštis pateikiamas, kai BLOCKED = 0.</li>
     <li><strong>Auditas.</strong> Kiekvienas SKU gauna statusą, taisyklių ID, komponentų šaltinius, tarpines sumas ir problemos paaiškinimą.</li>
     <li><strong>Odoo apsauga.</strong> Kainodaros paleidimas ir ši kontrolė yra read-only Production Odoo atžvilgiu.</li>
   </ol>
