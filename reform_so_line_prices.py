@@ -483,6 +483,7 @@ def component_cost_only_manufacture_products(dataset):
         and text(product.get("sku"))
         and (
             text(product.get("generated_from"))
+            or "HRD" in text(product.get("sku")).upper()
             or text(product.get("sku")).upper().startswith("FPACK-")
             or text(product.get("sku")).upper().endswith("-PP")
         )

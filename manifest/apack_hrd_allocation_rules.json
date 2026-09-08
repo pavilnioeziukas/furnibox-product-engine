@@ -1,0 +1,183 @@
+{
+  "BAS": {
+    "HRD-A": [
+      "CAB_SPACER"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "HIG": {
+    "HRD-A": [
+      "CAB_SPACER"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "HBI": {
+    "HRD-A": [
+      "CAB_SPACER"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "UPP": {
+    "HRD-A": [
+      "CAB_SPACER",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032"
+    ],
+    "APACK": [
+      "ACCS-2DBLDX-RIGHT",
+      "ACCS-2DBLSX-LEFT",
+      "ACCS-801000100DX",
+      "ACCS-801000100SX",
+      "ACCS-801000200DX",
+      "ACCS-801000200SX",
+      "ACCS-801003500DX",
+      "ACCS-801003500SX",
+      "CON7X50",
+      "DOW8X30",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "WAL": {
+    "HRD-A": [
+      "CAB_SPACER",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032"
+    ],
+    "APACK": [
+      "ACCS-2DBLDX-RIGHT",
+      "ACCS-2DBLSX-LEFT",
+      "ACCS-801000100DX",
+      "ACCS-801000100SX",
+      "ACCS-801000200DX",
+      "ACCS-801000200SX",
+      "ACCS-801003500DX",
+      "ACCS-801003500SX",
+      "CON7X50",
+      "DOW8X30",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "TOP": {
+    "HRD-A": [
+      "CAB_SPACER",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032"
+    ],
+    "APACK": [
+      "ACCS-2DBLDX-RIGHT",
+      "ACCS-2DBLSX-LEFT",
+      "ACCS-801000100DX",
+      "ACCS-801000100SX",
+      "ACCS-801000200DX",
+      "ACCS-801000200SX",
+      "ACCS-801003500DX",
+      "ACCS-801003500SX",
+      "CON7X50",
+      "DOW8X30",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "COS": {
+    "HRD-A": [
+      "15140",
+      "CAB_SPACER",
+      "IF3043-01",
+      "IF3043-11",
+      "MED3.5*16AP"
+    ],
+    "APACK": [
+      "CON-LOCK-D7",
+      "CON-SCREW-D7",
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "WAC": {
+    "HRD-A": [
+      "CAB_SPACER"
+    ],
+    "APACK": [
+      "ACCS-2DBLDX-RIGHT",
+      "ACCS-2DBLSX-LEFT",
+      "ACCS-801000100DX",
+      "ACCS-801000100SX",
+      "ACCS-801000200DX",
+      "ACCS-801000200SX",
+      "ACCS-801003500DX",
+      "ACCS-801003500SX",
+      "CON7X50",
+      "DOW8X30",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "BSK": {
+    "HRD-A": [
+      "CAB_SPACER",
+      "LAM276308"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "LAM186330",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "HCO": {
+    "HRD-A": [
+      "15140",
+      "CAB_SPACER",
+      "IF3043-01",
+      "IF3043-11",
+      "MED3.5*16AP"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  }
+}
