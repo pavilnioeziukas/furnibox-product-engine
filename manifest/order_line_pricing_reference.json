@@ -1,0 +1,319 @@
+{
+  "source_file": "BOM 1.xlsx",
+  "source_sha256": "ad879bb45126ce6b9922fa473f6fe96c9a10236873285a2acf3fcd63855ed13a",
+  "sheet": "ORDER LINE ",
+  "rows": [
+    {
+      "sku": "EUB-P-ACC02-SLF200",
+      "supplier_sku": "UTH1001",
+      "category": "6",
+      "row": 2
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF201",
+      "supplier_sku": "UTH1011",
+      "category": "6",
+      "row": 3
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF202",
+      "supplier_sku": "UTH1021",
+      "category": "6",
+      "row": 4
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF203",
+      "supplier_sku": "UTH902",
+      "category": "6",
+      "row": 5
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF204",
+      "supplier_sku": "UTH912",
+      "category": "6",
+      "row": 6
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF205",
+      "supplier_sku": "UTH922",
+      "category": "6",
+      "row": 7
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF206",
+      "supplier_sku": "UTH903",
+      "category": "6",
+      "row": 8
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF207",
+      "supplier_sku": "UTH913",
+      "category": "6",
+      "row": 9
+    },
+    {
+      "sku": "EUB-P-ACC02-SLF208",
+      "supplier_sku": "UTH923",
+      "category": "6",
+      "row": 10
+    },
+    {
+      "sku": "USB-P-ACC02-SLF200",
+      "supplier_sku": "UTH1031",
+      "category": "6",
+      "row": 11
+    },
+    {
+      "sku": "USB-P-ACC02-SLF201",
+      "supplier_sku": "UTH1041",
+      "category": "6",
+      "row": 12
+    },
+    {
+      "sku": "USB-P-ACC02-SLF202",
+      "supplier_sku": "UTH1051",
+      "category": "6",
+      "row": 13
+    },
+    {
+      "sku": "USB-P-ACC02-SLF203",
+      "supplier_sku": "UTH932",
+      "category": "6",
+      "row": 14
+    },
+    {
+      "sku": "USB-P-ACC02-SLF204",
+      "supplier_sku": "UTH942",
+      "category": "6",
+      "row": 15
+    },
+    {
+      "sku": "USB-P-ACC02-SLF205",
+      "supplier_sku": "UTH952",
+      "category": "6",
+      "row": 16
+    },
+    {
+      "sku": "USB-P-ACC02-SLF206",
+      "supplier_sku": "UTH933",
+      "category": "6",
+      "row": 17
+    },
+    {
+      "sku": "USB-P-ACC02-SLF207",
+      "supplier_sku": "UTH943",
+      "category": "6",
+      "row": 18
+    },
+    {
+      "sku": "USB-P-ACC02-SLF208",
+      "supplier_sku": "UTH953",
+      "category": "6",
+      "row": 19
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD050",
+      "supplier_sku": "AVH630",
+      "category": "6",
+      "row": 20
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD051",
+      "supplier_sku": "AVG630",
+      "category": "6",
+      "row": 21
+    },
+    {
+      "sku": "USB-P-ACC01-HRD050",
+      "supplier_sku": "AVH24in",
+      "category": "6",
+      "row": 22
+    },
+    {
+      "sku": "USB-P-ACC01-HRD051",
+      "supplier_sku": "AVG24in",
+      "category": "6",
+      "row": 23
+    },
+    {
+      "sku": "USB-P-ACC01-HRD052",
+      "supplier_sku": "AVH30in",
+      "category": "6",
+      "row": 24
+    },
+    {
+      "sku": "USB-P-ACC01-HRD053",
+      "supplier_sku": "AVG30in",
+      "category": "6",
+      "row": 25
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD300",
+      "supplier_sku": "1440985",
+      "category": "11",
+      "row": 26
+    },
+    {
+      "sku": "USB-P-ACC01-HRD301",
+      "supplier_sku": "2252341",
+      "category": "11",
+      "row": 27
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS015",
+      "supplier_sku": "2816909966",
+      "category": "11",
+      "row": 28
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS016",
+      "supplier_sku": "2816909846",
+      "category": "11",
+      "row": 29
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS950",
+      "supplier_sku": "F0288000002",
+      "category": "11",
+      "row": 30
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS951",
+      "supplier_sku": "F0288000019",
+      "category": "11",
+      "row": 31
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS952",
+      "supplier_sku": "F0288000001",
+      "category": "11",
+      "row": 32
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS030",
+      "supplier_sku": "210024442",
+      "category": "11",
+      "row": 33
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS031",
+      "supplier_sku": "210024603",
+      "category": "11",
+      "row": 34
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS032",
+      "supplier_sku": "210024803",
+      "category": "11",
+      "row": 35
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS017",
+      "supplier_sku": "91970369",
+      "category": "11",
+      "row": 36
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS800",
+      "supplier_sku": "F0271000106",
+      "category": "11",
+      "row": 37
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS801",
+      "supplier_sku": "F0271000099",
+      "category": "11",
+      "row": 38
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS802",
+      "supplier_sku": "F0271000108",
+      "category": "11",
+      "row": 39
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS803",
+      "supplier_sku": "F0271000109",
+      "category": "11",
+      "row": 40
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS804",
+      "supplier_sku": "1632405B/0400",
+      "category": "11",
+      "row": 41
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS805",
+      "supplier_sku": "1632405B/0600",
+      "category": "11",
+      "row": 42
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS806",
+      "supplier_sku": "1632405B/0800",
+      "category": "11",
+      "row": 43
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS807",
+      "supplier_sku": "1632405B/1200",
+      "category": "11",
+      "row": 44
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS900",
+      "supplier_sku": "F0271000084",
+      "category": "11",
+      "row": 45
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS901",
+      "supplier_sku": "F0271000028",
+      "category": "11",
+      "row": 46
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS902",
+      "supplier_sku": "F0271000036",
+      "category": "11",
+      "row": 47
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS903",
+      "supplier_sku": "F0271000034",
+      "category": "11",
+      "row": 48
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS904",
+      "supplier_sku": "1632305B/0400",
+      "category": "11",
+      "row": 49
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS905",
+      "supplier_sku": "1632305B/0600",
+      "category": "11",
+      "row": 50
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS906",
+      "supplier_sku": "1632305B/0800",
+      "category": "11",
+      "row": 51
+    },
+    {
+      "sku": "EUB-P-ACC02-MIS907",
+      "supplier_sku": "1632305B/1200",
+      "category": "11",
+      "row": 52
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS820",
+      "supplier_sku": "F0126000004",
+      "category": "11",
+      "row": 53
+    }
+  ]
+}
