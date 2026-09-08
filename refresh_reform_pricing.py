@@ -1118,6 +1118,10 @@ def refresh(
                 PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
             )
 
+        calculator_snapshot = candidate.parent / "Calculator_Settings.json"
+        if calculator_snapshot.exists():
+            shutil.copy2(calculator_snapshot, output_dir / "Calculator_Settings.json")
+
         if blocked:
             report_result_step(
                 5,
@@ -1138,12 +1142,19 @@ def refresh(
                 7,
                 "Kainoraštis papildomas kontrolės lapais ir paieškos indeksu",
             )
+            # The review contains every SO position, including unresolved
+            # ones. Only COMPLETE_ONLY is a usable partial selling list.
+            enrich_pricing_workbook(
+                candidate,
+                destination=output_dir / "Reform_SO_Line_Prices_REVIEW_ALL.xlsx",
+                git_commit=git_commit, run_id=run_id, generated_at=generated_at,
+                search_index=output_dir / "Pricing_Explain_Index.sqlite",
+            )
             enrich_pricing_workbook(
                 partial_path,
                 git_commit=git_commit,
                 run_id=run_id,
                 generated_at=generated_at,
-                search_index=output_dir / "Pricing_Explain_Index.sqlite",
             )
             report_result_step(7, 7, "Publikuojami atsisiuntimo failai")
             write_furnibox_purchase_prices(
