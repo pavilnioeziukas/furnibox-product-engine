@@ -21,3 +21,5 @@ Tests cover all panel/source bases, all populated shelf/source U results, area t
 - `Lentynu med dal loginis persk`: the existing 297-row calculator remains the wood-part method. Its AI type tariffs are compared with the earlier sheet's AH weighted averages and AI suggestions; they are not merged. Ambiguous/missing rows remain flagged.
 
 Exact-SKU cross-links connect purchase records, LED/plain shelf relationships, old assemblies and new BOM uses. No inferred code substitutions, global price updates, Odoo writes or SO pipeline changes are made.
+
+211 parent BOMs contain repeated component codes across source rows. Totals retain all source quantities and explicitly warn about repetitions and possible alternative compositions. No automatic deduplication is applied. These are source-row sums, not approval of repeated quantities for sale.
