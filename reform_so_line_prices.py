@@ -37,6 +37,19 @@ from pricing_bom_scope import supplement_pricing_graph
 PRICE_FILE = "Reform_Final_Prices.xlsx"
 OUTPUT_FILE = "Reform_SO_Line_Prices.xlsx"
 ADJUSTMENT = -0.07
+# User-confirmed Reform -> purchase-reference identities (2026-09-08).
+# Do not strip zeros globally: they can be meaningful in other SKUs.
+PURCHASE_SKU_ALIASES = {
+    "0043509846": "43509846",
+    "0054559846": "54559846",
+}
+# User-approved pricing-only exclusion, 2026-09-08. Preserve the Target graph
+# and Odoo records; these products and their exclusive components are not sold
+# through this pricing run. Keep graph edges to avoid hiding future usage.
+PRICING_EXCLUDED_SKUS = frozenset(sku.casefold() for sku in (
+    "FPACK-WTP92-HRD001", "FPACK-WTP92-HRD001-A",
+    "M0450161SPUS", "050119021", "290.08.005", "UNI-D-GEN99-DOC116",
+))
 TAMARA_PRICING_REFERENCE_PATH = (
     Path(__file__).resolve().parent
     / "manifest"
@@ -228,6 +241,12 @@ def load_prices(path: Path):
         )
 
     wb.close()
+    for source_sku, purchase_sku in PURCHASE_SKU_ALIASES.items():
+        if key(source_sku) not in result and key(purchase_sku) in result:
+            name, price, price_source = result[key(purchase_sku)]
+            result[key(source_sku)] = (
+                name, price, f"{price_source} / PURCHASE SKU {purchase_sku}",
+            )
     return result
 
 
@@ -670,6 +689,21 @@ def apply_target_business_category_rules(
     result = dict(rules)
     authoritative = set()
     products = dataset.get("products") or []
+    bom_skus = {key(product.get("sku")) for product in products}
+    # Target keeps component-only classification in part_group, rather than
+    # product_type. Tamara's CATEGORY rows 24 and 28 define these leaf rates.
+    # Fill only missing rules; existing SKU assignments remain authoritative.
+    component_categories = {"INTERIOR STORAGE": "32", "PAPER PRINT": "36"}
+    for component in dataset.get("product_catalog") or []:
+        sku = text(component.get("sku"))
+        category = component_categories.get(text(component.get("part_group")).upper())
+        if (
+            sku and category and component.get("is_component")
+            and not component.get("has_bom")
+            and key(sku) not in bom_skus
+            and key(sku) not in result
+        ):
+            result[key(sku)] = compose_bom_category_rule(sku, category, document)
     if reference is None:
         reference = load_tamara_pricing_reference()
 
@@ -749,7 +783,7 @@ def exclude_bom_products_from_non_bom(items, graph):
     return [
         item
         for item in items
-        if item and key(item[0]) not in bom_skus
+        if item and key(item[0]) not in bom_skus | PRICING_EXCLUDED_SKUS
     ]
 
 
@@ -998,6 +1032,8 @@ def load_reform_boms(
         top = text(
             product.get("sku")
         )
+        if key(top) in PRICING_EXCLUDED_SKUS:
+            continue
 
         items = []
 

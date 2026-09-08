@@ -50,6 +50,16 @@ OUTPUT_NAME = "Existing_and_New_Cabinet_Parts_Prices.xlsx"
 DIMENSION_RE = re.compile(
     r"(?<!\d)(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+(?:[.,]\d+)?)(?!\d)"
 )
+# User-confirmed invalid legacy records (2026-09-08), not materials awaiting
+# rates. Exclude orphan diagnostic records, but never hide a BOM dependency.
+IGNORED_INVALID_PART_SKUS = frozenset({
+    "489X478 (U732ST9)",
+    "68X476 (U732ST9 16MM)",
+})
+
+
+def pricing_audit_skus(dimensions, bom_skus):
+    return set(dimensions) - (IGNORED_INVALID_PART_SKUS - set(bom_skus))
 
 
 @dataclass(frozen=True)
@@ -991,7 +1001,7 @@ def build_workbook(
     existing_component_skus = {canon(component) for _, component, _ in existing_lines}
     bom_skus = existing_component_skus | new_component_skus
 
-    audit_skus = set(dimensions)
+    audit_skus = pricing_audit_skus(dimensions, bom_skus)
     if not audit_skus:
         raise ValueError("Faile ir Odoo nerasta nė vienos Cabinet Part detalės su matmenimis.")
 
