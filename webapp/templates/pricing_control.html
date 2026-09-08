@@ -52,7 +52,7 @@
       <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) if item.cost is number else '—' }}</strong><p>Komponentų kainos × jų kiekiai. Išskaidymas pateiktas žemiau.</p></div>
       <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) if item.addons is number else '—' }}</strong><p>Surinkimas, sandėliavimas, pakavimas ir kiti kategorijos tarifai. <a href="{{ url_for('pricing_rules') }}#bom-categories">Keisti tarifus →</a></p></div>
       <div><small>Bendra priedų korekcija ({{ '%g'|format(config.adjustment_rate * 100) }} %)</small><strong>{{ '%.4f €'|format(item.adjustment) if item.adjustment is number else '—' }}</strong><p>Taikoma tik priedams. Komponentų savikaina nemažinama.</p></div>
-      <div><small>Galutinė Reform SO kaina</small><strong>{{ '%.4f €'|format(item.final) if item.final is number else '—' }}</strong><p>Savikaina + priedai + priedų korekcija.</p></div>
+      <div><small>Galutinė Reform SO kaina</small><strong>{{ '%.4f €'|format(item.final) if item.final is number else '—' }}</strong><p>(Savikaina + priedai + priedų korekcija) × (1 + galutinis antkainis / 100). <a href="/calculators/settings">Keisti antkainį</a>.</p></div>
     </div>
     <dl class="sku-facts">
       <div><dt>Skaičiavimo būdas</dt><dd>{% if item.position_type == 'BOM' %}<strong>Pagal BOM komponentų struktūrą.</strong> Sistema suskaičiavo žemiau parodytų komponentų savikainą.{% else %}<strong>Be BOM.</strong> Kaina pradėta nuo tiesioginės pirkimo kainos.{% endif %}</dd></div>
@@ -65,8 +65,8 @@
       <div class="price-equation" aria-label="Galutinės kainos formulė">
         <div><small>Komponentų / pirkimo savikaina</small><strong>{{ '%.4f €'|format(item.cost) }}</strong></div><b>+</b>
         <div><small>Darbų ir aptarnavimo priedai</small><strong>{{ '%.4f €'|format(item.addons) }}</strong></div><b>+</b>
-        <div><small>Priedų korekcija ({{ '%g'|format(config.adjustment_rate * 100) }} %)</small><strong>{{ '%.4f €'|format(item.adjustment) }}</strong></div><b>=</b>
-        <div class="equation-total"><small>Galutinė SO kaina</small><strong>{{ '%.4f €'|format(item.final) }}</strong></div>
+        <div><small>Priedų korekcija ({{ '%g'|format(config.adjustment_rate * 100) }} %)</small><strong>{{ '%.4f €'|format(item.adjustment) }}</strong></div><b>+</b>
+        <div><small>Galutinis antkainis, {{ item.get("markup_percent", 0) }} %</small><strong>{{ "%.4f €"|format(item.get("markup_amount", 0) or 0) }}</strong></div><b>=</b><div class="equation-total"><small>Galutinė SO kaina</small><strong>{{ '%.4f €'|format(item.final) }}</strong></div>
       </div>
     {% endif %}
     {% if sku_search.materials %}

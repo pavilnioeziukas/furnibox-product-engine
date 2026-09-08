@@ -3,8 +3,29 @@ import io
 from flask import Blueprint, abort, render_template, request, Response
 from price_calculators import calculate, defaults, number, source
 import shelf_workbook
+import calculator_settings
+from unified_calculator_pricing import led_results
 
 calculators = Blueprint('calculators', __name__)
+
+
+@calculators.route('/calculators/settings', methods=['GET', 'POST'])
+def settings():
+    data = calculator_settings.load()
+    error = None
+    saved = False
+    if request.method == 'POST':
+        try:
+            data = calculator_settings.save({
+                **data,
+                'markup_percent': request.form.get('markup_percent'),
+                **{kind: {k: request.form.get(kind+'_'+k) for k in defaults(kind)}
+                   for kind in ('panel', 'shelf')}
+            })
+            saved = True
+        except (ValueError, KeyError) as exc:
+            error = str(exc)
+    return render_template('calculator_settings.html', data=data, error=error, saved=saved)
 
 FAMILIES = [('PAPR','Paprastos lentynos','Medinė dalis pagal plotą, tipo tarifą ir pakuotę.'),
             ('FIX','FIX','Fiksuotų lentynų medinės dalies skaičiavimas.'),
@@ -31,7 +52,7 @@ def shelf_file():
     rows=[];detail=None;error=None
     if view=='bom':rows=shelf_workbook.bom_results(data)
     elif view=='legacy':rows=shelf_workbook.legacy_results(data)
-    elif view=='led':rows=shelf_workbook.led_results(data)
+    elif view=='led':rows=led_results(calculator_settings.load())
     elif view=='purchase':rows=data['purchase']
     family=request.args.get('family','')
     if family:
@@ -56,6 +77,10 @@ def shelf_file():
             else:
                 detail['parts']=[(label,number(request.form.get('cost_'+str(i)),'Kainos dalis'))for i,label in enumerate(shelf_workbook.LED_LABELS)]
                 detail['total']=sum(value for label,value in detail['parts'])
+                if request.form.get('action') == 'save':
+                    config = calculator_settings.load()
+                    config['led_costs'][detail['sku']] = [v for _,v in detail['parts']]
+                    calculator_settings.save(config)
         except ValueError as exc:
             error=str(exc)
             detail['total']=None
@@ -79,7 +104,7 @@ def calculator(kind):
     if kind not in ('panel', 'shelf'):
         abort(404)
     data = source(kind)
-    rates = defaults(kind)
+    rates = calculator_settings.load()[kind]
     values = request.form if request.method == 'POST' else request.args
     family=values.get('family','')
     if family and (kind!='shelf' or family not in {r[0] for r in FAMILIES}):abort(400)

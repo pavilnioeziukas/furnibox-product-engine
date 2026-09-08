@@ -239,6 +239,9 @@ def _read_results(workbook) -> list[dict]:
                 "addons": values[columns["Pricing Add-ons Total"] - 1],
                 "adjustment": values[columns["Adjustment Amount"] - 1],
                 "final": values[columns["Final Reform SO Unit Price"] - 1],
+                "before_markup": values[columns.get("Before Final Markup", columns["Final Reform SO Unit Price"]) - 1],
+                "markup_percent": values[columns["Final Markup Percent"] - 1] if "Final Markup Percent" in columns else 0,
+                "markup_amount": values[columns["Final Markup Amount"] - 1] if "Final Markup Amount" in columns else 0,
                 "engine_status": engine_status,
                 "issues": issues,
                 "control_status": _control_status(engine_status, issues),
@@ -411,6 +414,9 @@ def _write_results(workbook, results: list[dict]) -> None:
             "Control Status",
             "Applied Rule IDs",
             "Issues / Review Reason",
+            "Before Final Markup",
+            "Final Markup Percent",
+            "Final Markup Amount",
         ]
     )
     for row in results:
@@ -427,6 +433,9 @@ def _write_results(workbook, results: list[dict]) -> None:
                 row["control_status"],
                 ", ".join(row["rule_ids"]),
                 row["issues"],
+                row.get("before_markup", row["final"]),
+                row.get("markup_percent", 0),
+                row.get("markup_amount", 0),
             ]
         )
     _style_table(
@@ -525,6 +534,7 @@ def _write_trace(workbook, results: list[dict]) -> None:
                 (
                     f"Material / purchase cost {result['cost']}; add-ons "
                     f"{result['addons']}; adjustment {result['adjustment']}; "
+                    f"final markup {result.get('markup_percent', 0)}% = {result.get('markup_amount', 0)}; "
                     f"issues: {result['issues'] or 'none'}."
                 ),
             ]

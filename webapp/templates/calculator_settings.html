@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Bendri tarifai ir antkainis{% endblock %}
+{% block content %}
+<h1>Bendri tarifai ir antkainis</h1>
+<p>Išsaugoti tarifai naudojami skaičiuoklėse ir kitame visų SO kainų perskaičiavime. Antkainis pridedamas vieną kartą: kaina prieš antkainį × (1 + procentas / 100). Esami rezultatai pasikeičia tik paleidus perskaičiavimą.</p>
+{% if saved %}<p role="status">Išsaugota. <a href="/pricing-control">Atidaryti kainodaros valdymą ir perskaičiuoti kainas</a>.</p>{% endif %}
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+<form method="post">
+<p><label>Galutinis antkainis, % <input name="markup_percent" type="number" min="0" step="any" required value="{{ data.markup_percent }}"></label></p>
+{% for kind,label in [('panel','Panelių tarifai'),('shelf','Lentynų tarifai')] %}
+<h2>{{ label }}</h2><div style="display:flex;gap:18px;flex-wrap:wrap">
+{% for key,value in data[kind].items() %}<label style="display:flex;flex-direction:column">{{ key }}<input name="{{ kind }}_{{ key }}" type="number" min="0" step="any" required value="{{ value }}"></label>{% endfor %}
+</div>{% endfor %}
+<p><button class="primary">Išsaugoti bendrus tarifus ir antkainį</button></p></form>
+<p><a href="/purchase-pricing">Detalių skaičiuoklės tarifai ir Furnix perdavimo antkainis</a>. Furnix perdavimo antkainis yra atskiras savikainos sluoksnis. Šiame puslapyje keičiamas galutinis SO antkainis.</p>
+<p>Panelėms naudojama K + W + X formulė. Paprastoms lentynoms – U + R + S. LED / ROD lentynoms – devynių C:K dalių suma. Visos pakuotės skaičiuoklės kainai senos pakuotės priemokos ir −7 % nepridedami. Prieštaringi šaltinio duomenys blokuoja kainą.</p>
+{% endblock %}

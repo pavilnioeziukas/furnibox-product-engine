@@ -1370,7 +1370,8 @@ def resolve_component_cost(
 
     # Priority 1:
     # prepared direct purchase / transfer price.
-    if sku_key in prices and sku_key not in bom_cost_skus:
+    if sku_key in prices and (sku_key not in bom_cost_skus or
+            str(get_price_source(prices, sku)).startswith('CALCULATOR:')):
         unit_price = float(
             prices[sku_key][1]
         )
@@ -1380,7 +1381,7 @@ def resolve_component_cost(
                 "cost": None,
                 "source": "NON-POSITIVE DIRECT PRICE",
                 "issues": [
-                    f"Non-positive component price: {sku} ({unit_price:g})"
+                    f"Non-positive component price: {sku} ({unit_price:g}); {get_price_source(prices, sku)}"
                 ],
                 "leaves": [
                     {
@@ -1809,6 +1810,11 @@ def calculate_boms(
                         ),
                     }
                 )
+
+            if str(get_price_source(prices, item.sku)).startswith('CALCULATOR:'):
+                # Calculator recipes already contain their manufacturing and
+                # packaging charges, including when used in a parent BOM.
+                continue
 
             if key(top) in authoritative_rule_tops:
                 # Tamara's product category expression already represents
@@ -2403,6 +2409,10 @@ def build_reform_so_line_prices(
             "Final Reform SO Unit Price",
             "Status",
             "Issues",
+            "Before Final Markup",
+            "Final Markup Percent",
+            "Final Markup Amount",
+            "Calculator",
         ]
     )
 
@@ -2419,7 +2429,7 @@ def build_reform_so_line_prices(
                     row["addons"]
                 ),
                 (
-                    adjustment
+                    row.get('adjustment_rate', adjustment)
                     if row[
                         "type"
                     ]
@@ -2432,6 +2442,10 @@ def build_reform_so_line_prices(
                 row["final"],
                 row["status"],
                 row["issues"],
+                row.get('before_markup', row['final']),
+                row.get('markup_percent', 0),
+                row.get('markup_amount', 0),
+                row.get('calculator', ''),
             ]
         )
 
@@ -2940,6 +2954,10 @@ def write_price_workbook(
             "Final Reform SO Unit Price",
             "Status",
             "Issues",
+            "Before Final Markup",
+            "Final Markup Percent",
+            "Final Markup Amount",
+            "Calculator",
         ]
     )
 
@@ -2956,7 +2974,7 @@ def write_price_workbook(
                     row["addons"]
                 ),
                 (
-                    adjustment
+                    row.get("adjustment_rate", adjustment)
                     if row[
                         "type"
                     ]
@@ -2969,6 +2987,10 @@ def write_price_workbook(
                 row["final"],
                 row["status"],
                 row["issues"],
+                row.get("before_markup", row["final"]),
+                row.get("markup_percent", 0),
+                row.get("markup_amount", 0),
+                row.get("calculator", ""),
             ]
         )
 
@@ -3486,10 +3508,17 @@ def build_from_application_config(
         price_path
     )
 
+    import calculator_settings
+    import unified_calculator_pricing as unified
+    calculator_snapshot = calculator_settings.load()
+    registry = unified.recipes(calculator_snapshot)
+    prices = unified.prepare(prices, registry)
+
     rules = rules_from_config(
         document
     )
 
+    pricing_products = list(document["bom_products"])
     component_cost_only_tops = set()
     authoritative_rule_tops = set()
     if dataset_path is not None:
@@ -3497,6 +3526,9 @@ def build_from_application_config(
             dataset_path,
             bom_path,
         )
+        known = {key(p["sku"]) for p in pricing_products}
+        pricing_products.extend({"sku": p["sku"], "product_category": p.get("product_type", "")}
+                                for p in target_dataset["products"] if key(p["sku"]) not in known)
         rules = inherit_generated_apack_rules(
             rules,
             target_dataset,
@@ -3518,14 +3550,16 @@ def build_from_application_config(
 
     boms, graph = load_reform_boms(
         bom_path,
-        document[
-            "bom_products"
-        ],
+        pricing_products,
         rules=rules,
         dataset_path=dataset_path,
         production_bom_path=production_bom_path,
         production_bom_scope=production_bom_scope,
     )
+
+    unified.cover_missing(registry, list(prices) + list(graph) +
+        [item.sku for _, items in boms.values() for item in items])
+    prices = unified.prepare(prices, registry)
 
     bom_rows, details = (
         calculate_boms(
@@ -3554,6 +3588,11 @@ def build_from_application_config(
             prices,
         )
     )
+
+    unified.finish(bom_rows + non_rows, details, registry, calculator_snapshot)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    (output_path.parent / "Calculator_Settings.json").write_text(
+        json.dumps(calculator_snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return write_price_workbook(
         bom_rows,
