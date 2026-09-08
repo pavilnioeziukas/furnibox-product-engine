@@ -15,6 +15,7 @@ def test_complete_import_and_quantity_weighted_bom():
     assert results[0]['total']==pytest.approx(13.7304684)
     assert results[1]['total']==pytest.approx(10.58830194)
     assert '0.4' in results[1]['issues'][0]
+    assert sum(any('kartojasi komponentų' in issue for issue in r['issues'])for r in results)==211
 
 
 def test_legacy_and_led_reconcile_without_double_quantity():

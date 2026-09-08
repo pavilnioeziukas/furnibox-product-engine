@@ -47,6 +47,13 @@ def bom_results(data=None):
             group['issues'].append(f"{row['sku']}: medinės dalies kiekis {row['qty']} – patikrinti")
         group['lines'].append(line)
     for g in groups.values():
+        seen=set()
+        repeated=set()
+        for line in g['lines']:
+            if line['sku'] in seen:repeated.add(line['sku'])
+            seen.add(line['sku'])
+        if repeated:
+            g['issues'].append('Šaltinyje kartojasi komponentų kodai: '+', '.join(sorted(repeated))+'. Suma apima visas eilutes; patikrinkite, ar tai nėra alternatyvios sudėtys.')
         g['total']=sum(r['cost']for r in g['lines'])if all(r['cost']is not None for r in g['lines'])else None
         g['unweighted']=sum(r['unit']for r in g['lines'])if all(r['unit']is not None for r in g['lines'])else None
         g['difference']=g['total']-g['unweighted'] if g['total']is not None else None
