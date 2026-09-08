@@ -9,7 +9,8 @@
 <p><label>Galutinis antkainis, % <input name="markup_percent" type="number" min="0" step="any" required value="{{ data.markup_percent }}"></label></p>
 {% for kind,label in [('panel','Panelių tarifai'),('shelf','Lentynų tarifai')] %}
 <h2>{{ label }}</h2><div style="display:flex;gap:18px;flex-wrap:wrap">
-{% for key,value in data[kind].items() %}<label style="display:flex;flex-direction:column">{{ key }}<input name="{{ kind }}_{{ key }}" type="number" min="0" step="any" required value="{{ value }}"></label>{% endfor %}
+{% set labels = {'WW':'WW medžiaga, €/m²','BB':'BB medžiaga, €/m²','NO':'NO medžiaga, €/m²','work':'Bazinis darbas, €/m²','fixed':'Fiksuota dalis, €/vnt.','packaging':'Pakuotė, €/m²','extra_work':'Papildomas darbas, €/m²'} %}
+{% for key,value in data[kind].items() %}<label style="display:flex;flex-direction:column">{{ labels.get(key,key ~ ', €/m²') }}<input name="{{ kind }}_{{ key }}" type="number" min="0" step="any" required value="{{ value }}"></label>{% endfor %}
 </div>{% endfor %}
 <p><button class="primary">Išsaugoti bendrus tarifus ir antkainį</button></p></form>
 <p><a href="/purchase-pricing">Detalių skaičiuoklės tarifai ir Furnix perdavimo antkainis</a>. Furnix perdavimo antkainis yra atskiras savikainos sluoksnis. Šiame puslapyje keičiamas galutinis SO antkainis.</p>
