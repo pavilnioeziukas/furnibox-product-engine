@@ -57,6 +57,7 @@ from purchase_price_adjustments_import import (
     summarize_preview,
 )
 from webapp.product_engine import ProductEngineSettings, load_actions
+from pricing_table_view import snapshot as pricing_snapshot, summary as pricing_summary, steps as pricing_steps, ADDONS as TABLE_ADDONS
 from odoo_tools import OdooConfig
 from odoo_tools.bootstraps.sale_delivered_manual import (
     ACTION_NAME as DELIVERED_ACTION_NAME,
@@ -1549,6 +1550,12 @@ def pricing_control():
     pricing_job = _latest_job_for("refresh_reform_pricing")
     sku_query = request.args.get("sku", "").strip()
     sku_search = _search_latest_pricing(pricing_job, sku_query)
+    table_data = pricing_snapshot(_job_file(pricing_job, "Reform_SO_Line_Prices.xlsx", "Reform_SO_Line_Prices_COMPLETE_ONLY.xlsx"))
+    summary_query = request.args.get("filter", "").strip()
+    try:
+        summary_page = int(request.args.get("page", "1"))
+    except ValueError:
+        summary_page = 1
 
     return render_template(
         "pricing_control.html",
@@ -1557,6 +1564,9 @@ def pricing_control():
         adjustment_total=len(adjustments),
         pricing_job=pricing_job,
         sku_search=sku_search,
+        price_steps=pricing_steps(table_data, sku_search["match"], sku_search.get("trace", [])),
+        price_summary=pricing_summary(table_data, summary_query, summary_page),
+        table_addons=TABLE_ADDONS,
         rule_explanations=_rule_explanations(sku_search["match"]),
         rule_catalog=[
             {"id": rule_id, "title": values[0], "explanation": values[1]}

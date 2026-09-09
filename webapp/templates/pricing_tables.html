@@ -1,0 +1,52 @@
+{% macro money(value) %}{{ '%.4f €'|format(value) if value is number else '—' }}{% endmacro %}
+{% if price_steps %}
+<section class="panel" id="price-steps">
+  <h2>Visa kainos skaičiavimo eiga · {{ price_steps|length }} žingsniai</h2>
+  <p>Kiekvienos pritaikytos taisyklės šaltinis, skaičiavimas ir rezultatas. Tarpinės ir galutinės sumos apibendrina ankstesnes eilutes — jų dar kartą nesumuokite.</p>
+  <div class="tariff-links"><a class="secondary" href="{{ url_for('pricing_rules') }}#bom-categories">BOM kategorijų tarifai</a><a class="secondary" href="{{ url_for('pricing_rules') }}#business-categories">FPACK, HRD, APACK ir Shelf tarifai</a></div>
+  <div class="table-wrap"><table class="price-steps-table"><thead><tr><th>Žingsnis / taisyklė</th><th>Kam ir kas pritaikyta</th><th>Kategorija / duomenų šaltinis</th><th>Skaičiavimas</th><th>Rezultatas</th><th>Paskirtis / patikra</th></tr></thead><tbody>
+  {% for step in price_steps %}<tr>
+    <td>{{ step.number }}<br><strong>{{ step.rule }}</strong></td>
+    <td><strong>{{ step.title }}</strong><small class="field-help">{{ step.target }}</small></td>
+    <td class="{{ 'category-missing' if step.source == 'Nepriskirta — reikia papildyti' else '' }}">{{ step.source }}</td>
+    <td>{{ step.formula }}<small class="field-help">{{ step.note }}</small></td>
+    <td class="price-number">{{ money(step.amount) }}</td>
+    <td>{{ step.purpose }}{% if step.review %}<small class="field-help category-missing">Reikia patikrinti</small>{% endif %}</td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endif %}
+<section class="panel" id="price-summary">
+  <h2>Kainų suvestinė</h2>
+  <p>Vienas SKU — viena eilutė. Sumos paimtos iš paskutinio skaičiavimo failo. „—“ reiškia, kad reikšmė neišsaugota; tai nėra nulis.</p>
+  <form method="get" action="{{ url_for('pricing_control') }}#price-summary" class="sku-search-form">
+    <label for="summary-filter">SKU arba pavadinimas</label><input id="summary-filter" name="filter" value="{{ price_summary.query }}" placeholder="Filtruoti suvestinę">
+    {% if sku_search.query %}<input type="hidden" name="sku" value="{{ sku_search.query }}">{% endif %}
+    <button class="primary" type="submit">Filtruoti</button>
+  </form>
+  <p>{{ price_summary.total }} pozicijos · {{ price_summary.page }} / {{ price_summary.pages }} puslapis · iki 50 eilučių puslapyje. Spauskite SKU, kad matytumėte skaičiavimo eigą.</p>
+  <div class="table-wrap summary-scroll" tabindex="0" role="region" aria-label="Kainų suvestinė su horizontaliu slinkimu"><table class="price-summary-table"><thead><tr>
+    <th>SKU</th><th>Pavadinimas</th><th>Tipas</th><th>Odoo kategorija</th><th>Tarifų kategorija</th><th>Savikaina</th>
+    {% for key, label in table_addons %}<th>{{ label }}</th>{% endfor %}
+    <th>Priedų suma</th><th>Korekcija %</th><th>Korekcija €</th><th>Galutinis antkainis %</th><th>Galutinis antkainis €</th><th>Galutinė kaina</th><th>Būsena / pastabos</th>
+  </tr></thead><tbody>
+  {% for row in price_summary.rows %}<tr>
+    <td><a href="{{ url_for('pricing_control', sku=row['SKU'], filter=price_summary.query, page=price_summary.page) }}#price-steps"><strong>{{ row['SKU'] }}</strong></a></td>
+    <td>{{ row.get('Name') or '—' }}</td><td>{{ row.get('Position Type') or '—' }}</td><td>{{ row.get('Product Category') or '—' }}</td>
+    <td class="{{ 'category-missing' if 'Nepriskirta' in row['Tariff Category'] else '' }}">{{ row['Tariff Category'] }}</td>
+    <td class="price-number">{{ money(row.get('Component / Purchase Cost')) }}</td>
+    {% for key, label in table_addons %}<td class="price-number">{{ money(row.get(key)) }}</td>{% endfor %}
+    <td class="price-number">{{ money(row.get('Pricing Add-ons Total')) }}</td>
+    <td>{{ '%.1f %%'|format(row['Adjustment Rate'] * 100) if row.get('Adjustment Rate') is number else '—' }}</td>
+    <td class="price-number">{{ money(row.get('Adjustment Amount')) }}</td>
+    <td>{{ '%g %%'|format(row['Final Markup Percent']) if row.get('Final Markup Percent') is number else '—' }}</td>
+    <td class="price-number">{{ money(row.get('Final Markup Amount')) }}</td>
+    <td class="price-number"><strong>{{ money(row.get('Final Reform SO Unit Price')) }}</strong></td>
+    <td>{{ row.get('Status') or row.get('Control Status') or '—' }}<small class="field-help">{{ row.get('Issues') or row.get('Issues / Review Reason') or '' }}</small></td>
+  </tr>{% else %}<tr><td colspan="19">{% if price_summary.query %}Atitikmenų nerasta.{% else %}Išsaugotos kainų suvestinės dar nėra.{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="tariff-links">
+    {% if price_summary.page > 1 %}<a class="secondary" href="{{ url_for('pricing_control', filter=price_summary.query, page=price_summary.page-1, sku=sku_search.query) }}#price-summary">← Ankstesnis</a>{% endif %}
+    {% if price_summary.page < price_summary.pages %}<a class="secondary" href="{{ url_for('pricing_control', filter=price_summary.query, page=price_summary.page+1, sku=sku_search.query) }}#price-summary">Kitas →</a>{% endif %}
+  </div>
+</section>
