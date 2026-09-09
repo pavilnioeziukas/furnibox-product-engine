@@ -26,7 +26,7 @@
   </form>
   <p>{{ price_summary.total }} pozicijos · {{ price_summary.page }} / {{ price_summary.pages }} puslapis · iki 50 eilučių puslapyje. Spauskite SKU, kad matytumėte skaičiavimo eigą.</p>
   <div class="table-wrap summary-scroll" tabindex="0" role="region" aria-label="Kainų suvestinė su horizontaliu slinkimu"><table class="price-summary-table"><thead><tr>
-    <th>SKU</th><th>Pavadinimas</th><th>Tipas</th><th>Odoo kategorija</th><th>Tarifų kategorija</th><th>Savikaina</th>
+    <th>SKU</th><th>Pavadinimas</th><th>Tipas</th><th>Produkto kategorija</th><th>Tarifų kategorija</th><th>Savikaina</th>
     {% for key, label in table_addons %}<th>{{ label }}</th>{% endfor %}
     <th>Priedų suma</th><th>Korekcija %</th><th>Korekcija €</th><th>Galutinis antkainis %</th><th>Galutinis antkainis €</th><th>Galutinė kaina</th><th>Būsena / pastabos</th>
   </tr></thead><tbody>

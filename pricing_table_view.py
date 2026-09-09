@@ -53,6 +53,8 @@ def summary(data, query='', page=1, limit=50):
     categories = {}
     for row in data.get('BOM CATEGORY BREAKDOWN', []):
         categories.setdefault(str(row.get('Top SKU', '')).casefold(), set()).add(category(row))
+    for row in data.get('NON-BOM RULES', []):
+        categories.setdefault(str(row.get('SKU', '')).casefold(), set()).add(str(row.get('Pricing Category') or MISSING))
     result = []
     for original in rows:
         if query.casefold() not in f"{original.get('SKU', '')} {original.get('Name', '')}".casefold():

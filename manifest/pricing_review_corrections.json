@@ -1,0 +1,280 @@
+{
+  "version": "2026-09-09-reviewed-workbook-v1",
+  "source_file": "Reform_SO_Line_Prices_COMPLETE_ONLY (16) (1).xlsx",
+  "source_sha256": "94b0705fa7bdbcafc5dc0844861a980a53c57708154f84c8d4e5822ce9402fa0",
+  "corrections": [
+    {
+      "sku": "EUB-P-ACC01-HRD105",
+      "source_row": 1954,
+      "marked_cells": [
+        "B1954",
+        "H1954",
+        "K1954"
+      ],
+      "name": "Hardware - Ventilation rail - W60 / White",
+      "expression": "7",
+      "old_price": 6.958299999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD105-A",
+      "source_row": 1955,
+      "marked_cells": [
+        "B1955",
+        "H1955",
+        "K1955"
+      ],
+      "name": "Hardware - Ventilation rail - W60 / White",
+      "expression": "7",
+      "old_price": 6.958299999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD106",
+      "source_row": 1956,
+      "marked_cells": [
+        "B1956",
+        "K1956"
+      ],
+      "name": "Hardware - Ventilation rail - W60 / Black",
+      "expression": "7",
+      "old_price": 6.958299999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD106-A",
+      "source_row": 1957,
+      "marked_cells": [
+        "B1957",
+        "K1957"
+      ],
+      "name": "Hardware - Ventilation rail - W60 / Black",
+      "expression": "7",
+      "old_price": 6.958299999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD107",
+      "source_row": 1958,
+      "marked_cells": [
+        "B1958",
+        "H1958",
+        "K1958"
+      ],
+      "name": "Hardware - Ventilation rail - W80 / White",
+      "expression": "7",
+      "old_price": 9.175799999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD107-A",
+      "source_row": 1959,
+      "marked_cells": [
+        "B1959",
+        "H1959",
+        "K1959"
+      ],
+      "name": "Hardware - Ventilation rail - W80 / White",
+      "expression": "7",
+      "old_price": 9.175799999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD108",
+      "source_row": 1960,
+      "marked_cells": [
+        "B1960",
+        "H1960",
+        "K1960"
+      ],
+      "name": "Hardware - Ventilation rail - W80 / Black",
+      "expression": "7",
+      "old_price": 9.175799999999999
+    },
+    {
+      "sku": "EUB-P-ACC01-HRD108-A",
+      "source_row": 1961,
+      "marked_cells": [
+        "B1961",
+        "H1961",
+        "K1961"
+      ],
+      "name": "Hardware - Ventilation rail - W80 / Black",
+      "expression": "7",
+      "old_price": 9.175799999999999
+    },
+    {
+      "sku": "HRDW-ACC01-MIS101",
+      "source_row": 2923,
+      "marked_cells": [
+        "A2923",
+        "B2923",
+        "C2923",
+        "D2923",
+        "E2923",
+        "F2923",
+        "G2923",
+        "H2923",
+        "K2923"
+      ],
+      "name": "Island Hardware pack",
+      "product_category": "CABINET HARDWARE + COMPONENTS / CABINET ACCESSORIES",
+      "position_type": "BOM",
+      "existing_name": "Island Hardware pack",
+      "existing_product_category": "CABINET HARDWARE + COMPONENTS / CABINET ACCESSORIES",
+      "expression": "9+34",
+      "old_price": 5.168
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD019",
+      "source_row": 2954,
+      "marked_cells": [
+        "B2954",
+        "H2954",
+        "K2954"
+      ],
+      "name": "Hardware - Ventilation grill / Black",
+      "expression": "7",
+      "old_price": 4.991300000000001
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD019-A",
+      "source_row": 2955,
+      "marked_cells": [
+        "B2955",
+        "H2955",
+        "K2955"
+      ],
+      "name": "Hardware - Ventilation grill / Black",
+      "expression": "7",
+      "old_price": 4.991300000000001
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD020",
+      "source_row": 2956,
+      "marked_cells": [
+        "B2956",
+        "H2956",
+        "K2956"
+      ],
+      "name": "Hardware - Ventilation grill /  White",
+      "expression": "7",
+      "old_price": 4.991300000000001
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD020-A",
+      "source_row": 2957,
+      "marked_cells": [
+        "B2957",
+        "H2957",
+        "K2957"
+      ],
+      "name": "Hardware - Ventilation grill /  White",
+      "expression": "7",
+      "old_price": 4.991300000000001
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD027",
+      "source_row": 2966,
+      "marked_cells": [
+        "B2966",
+        "D2966",
+        "K2966"
+      ],
+      "name": "Wall Mount - Adjustable Bracket / White (2 pcs.)",
+      "product_category": "CABINET HARDWARE + COMPONENTS / FASTENERS + COMPONENTS / CABINET HARDWARE + COMPONENTS / CABINET ACCESSORIES",
+      "expression": "9+30+33+34",
+      "old_price": 4.5437
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD028",
+      "source_row": 2968,
+      "marked_cells": [
+        "B2968",
+        "D2968",
+        "K2968"
+      ],
+      "name": "Wall Mount - Adjustable Bracket / Black (2 pcs.)",
+      "product_category": "CABINET HARDWARE + COMPONENTS / FASTENERS + COMPONENTS / CABINET HARDWARE + COMPONENTS / CABINET ACCESSORIES",
+      "expression": "9+30+33+34",
+      "old_price": 4.5437
+    },
+    {
+      "sku": "UNI-P-ACC01-HRD031",
+      "source_row": 2970,
+      "marked_cells": [
+        "B2970"
+      ],
+      "name": "Hardware - Shelf angle for oven & fridge/freezer",
+      "old_price": 7.5083
+    },
+    {
+      "sku": "UNI-P-ACC02-MIS952",
+      "source_row": 3092,
+      "marked_cells": [
+        "A3092",
+        "C3092",
+        "H3092",
+        "K3092"
+      ],
+      "position_type": "NON-BOM",
+      "existing_name": "Pixel spot Ø30 stainless steel 1W 24V 2700K",
+      "existing_product_category": "INTERIOR STORAGE",
+      "expression": "6",
+      "old_price": 13.8231
+    },
+    {
+      "sku": "UNI-P-ACC03-MIS003",
+      "source_row": 3095,
+      "marked_cells": [
+        "B3095"
+      ],
+      "name": "Miscellaneous - Filler bracket set (2 pcs.)",
+      "old_price": 0.8748
+    },
+    {
+      "sku": "USB-P-ACC01-HRD105",
+      "source_row": 4307,
+      "marked_cells": [
+        "B4307",
+        "H4307",
+        "K4307"
+      ],
+      "name": "Hardware - W30 - Ventilation rail / White",
+      "expression": "7",
+      "old_price": 7.8662
+    },
+    {
+      "sku": "USB-P-ACC01-HRD105-A",
+      "source_row": 4308,
+      "marked_cells": [
+        "B4308",
+        "H4308",
+        "K4308"
+      ],
+      "name": "Hardware - W30 - Ventilation rail / White",
+      "expression": "7",
+      "old_price": 7.8662
+    },
+    {
+      "sku": "USB-P-ACC01-HRD106",
+      "source_row": 4309,
+      "marked_cells": [
+        "B4309",
+        "K4309"
+      ],
+      "name": "Hardware - W30 - Ventilation rail / Black",
+      "expression": "7",
+      "old_price": 7.8383
+    },
+    {
+      "sku": "USB-P-ACC01-HRD106-A",
+      "source_row": 4310,
+      "marked_cells": [
+        "B4310",
+        "K4310"
+      ],
+      "name": "Hardware - W30 - Ventilation rail / Black",
+      "expression": "7",
+      "old_price": 7.8383
+    }
+  ],
+  "notes": [
+    "Red final-price cells mark incorrect results; they are not manual price overrides.",
+    "CATEGORY RULES A59:B59 marks category 7; no tariff amount is red. Use centrally configured business category 7 tariffs."
+  ]
+}

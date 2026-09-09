@@ -3526,6 +3526,9 @@ def build_from_application_config(
             dataset_path,
             bom_path,
         )
+        from pricing_review_corrections import apply_review
+        document = apply_review(document, known_skus=[p['sku'] for p in target_dataset['products']])
+        rules = rules_from_config(document)
         known = {key(p["sku"]) for p in pricing_products}
         pricing_products.extend({"sku": p["sku"], "product_category": p.get("product_type", "")}
                                 for p in target_dataset["products"] if key(p["sku"]) not in known)
@@ -3560,6 +3563,17 @@ def build_from_application_config(
         production_bom_scope=production_bom_scope,
     )
 
+    from pricing_review_corrections import explicit_bom_skus, remove_non_bom_edges, apply_metadata
+    explicit = explicit_bom_skus(document)
+    configured_rules = rules_from_config(document)
+    rules.update({sku: configured_rules[sku] for sku in explicit})
+    authoritative_rule_tops.update(explicit)
+    boms, graph = remove_non_bom_edges(boms, graph, document)
+    # A reviewed NON-BOM position requires its own positive purchase price.
+    for sku, kind in document.get('pricing_type_overrides', {}).items():
+        if kind == 'NON-BOM' and sku in prices and float(prices[sku][1]) <= 0:
+            del prices[sku]
+
     unified.cover_missing(registry, list(prices) + list(graph) +
         [item.sku for _, items in boms.values() for item in items], calculator_snapshot)
     prices = unified.prepare(prices, registry)
@@ -3593,6 +3607,11 @@ def build_from_application_config(
     )
 
     unified.finish(bom_rows + non_rows, details, registry, calculator_snapshot)
+    apply_metadata(bom_rows + non_rows, document)
+    # Persist the reviewed assignments used by this run for the configuration UI.
+    from so_pricing_rules import save_config
+    if document.get('review_corrections_applied'):
+        save_config(config_path, document)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     (output_path.parent / "Calculator_Settings.json").write_text(
         json.dumps(calculator_snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
