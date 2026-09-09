@@ -56,8 +56,8 @@
     </div>
     <dl class="sku-facts">
       <div><dt>Skaičiavimo būdas</dt><dd>{% if item.position_type == 'BOM' %}<strong>Pagal BOM komponentų struktūrą.</strong> Sistema suskaičiavo žemiau parodytų komponentų savikainą.{% else %}<strong>Be BOM.</strong> Kaina pradėta nuo tiesioginės pirkimo kainos.{% endif %}</dd></div>
-      <div><dt>Kainodaros kategorija</dt><dd><strong>{{ item.category or 'Nepriskirta' }}</strong><br>Ji nustato, kurie darbų ir aptarnavimo tarifai taikomi šiam produktui. <a href="{{ url_for('pricing_rules') }}#bom-categories">Atidaryti kategorijų konfigūraciją →</a></dd></div>
-      <div><dt>Patikros rezultatas</dt><dd>{% if item.status in ('BLOCKED', 'NEĮTRAUKTAS') %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Problemų nerasta.</strong> Kaina apskaičiuota pagal turimus duomenis ir taisykles.{% endif %}</dd></div>
+      <div><dt>Kainodaros kategorija</dt><dd><strong>{{ item.category or 'Nepriskirta' }}</strong><br>Rodoma išsaugota produkto kategorija. Ji nebūtinai sutampa su Tamaros tarifų kategorija. Tarifų kodą ir jų pagrindą tikrinkite pritaikytų taisyklių išskaidyme. <a href="{{ url_for('pricing_rules') }}#bom-categories">Atidaryti kategorijų konfigūraciją →</a></dd></div>
+      <div><dt>Patikros rezultatas</dt><dd>{% if item.status in ('BLOCKED', 'NEĮTRAUKTAS') %}<strong>Reikia spręsti.</strong> {{ item.issues or 'Trūksta kainodarai būtinų duomenų.' }}{% else %}<strong>Kaina apskaičiuota.</strong> Rezultatas gautas pagal turimus duomenis ir taisykles. Ši būsena savaime nepatvirtina kategorijos priskyrimo ir tarifų pagrįstumo.{% endif %}</dd></div>
       <div><dt>Naudota logika</dt><dd>{% for rule in rule_explanations %}<span class="rule-summary"><strong>{{ rule.title }}</strong> — {{ rule.explanation }}</span>{% else %}—{% endfor %}</dd></div>
     </dl>
     <details class="technical-rules"><summary>Techniniai audito kodai</summary><p>{% for rule in rule_explanations %}<a href="#rule-{{ rule.id }}">{{ rule.id }} · {{ rule.title }}</a>{% if not loop.last %}<br>{% endif %}{% else %}Nėra{% endfor %}</p></details>
@@ -130,10 +130,10 @@
   <div class="policy-row"><span class="policy-order">3</span><div><strong>BLOCKED, jei nėra nei kainos, nei BOM</strong><p>Spėjama kaina nenaudojama. Odoo Standard Price nėra atsarginis šaltinis.</p></div><span class="state fail">Nestebima tyliai</span></div>
 </div>
 
-<section id="pricing-rule-reference" class="section-head"><div><p class="eyebrow">Taisyklių žodynas</p><h2>Ką reiškia R001–R007</h2></div><p>R kodai naudojami tik auditui ir atsekamumui. Skaičiavime taikoma čia aprašyta verslo logika.</p></section>
+<section id="pricing-rule-reference" class="section-head"><div><p class="eyebrow">Taisyklių žodynas</p><h2>Ką reiškia R001–R007</h2></div><p>R001–R007 paaiškina skaičiavimo veiksmus, o ne Tamaros kategorijų kodus. Vienam produktui gali būti taikomos kelios taisyklės. Pavyzdžiai iliustruoja formules ir nepatvirtina konkretaus SKU tarifų.</p></section>
 <div class="panel rule-catalog">
   {% for rule in rule_catalog %}
-    <article id="rule-{{ rule.id }}"><span>{{ rule.id }}</span><div><strong>{{ rule.title }}</strong><p>{{ rule.explanation }}</p></div></article>
+    <article id="rule-{{ rule.id }}"><span>{{ rule.id }}</span><div><strong>{{ rule.title }}</strong><p>{{ rule.explanation }}</p>{% include "pricing_rule_details.html" %}</div></article>
   {% endfor %}
 </div>
 

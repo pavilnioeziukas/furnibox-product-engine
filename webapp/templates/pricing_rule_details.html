@@ -1,0 +1,25 @@
+{% if rule.id == 'R001' %}
+<p><strong>Kaip taikoma.</strong> Komponentui imama paruošta pirkimo arba perdavimo kaina. Joje jau gali būti patvirtinta pirkimo kainos korekcija ar Reform perdavimo antkainis. Todėl ji nebūtinai lygi paskutinės sąskaitos kainai. Konkreti kilmė rodoma komponentų išskaidymo stulpelyje „Iš kur gauta kaina“.</p>
+<p><strong>Pavyzdys.</strong> 2 komponentai po 4,65 € → komponentų suma 9,30 €. Tai dar nėra galutinė pardavimo kaina su darbų priedais.</p>
+{% elif rule.id == 'R002' %}
+<p><strong>Formulė.</strong> Komponentų savikaina = Σ (komponento vieneto savikaina × jo kiekis). BOM yra gaminio sudėtis. Jei mazgas skaidomas pagal savo BOM, skaičiavimas tęsiamas per jo komponentus ir sudauginami visų lygių kiekiai.</p>
+<p><strong>Pavyzdys.</strong> 1 × 4,650 € + 1 × 0,053 € = 4,703 €. Jei reikia 2 rinkinių po 4 varžtus, į savikainą patenka 8 varžtai. Darbų ir aptarnavimo priedai apskaitomi atskirai.</p>
+{% elif rule.id == 'R003' %}
+<p><strong>Kas sudaro priedus.</strong> Surinkimas + sandėliavimas + pakavimas + padėjimas ant paletės + kita. Pagal taisykles priedai gali būti taikomi gaminiui ir atitinkamiems jo mazgams; reikia patikrinti taikymo lygį ir kiekį.</p>
+<p><strong>Pavyzdys.</strong> 0,20 € surinkimas + 0,10 € sandėliavimas + 0,01 € kita = 0,31 €. Ši suma savaime neįrodo, kuriai kategorijai produktas priklauso.</p>
+<p><strong>Kategorijos pagrindimas.</strong> Odoo produkto kategorija nėra tas pats, kas Tamaros tarifų kategorijos kodas. Išsaugotoje SKU taisyklėje gali būti tarifai be kategorijos kodo ir pavadinimo. Tokį priskyrimą reikia papildyti pagal patvirtintą šaltinį ir patikrinti tarifus; kategorijos negalima nustatyti vien pagal sutampančią sumą.</p>
+{% elif rule.id == 'R004' %}
+<p><strong>Formulė.</strong> Priedų korekcija = priedų suma × korekcijos procentas. Komponentų savikainai šis procentas netaikomas.</p>
+<p><strong>Pavyzdys su −7 %.</strong> 0,31 € × (−7 %) = −0,0217 €. Priedai po korekcijos: 0,2883 €. Kai komponentų savikaina 4,703 €, suma prieš galutinį antkainį yra 4,9913 €. Jei nustatytas galutinis antkainis, jis taikomas atskirai.</p>
+<p>−7 % yra šio pavyzdžio reikšmė. Tikrinkite konkretaus skaičiavimo korekcijos sumą. Ne BOM formulėje R007 ši korekcija netaikoma.</p>
+{% elif rule.id == 'R005' %}
+<p><strong>Kaip taikoma.</strong> Viduje gaminamas APACK, HRD-A ar Shelf-PP mazgas į didesnio gaminio savikainą įtraukiamas per savo komponentus. Atskiro mazgo pardavimo priedai neturi būti automatiškai pakartoti netinkamame BOM lygyje.</p>
+<p><strong>Pavyzdys.</strong> Mazgo komponentai kainuoja 3 €. Jei atskiram jo pardavimui numatytas 1 € darbo priedas, naudojant mazgą didesniame gaminyje negalima automatiškai pridėti to paties darbo antrą kartą. Darbai turi būti apskaityti tinkamame lygyje pagal priskirtas taisykles.</p>
+{% elif rule.id == 'R006' %}
+<p><strong>Kada blokuojama.</strong> Kai nėra paruoštos komponento kainos ir savikainos negalima nustatyti pagal BOM. Komponentų kainos sprendimo funkcija taip pat atmeta nulinę ar neigiamą tiesioginę kainą. Odoo „Standard Price“ nenaudojama kaip atsarginė reikšmė.</p>
+<p><strong>Pavyzdys.</strong> Jei iš trijų rinkinio komponentų vieno kaina nežinoma, kitų dviejų suma negali būti pateikta kaip viso rinkinio kaina.</p>
+<p><strong>Patikros ribos.</strong> Būsena „CALCULATED“ reiškia, kad sistema apskaičiavo rezultatą pagal turimus duomenis. Ji savaime nepatvirtina Tamaros kategorijos kodo, pavadinimo ar tarifų pagrįstumo. Trūkstamą kategorijos priskyrimą reikia išspręsti atskirai.</p>
+{% elif rule.id == 'R007' %}
+<p><strong>Formulė.</strong> Kaina = paruošta pirkimo kaina + paruošimas + sandėliavimas + maišelis + lipdukas. Šiuo būdu produkto komponentai pagal BOM neskaidomi.</p>
+<p><strong>Pavyzdys.</strong> 5,00 € + 0,20 € + 0,30 € + 0,02 € + 0,02 € = 5,54 €. Šioje bazinėje formulėje R004 korekcija netaikoma (korekcija = 0). Trūkstant pirkimo kainos, pozicija blokuojama. Galutinį antkainį, jei jis nustatytas, tikrinkite atskirai.</p>
+{% endif %}
