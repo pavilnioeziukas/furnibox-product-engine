@@ -953,10 +953,10 @@ class ReformSoLinePriceTests(unittest.TestCase):
             bom = rows["TOP-1"]
             # Components: (2*3 + 5*1)*2 + 7*4 = 50
             self.assertAlmostEqual(sheet.cell(bom, headers["Component / Purchase Cost"]).value, 50)
-            # Add-ons: SUB-1*2 + DIRECT-1 once + TOP-1 once = 254.1
-            self.assertAlmostEqual(sheet.cell(bom, headers["Pricing Add-ons Total"]).value, 254.1)
-            self.assertAlmostEqual(sheet.cell(bom, headers["Adjustment Amount"]).value, -17.787)
-            self.assertAlmostEqual(sheet.cell(bom, headers["Final Reform SO Unit Price"]).value, 286.313)
+            # Add-ons: SUB-1*2 + DIRECT-1*4 + TOP-1 once = 260.4
+            self.assertAlmostEqual(sheet.cell(bom, headers["Pricing Add-ons Total"]).value, 260.4)
+            self.assertAlmostEqual(sheet.cell(bom, headers["Adjustment Amount"]).value, -18.228)
+            self.assertAlmostEqual(sheet.cell(bom, headers["Final Reform SO Unit Price"]).value, 292.172)
             non = rows["ACC-1"]
             self.assertAlmostEqual(sheet.cell(non, headers["Final Reform SO Unit Price"]).value, 10.35)
             self.assertEqual(sheet.cell(non, headers["Status"]).value, "COMPLETE")

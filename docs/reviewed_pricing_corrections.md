@@ -19,7 +19,11 @@ Generated A variants are included after dataset discovery. Reviewed BOM categori
 retain business expressions and refresh amounts from central tariffs. Their
 product expressions suppress repeated child product/packaging add-ons, but
 separately assigned Components tariffs are included (user correction 2026-09-10).
-EU-VENRAIL-561-BB contributes storage .10, packaging .05 and pallet .02 EUR
+The later corrected C1-C12 table supersedes the original component rates.
+C7 is LED HARDWARE, C10 is SHELF HARDWARE, C8 totals .08 EUR as explicitly
+confirmed. All component rates multiply by the component quantity, including
+direct items (four screws at .01 contribute .04 EUR). EU-VENRAIL-561-BB now
+contributes storage .15, packaging .05 and pallet .02 EUR per unit
 before the BOM adjustment, in addition to its parent's product tariffs.
 Existing calculator and internal manufacturing cost protections still apply.
 Reviewed NON-BOM products

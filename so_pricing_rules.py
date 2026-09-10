@@ -232,7 +232,8 @@ def load_config(path: Path) -> dict[str, Any]:
     if not path.exists():
         return empty_config()
     from pricing_review_corrections import apply_review
-    return validate_config(apply_review(validate_config(json.loads(path.read_text(encoding="utf-8")))))
+    from component_tariffs import apply_config
+    return validate_config(apply_config(apply_review(validate_config(json.loads(path.read_text(encoding="utf-8"))))))
 
 
 def save_config(path: Path, document: dict[str, Any]) -> None:

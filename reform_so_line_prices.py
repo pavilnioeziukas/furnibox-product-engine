@@ -1831,7 +1831,9 @@ def calculate_boms(
                     part.strip().casefold() == "components"
                     for part in category_path.split("/")
                 )
-                if not is_component:
+                if not is_component and not (
+                    component_rule and component_rule.category_id in {'C11', 'C12'}
+                ):
                     continue
 
             has_bom = bool(
@@ -1851,10 +1853,8 @@ def calculate_boms(
                 )
 
             else:
-                # Existing legacy rule:
-                # direct item pricing add-on is
-                # applied once, not by quantity.
-                multiplier = 1.0
+                # Confirmed 2026-09-10: component tariffs are per unit.
+                multiplier = item_qty
 
                 level = (
                     "DIRECT LEVEL II"
@@ -3571,6 +3571,9 @@ def build_from_application_config(
     configured_rules = rules_from_config(document)
     rules.update({sku: configured_rules[sku] for sku in explicit})
     authoritative_rule_tops.update(explicit)
+    from component_tariffs import apply_rules as apply_component_tariffs
+    rules = apply_component_tariffs(rules, document,
+                                   target_dataset if dataset_path is not None else None)
     boms, graph = remove_non_bom_edges(boms, graph, document)
     # A reviewed NON-BOM position requires its own positive purchase price.
     for sku, kind in document.get('pricing_type_overrides', {}).items():
