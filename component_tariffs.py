@@ -11,7 +11,7 @@ TARIFFS = {
     'C5': ('Components / FRONT HARDWARE', (0, .04, 0, 0, .01, 0)),
     'C6': ('Components / INTERIOR STORAGE', (0, 2, 0, 0, 0, 0)),
     'C7': ('Components / LED HARDWARE', (.1, .05, .05, .02, 0, 0)),
-    'C8': ('Components / OTHER', (.04, .04, 0, 0, 0, 0)),
+    'C8': ('Components / OTHER', (0, .04, 0, 0, 0, 0)),
     'C9': ('Components / PAPER PRINT', (0, .05, .05, .02, 0, 0)),
     'C10': ('Components / SHELF HARDWARE', (0, .15, .05, .02, 0, 0)),
     'C11': ('Packing material', (0, 1.04, 0, 0, 0, 0)),
@@ -26,11 +26,21 @@ def category_code(path):
     names['packaging material'] = 'C11'
     return names.get(normalize(path))
 
+def apply_c8_correction(document):
+    from so_pricing_rules import ADDON_FIELDS
+    version = 'c8-storage-only-v1'
+    if document.get('component_c8_correction') != version:
+        for category in document['bom_categories']:
+            if category.get('source_category_id') == 'C8':
+                category.update(dict(zip(ADDON_FIELDS, TARIFFS['C8'][1])))
+        document['component_c8_correction'] = version
+    return document
+
 def apply_config(document):
     from so_pricing_rules import ADDON_FIELDS
     document = copy.deepcopy(document)
     if document.get('component_tariffs_version') == VERSION:
-        return document
+        return apply_c8_correction(document)
     for code, (name, amounts) in TARIFFS.items():
         for category in document['bom_categories']:
             if category_code(category.get('odoo_category')) == code:
@@ -45,7 +55,7 @@ def apply_config(document):
         if code:
             assignment['category_id'] = 'COMPONENT-'+code
     document['component_tariffs_version'] = VERSION
-    return document
+    return apply_c8_correction(document)
 
 def apply_rules(rules, document, dataset=None):
     """Classify by explicit category paths, never by SKU or equal rate sums."""

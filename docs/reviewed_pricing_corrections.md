@@ -20,8 +20,10 @@ retain business expressions and refresh amounts from central tariffs. Their
 product expressions suppress repeated child product/packaging add-ons, but
 separately assigned Components tariffs are included (user correction 2026-09-10).
 The later corrected C1-C12 table supersedes the original component rates.
-C7 is LED HARDWARE, C10 is SHELF HARDWARE, C8 totals .08 EUR as explicitly
-confirmed. All component rates multiply by the component quantity, including
+C7 is LED HARDWARE, C10 is SHELF HARDWARE. Tamara's subsequent clarification
+removes C8 assembly: C8 is storage only, .04 EUR per unit. A separate one-time
+migration updates existing C8 categories without replaying the other tariffs.
+All component rates multiply by the component quantity, including
 direct items (four screws at .01 contribute .04 EUR). EU-VENRAIL-561-BB now
 contributes storage .15, packaging .05 and pallet .02 EUR per unit
 before the BOM adjustment, in addition to its parent's product tariffs.

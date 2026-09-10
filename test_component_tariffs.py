@@ -9,12 +9,26 @@ def test_corrected_table_and_migration_preserve_future_edits():
     doc['bom_skus']=[{'sku':'RAIL','category_id':'old'}]
     doc=apply_config(doc)
     assert doc['bom_skus'][0]['category_id']=='COMPONENT-C10'
-    assert sum(TARIFFS['C8'][1])==.08
+    assert sum(TARIFFS['C8'][1])==.04
     assert abs(sum(TARIFFS['C7'][1])-.22)<1e-9
     assert abs(sum(TARIFFS['C10'][1])-.22)<1e-9
     c=next(c for c in doc['bom_categories'] if c['id']=='COMPONENT-C10')
     c['storage']=.2
     assert apply_config(doc)==doc
+
+def test_c8_existing_production_migration_only_changes_c8():
+    doc=apply_config(empty_config())
+    del doc['component_c8_correction']
+    c8=next(c for c in doc['bom_categories'] if c['id']=='COMPONENT-C8')
+    c8['assembly']=.04
+    c10=next(c for c in doc['bom_categories'] if c['id']=='COMPONENT-C10')
+    c10['storage']=.19
+    fixed=apply_config(doc)
+    assert len(fixed['bom_categories'])==len(doc['bom_categories'])
+    result=next(c for c in fixed['bom_categories'] if c['id']=='COMPONENT-C8')
+    assert result['assembly']==0 and result['storage']==.04
+    assert next(c for c in fixed['bom_categories'] if c['id']=='COMPONENT-C10')['storage']==.19
+    assert apply_config(fixed)==fixed
 
 def test_venrail_and_four_screws_per_unit():
     doc=apply_config(empty_config())
