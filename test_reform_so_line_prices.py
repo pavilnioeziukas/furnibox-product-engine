@@ -296,6 +296,31 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(sum(rows[0]["addons"]), 10.0)
         self.assertEqual([row["level"] for row in details], ["LEVEL I BOM"])
 
+    def test_product_category_keeps_separate_venrail_component_tariffs(self):
+        top, rail = "EUB-P-ACC01-HRD106", "EU-VENRAIL-561-BB"
+        rules = {
+            key(top): PricingRule(top, "7", "SHELF HARDWARE", "ACCESSORIES",
+                                 .30, .05, .03, .02, .04, 0),
+            key(rail): PricingRule(rail, "", "", "Components/SHELF HARDWARE",
+                                  0, .10, .05, .02, 0, 0),
+        }
+        for internal in (set(), {top}):
+            with self.subTest(internal=bool(internal)):
+                rows, details = calculate_boms(
+                    {top: ("ACCESSORIES", [Item(rail, 1)])},
+                    {key(rail): ("Ventilation rail", 6.55, "DIRECT PRICE")},
+                    rules, adjustment=-.07,
+                    graph={key(top): [(rail, 1)]},
+                    authoritative_rule_tops={top},
+                    component_cost_only_tops=internal,
+                )
+                self.assertEqual(rows[0]["status"], "COMPLETE")
+                self.assertAlmostEqual(sum(rows[0]["addons"]), .61)
+                self.assertAlmostEqual(rows[0]["final"], 7.1173)
+                rail_details = [d for d in details if d["rule"].sku == rail]
+                self.assertEqual(len(rail_details), 1)
+                self.assertAlmostEqual(sum(rail_details[0]["addons"]), .17)
+
     def test_target_shelf_subtypes_and_us_pack_categories(self):
         products = []
         expectations = {

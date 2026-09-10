@@ -17,7 +17,12 @@ amounts are red, so central category 7 rates remain authoritative.
 Configuration migration applies each SKU once and records the review version.
 Generated A variants are included after dataset discovery. Reviewed BOM categories
 retain business expressions and refresh amounts from central tariffs. Their
-complete expressions suppress repeated child add-ons. Reviewed NON-BOM products
+product expressions suppress repeated child product/packaging add-ons, but
+separately assigned Components tariffs are included (user correction 2026-09-10).
+EU-VENRAIL-561-BB contributes storage .10, packaging .05 and pallet .02 EUR
+before the BOM adjustment, in addition to its parent's product tariffs.
+Existing calculator and internal manufacturing cost protections still apply.
+Reviewed NON-BOM products
 lose their outgoing costing edges, keep incoming parent references, and require
 their own positive prepared purchase price. Metadata is applied before exports,
 so SO LINE PRICES and derived PRICE RESULTS agree. Successful calculation saves

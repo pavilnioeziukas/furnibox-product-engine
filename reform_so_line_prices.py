@@ -683,9 +683,9 @@ def apply_target_business_category_rules(
 ):
     """Overlay transformed products with Tamara CATEGORY/BOM PAP logic.
 
-    Returned ``authoritative`` products carry the complete add-on expression
-    for that BOM.  Their child material costs are still resolved recursively,
-    but child add-on rules must not be added again.
+    Returned ``authoritative`` products carry the product-level expression.
+    Separate component handling tariffs still apply; child product/packaging
+    expressions must not be added again.
     """
     result = dict(rules)
     authoritative = set()
@@ -1816,20 +1816,23 @@ def calculate_boms(
                 # packaging charges, including when used in a parent BOM.
                 continue
 
-            if key(top) in authoritative_rule_tops:
-                # Tamara's product category expression already represents
-                # the complete add-on combination for this BOM.  Child
-                # material cost remains recursive, but child add-ons would
-                # duplicate that authoritative product-category total.
-                continue
-
-            if key(top) in component_cost_only_tops:
-                # APACK, HRD-A and Shelf-PP are generated internal
-                # MANUFACTURE products. Their child materials already enter
-                # recursive component cost. Requiring another sales add-on
-                # rule for every screw, package or sticker would apply the
-                # legacy Level II rule at the wrong structural level.
-                continue
+            if (key(top) in authoritative_rule_tops
+                    or key(top) in component_cost_only_tops):
+                # Product expressions replace child product/packaging charges,
+                # not independently assigned component handling tariffs.
+                # User confirmed 2026-09-10: EU-VENRAIL-561-BB's .17 EUR is
+                # additional to the parent's category 7. Use the configured
+                # component classification, never infer it from tariff sums.
+                component_rule = rules.get(key(item.sku))
+                category_path = (
+                    component_rule.odoo_category if component_rule else ""
+                )
+                is_component = any(
+                    part.strip().casefold() == "components"
+                    for part in category_path.split("/")
+                )
+                if not is_component:
+                    continue
 
             has_bom = bool(
                 graph.get(
