@@ -35,7 +35,20 @@ def recipes(settings):
         add(row['sku'], result['total'], parts[:3]+parts[4:], 'Panelių skaičiuoklė: K + W + X')
         add(row['detail'], parts[3][1], parts[:3], 'Panelių skaičiuoklė: bazė K')
 
-    for row in source('shelf')['rows']:
+    shelf_rows = source('shelf')['rows']
+    special_families = {'SREW-SHELF-LED', 'SREW-SHELF-ROD', 'SREW-SHELF-LEDROD'}
+    valid_special = {key(r['sku']) for r in shelf_rows
+                     if r['kind'] in special_families
+                     and not any('tip' in issue.casefold() for issue in r.get('issues', []))
+                     and r['packaging'] is not None and r['cardboard'] is not None}
+    for row in shelf_rows:
+        if key(row['sku']) in valid_special and (
+                any('tip' in issue.casefold() for issue in row.get('issues', []))
+                or row['packaging'] is None or row['cardboard'] is None):
+            # The historical extra LEDROD section reuses LED codes, with the
+            # wrong family and no packaging. Use the complete matching row;
+            # conflicting complete rows still block below.
+            continue
         result = calculate('shelf', row, settings['shelf'])
         # Exact duplicate rows may agree, but a source type mismatch is not an
         # approved classification. Never silently prefer one conflicting row.
@@ -57,16 +70,8 @@ def recipes(settings):
             recipe.update(total=None, issue='Skaičiuoklės rezultatas nėra teigiamas', parts=[])
         result[sku] = recipe
 
-    # The dedicated nine-part LED / ROD calculation is the finished shelf
-    # recipe. Its packaging is already included. A PP SKU denotes that same
-    # packaged shelf, not a second packaging operation.
-    for row in led_results(settings):
-        recipe = dict(sku=row['sku'], total=row['total'], parts=[(k,v if v is not None else 0.) for k,v in row['parts']],
-                      origin='LED / ROD skaičiuoklė: C:K', issue='')
-        if row['total'] is None:
-            recipe['issue'] = 'Nepilnas LED / ROD išskaidymas'
-        result[key(row['sku'])] = recipe
-        result[key(row['sku']+'-PP')] = dict(recipe, sku=row['sku']+'-PP')
+    # LED/ROD/LEDROD use the same family-rate calculator as other shelves.
+    # Historical C:K cost scenarios must never overwrite its U / U+R+S prices.
     return result
 
 

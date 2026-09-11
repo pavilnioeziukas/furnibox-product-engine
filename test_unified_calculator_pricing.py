@@ -26,8 +26,22 @@ def test_shelf_pack_and_led_match_calculators():
     assert registry['eu-srew-shelf-163x564-ww']['total'] == pytest.approx(6.4212342)
     assert registry['eu-srew-shelf-163x564-ww-pp']['total'] == pytest.approx(8.3212342)
     led = registry['eu-srew-shelf-led-1163x340-bb-pp']
-    assert led['total'] == pytest.approx(60.0734)
+    assert led['total'] == pytest.approx(.39542 * 93)
     assert sum(v for _,v in led['parts']) == pytest.approx(led['total'])
+
+
+def test_led_component_and_pack_use_family_rate_not_historical_scenario():
+    config = settings.validate({})
+    sku = 'eu-srew-shelf-led-363x564-no'
+    config['led_costs'] = {'EU-SREW-SHELF-LED-363x564-NO': [100.] * 9}
+    registry = unified.recipes(config)
+    assert registry[sku]['total'] == pytest.approx(.363 * .564 * 93 - 1.9)
+    assert registry[sku+'-pp']['total'] == pytest.approx(.363 * .564 * 93)
+    assert registry[sku]['total'] == pytest.approx(17.140076)
+    prices = unified.prepare({}, registry)
+    assert resolve_component_cost(sku, prices, {})['cost'] == pytest.approx(17.140076)
+    config['shelf']['SREW-SHELF-LED'] += 1
+    assert unified.recipes(config)[sku]['total'] == pytest.approx(17.140076 + .363*.564)
 
 
 def test_conflicting_shelf_blocks_even_with_old_price_and_bom():
@@ -77,10 +91,11 @@ def test_settings_and_led_saved_for_next_so_run(tmp_path, monkeypatch):
     sku = 'EU-SREW-SHELF-LED-1163x340-BB'
     response = client.post('/shelf-workbook?view=led&item='+sku, data={**{'cost_'+str(i):i+1 for i in range(9)}, 'action':'save'})
     assert response.status_code == 200
-    assert unified.recipes(settings.load())[sku.casefold()]['total'] == 45
+    before = unified.recipes(settings.load())[sku.casefold()]['total']
+    assert before == pytest.approx(.39542 * 93 - 1.9)
     # Saving general rates must retain saved LED costs.
     client.post('/calculators/settings', data=form)
-    assert unified.recipes(settings.load())[sku.casefold()]['total'] == 45
+    assert unified.recipes(settings.load())[sku.casefold()]['total'] == before
 
 
 @pytest.mark.parametrize('sku,area,rate,coefficient', [

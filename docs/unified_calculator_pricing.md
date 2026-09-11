@@ -4,14 +4,12 @@ The SO pricing run loads one snapshot of `calculator_settings.json` from the
 application shared data directory. `/calculators/settings` persists panel and
 shelf rates and the final cost markup (initially 0%). The standalone calculators
 start with those same rates. Their unsaved scenario inputs remain temporary.
-The LED / ROD form can save its nine cost items for the next SO pricing run.
+The LED / ROD form saves historical comparison scenarios only; these never override SO pricing.
 Cabinet part rates remain in the existing purchase-pricing workspace and are
 consumed by the existing cabinet-part preparation step in the full pipeline.
 
 Exact panel pack SKUs use K + W + X; their raw panel SKUs use K. Shelf wooden
-parts use U and their source pack SKUs use U + R + S. The dedicated LED / ROD
-sheet takes precedence over the generic wood sheet for the finished LED / ROD
-SKU and its PP pack. Its C:K sum already includes packaging. These complete
+parts use U and their source pack SKUs use U + R + S. LED, ROD and LEDROD use the shelf family-rate calculator: U for the detail and U + R + S for the pack. Historical C:K sums do not override this calculation. These complete
 calculator recipes replace the old pack calculation, rather than adding old
 category packaging fees or the -7% fee adjustment again. An enclosing product
 can still have its own category-level service fees.
