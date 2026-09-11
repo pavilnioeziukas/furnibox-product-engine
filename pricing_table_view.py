@@ -82,9 +82,12 @@ def steps(data, match, trace):
                            source=source, formula=formula, amount=amount, purpose=purpose,
                            note=note, review=review))
     for row in trace:
-        if row.get('Step Type') != 'MATERIAL':
+        kind = row.get('Step Type')
+        if kind not in ('MATERIAL', 'LABOUR', 'FIXED COST', 'PACKAGING', 'CALCULATOR COST'):
             continue
-        add('R001', 'Komponento savikaina', row.get('Input / Component / Rule'),
+        title = {'LABOUR': 'Darbo kaina', 'FIXED COST': 'Fiksuota kainos dalis',
+                 'PACKAGING': 'Pakavimo kaina', 'CALCULATOR COST': 'Skaičiuoklės kainos dalis'}.get(kind, 'Komponento savikaina')
+        add('R001', title, row.get('Input / Component / Rule'),
             row.get('Source Label') or row.get('Source'),
             f"{fmt(row.get('Unit Price'))} × {fmt(row.get('Qty / Multiplier'))} = {fmt(row.get('Amount'))}",
             row.get('Amount'), 'Savikainos dalis', row.get('Explanation', ''), row.get('Step Status') == 'BLOCKED')

@@ -2078,6 +2078,8 @@ def write_component_cost_breakdown(
             "Component Cost",
             "Status",
             "Cost Source",
+            "Step Type",
+            "Calculation Explanation",
         ]
     )
 
@@ -2119,6 +2121,8 @@ def write_component_cost_breakdown(
                         "cost_source",
                         "",
                     ),
+                    detail.get("step_type", "MATERIAL"),
+                    detail.get("explanation", ""),
                 ]
             )
 

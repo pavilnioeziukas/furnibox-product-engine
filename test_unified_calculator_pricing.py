@@ -21,6 +21,21 @@ def test_panel_and_pack_no_double_packaging():
     assert not traces
 
 
+def test_panel_audit_identifies_detail_and_reconciles_area_rates():
+    config = settings.validate({})
+    registry = unified.recipes(config)
+    rows = [dict(sku='EUB-C-CAB01-PNL001', final=0)]
+    unified.finish(rows, [], registry, config)
+    details = rows[0]['component_details']
+    assert [d['step_type'] for d in details] == ['MATERIAL', 'LABOUR', 'FIXED COST', 'PACKAGING', 'LABOUR']
+    assert all(' · ' in d['component'] and 'PNL' in d['component'] for d in details)
+    for d in details:
+        assert d['total_qty'] * d['unit_price'] == pytest.approx(d['line_cost'])
+        assert 'mm' in d['explanation']
+    assert sum(d['line_cost'] for d in details) == pytest.approx(rows[0]['final'])
+    assert details[0]['total_qty'] == pytest.approx(.48)
+
+
 def test_shelf_pack_and_led_match_calculators():
     registry = unified.recipes(settings.validate({}))
     assert registry['eu-srew-shelf-163x564-ww']['total'] == pytest.approx(6.4212342)

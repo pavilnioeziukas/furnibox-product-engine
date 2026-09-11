@@ -288,6 +288,8 @@ def _component_trace(workbook) -> dict[str, list[dict]]:
                 "amount": values[columns["Component Cost"] - 1],
                 "status": _text(values[columns["Status"] - 1]),
                 "source": _text(values[columns["Cost Source"] - 1]),
+                "step_type": _text(values[columns["Step Type"] - 1]) if "Step Type" in columns else "MATERIAL",
+                "explanation": _text(values[columns["Calculation Explanation"] - 1]) if "Calculation Explanation" in columns else "",
             }
         )
     return result
@@ -484,7 +486,7 @@ def _write_trace(workbook, results: list[dict]) -> None:
                 [
                     sku,
                     step,
-                    "MATERIAL",
+                    detail.get("step_type") or "MATERIAL",
                     "R001",
                     detail["component"],
                     detail["qty"],
@@ -492,7 +494,7 @@ def _write_trace(workbook, results: list[dict]) -> None:
                     detail["amount"],
                     detail["source"],
                     status,
-                    (
+                    detail.get("explanation") or (
                         f"{detail['level_ii']} -> {detail['component']}; "
                         "prepared component price or recursively resolved leaf."
                     ),

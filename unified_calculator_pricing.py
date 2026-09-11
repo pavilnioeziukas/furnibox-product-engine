@@ -25,15 +25,29 @@ def led_results(settings):
 def recipes(settings):
     candidates = defaultdict(list)
 
-    def add(sku, total, parts, origin, issue=''):
+    def add(sku, total, parts, origin, issue='', audit=None):
         if sku:
-            candidates[key(sku)].append(dict(sku=sku, total=total, parts=parts, origin=origin, issue=issue))
+            candidates[key(sku)].append(dict(sku=sku, total=total, parts=parts, origin=origin, issue=issue, audit=audit or {}))
 
     for row in source('panel')['rows']:
         result = calculate('panel', row, settings['panel'])
         parts = result['parts']
-        add(row['sku'], result['total'], parts[:3]+parts[4:], 'Panelių skaičiuoklė: K + W + X')
-        add(row['detail'], parts[3][1], parts[:3], 'Panelių skaičiuoklė: bazė K')
+        area = result['area']
+        audit = {}
+        for label, field, kind in [('Medžiaga', row['color'], 'MATERIAL'),
+                                   ('Bazinis darbas', 'work', 'LABOUR'),
+                                   ('Fiksuota dalis', 'fixed', 'FIXED COST'),
+                                   ('Pakuotė W', 'packaging', 'PACKAGING'),
+                                   ('Papildomas darbas X', 'extra_work', 'LABOUR')]:
+            qty = 1 if field == 'fixed' else area
+            rate = settings['panel'][field]
+            unit = 'vnt.' if field == 'fixed' else 'm²'
+            audit[label] = dict(detail_sku=row['detail'], step_type=kind, qty=qty, rate=rate,
+                explanation=f"{row['detail']} · {label} · {row['color']} · {row['length']:g} × {row['width']:g} mm; "
+                            f"{qty:g} {unit} × {rate:.8g} €/{unit} = {qty*rate:.4f} €."
+                            + (' Žaliavinės plokštės SKU šaltinyje nenurodytas.' if field == row['color'] else ''))
+        add(row['sku'], result['total'], parts[:3]+parts[4:], 'Panelių skaičiuoklė: K + W + X', audit=audit)
+        add(row['detail'], parts[3][1], parts[:3], 'Panelių skaičiuoklė: bazė K', audit=audit)
 
     shelf_rows = source('shelf')['rows']
     special_families = {'SREW-SHELF-LED', 'SREW-SHELF-ROD', 'SREW-SHELF-LEDROD'}
@@ -139,9 +153,16 @@ def finish(rows, details, registry, settings):
             row.update(cost=total, addons=(0.,)*6, adjustment=0., adjustment_rate=0.,
                        final=total, status='COMPLETE' if total is not None else 'BLOCKED',
                        issues=recipe['issue'], calculator=recipe['origin'])
-            row['component_details'] = [dict(top=row['sku'], level_ii=row['sku'], level_ii_qty=1,
-                component=label, component_qty=1, total_qty=1, unit_price=value, line_cost=value,
-                status='OK', cost_source='CALCULATOR: '+recipe['origin']) for label,value in recipe['parts']]
+            row['component_details'] = []
+            for label, value in recipe['parts']:
+                audit = recipe.get('audit', {}).get(label, {})
+                detail_sku = audit.get('detail_sku', row['sku'])
+                step_type = audit.get('step_type', 'PACKAGING' if label.startswith(('Pakuotė', 'Kartonas')) else 'CALCULATOR COST')
+                row['component_details'].append(dict(top=row['sku'], level_ii=row['sku'], level_ii_qty=1,
+                    component=f'{detail_sku} · {label}', component_qty=audit.get('qty', 1),
+                    total_qty=audit.get('qty', 1), unit_price=audit.get('rate', value), line_cost=value,
+                    status='OK', cost_source='CALCULATOR: '+recipe['origin'], step_type=step_type,
+                    explanation=audit.get('explanation', f'{detail_sku} · {label}; {recipe["origin"]}')))
         row['before_markup'] = row['final']
         row['markup_percent'] = settings['markup_percent']
         row['markup_amount'] = None if row['final'] is None else row['final']*settings['markup_percent']/100
