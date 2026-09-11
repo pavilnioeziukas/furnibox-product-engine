@@ -132,6 +132,13 @@ def steps(data, match, trace):
     formula = ' + '.join(fmt(v) for v in amounts)
     if num(markup) and markup != 0:
         formula += ' + ' + fmt(markup)
+    exception = saved_row.get('Final Price Exception Amount')
+    exception_source = saved_row.get('Final Price Exception Source')
+    if exception_source and num(exception):
+        add('EXCEPTION', 'Patvirtinta galutinės kainos išimtis', sku,
+            exception_source, fmt(exception), exception, 'Kainos išimtis',
+            'Taikoma po visų priedų ir galutinio antkainio.')
+        formula += ' + ' + fmt(exception)
     add('R002–R007', 'Galutinė SO kaina', sku, 'Išsaugotas skaičiavimo rezultatas',
         formula + ' = ' + fmt(match.get('final')), match.get('final'), 'Galutinis rezultatas',
         match.get('issues') or '', match.get('status') in ('BLOCKED', 'NEĮTRAUKTAS'))

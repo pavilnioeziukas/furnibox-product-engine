@@ -242,6 +242,8 @@ def _read_results(workbook) -> list[dict]:
                 "before_markup": values[columns.get("Before Final Markup", columns["Final Reform SO Unit Price"]) - 1],
                 "markup_percent": values[columns["Final Markup Percent"] - 1] if "Final Markup Percent" in columns else 0,
                 "markup_amount": values[columns["Final Markup Amount"] - 1] if "Final Markup Amount" in columns else 0,
+                "price_exception": values[columns["Final Price Exception Amount"]-1] if "Final Price Exception Amount" in columns else 0,
+                "price_exception_source": values[columns["Final Price Exception Source"]-1] if "Final Price Exception Source" in columns else "",
                 "engine_status": engine_status,
                 "issues": issues,
                 "control_status": _control_status(engine_status, issues),
@@ -417,6 +419,8 @@ def _write_results(workbook, results: list[dict]) -> None:
             "Before Final Markup",
             "Final Markup Percent",
             "Final Markup Amount",
+            "Final Price Exception Amount",
+            "Final Price Exception Source",
         ]
     )
     for row in results:
@@ -436,6 +440,8 @@ def _write_results(workbook, results: list[dict]) -> None:
                 row.get("before_markup", row["final"]),
                 row.get("markup_percent", 0),
                 row.get("markup_amount", 0),
+                row.get("price_exception", 0),
+                row.get("price_exception_source", ""),
             ]
         )
     _style_table(
@@ -518,6 +524,12 @@ def _write_trace(workbook, results: list[dict]) -> None:
                     ),
                 ]
             )
+            step += 1
+        if result.get("price_exception_source"):
+            sheet.append([sku, step, "FINAL PRICE EXCEPTION", "EXCEPTION",
+                          "Patvirtinta galutinės kainos išimtis", 1, None,
+                          result["price_exception"], result["price_exception_source"],
+                          "CALCULATED", "Išimtis pritaikyta po visų priedų ir antkainio."])
             step += 1
         sheet.append(
             [

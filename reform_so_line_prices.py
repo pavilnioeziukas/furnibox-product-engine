@@ -2445,6 +2445,8 @@ def build_reform_so_line_prices(
             "Final Markup Percent",
             "Final Markup Amount",
             "Calculator",
+            "Final Price Exception Amount",
+            "Final Price Exception Source",
         ]
     )
 
@@ -2478,6 +2480,8 @@ def build_reform_so_line_prices(
                 row.get('markup_percent', 0),
                 row.get('markup_amount', 0),
                 row.get('calculator', ''),
+                row.get("price_exception", 0),
+                row.get("price_exception_source", ""),
             ]
         )
 
@@ -2990,6 +2994,8 @@ def write_price_workbook(
             "Final Markup Percent",
             "Final Markup Amount",
             "Calculator",
+            "Final Price Exception Amount",
+            "Final Price Exception Source",
         ]
     )
 
@@ -3023,6 +3029,8 @@ def write_price_workbook(
                 row.get("markup_percent", 0),
                 row.get("markup_amount", 0),
                 row.get("calculator", ""),
+                row.get("price_exception", 0),
+                row.get("price_exception_source", ""),
             ]
         )
 
@@ -3642,6 +3650,8 @@ def build_from_application_config(
     )
 
     unified.finish(bom_rows + non_rows, details, registry, calculator_snapshot)
+    from final_price_exceptions import apply as apply_final_price_exceptions
+    apply_final_price_exceptions(bom_rows + non_rows)
     apply_metadata(bom_rows + non_rows, document)
     # Persist the reviewed assignments used by this run for the configuration UI.
     from so_pricing_rules import save_config
