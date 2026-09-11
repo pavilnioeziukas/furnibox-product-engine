@@ -2,6 +2,7 @@
 from functools import lru_cache
 from pathlib import Path
 from openpyxl import load_workbook
+from current_reference_prices import COLUMN, current_price
 
 ADDONS = [('Assembly', 'Surinkimas'), ('Storage', 'Sandėliavimas'),
           ('Packaging', 'Pakavimas'), ('Put on pallet', 'Padėjimas ant paletės'),
@@ -60,6 +61,8 @@ def summary(data, query='', page=1, limit=50):
         if query.casefold() not in f"{original.get('SKU', '')} {original.get('Name', '')}".casefold():
             continue
         row = dict(original)
+        if COLUMN not in row:
+            row[COLUMN] = current_price(row.get('SKU'))
         assigned = categories.get(str(row.get('SKU', '')).casefold(), set())
         row['Tariff Category'] = '; '.join(sorted(assigned)) if assigned else 'Priskyrimo duomenų šiame rezultate nėra'
         result.append(row)

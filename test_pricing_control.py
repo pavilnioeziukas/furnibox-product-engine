@@ -75,8 +75,9 @@ def test_enrich_pricing_workbook_adds_control_views_without_changing_price(tmp_p
 
     results = workbook["PRICE RESULTS"]
     assert results["H2"].value == 11.86
-    assert results["I2"].value == "CALCULATED"
-    assert results["I3"].value == "BLOCKED"
+    assert results["I1"].value == "Dabartinė kaina, €"
+    assert results["J2"].value == "CALCULATED"
+    assert results["J3"].value == "BLOCKED"
 
     raw = workbook["SO LINE PRICES"]
     assert raw["H2"].value == 11.86

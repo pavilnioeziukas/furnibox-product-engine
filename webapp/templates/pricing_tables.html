@@ -18,6 +18,7 @@
 {% endif %}
 <section class="panel" id="price-summary">
   <h2>Kainų suvestinė</h2>
+  <p>„Dabartinė kaina, €“ – palyginimui pateiktos 2026-09-11 kainos pagal tikslų SKU. Jos nekeičia apskaičiuotos kainos. „—“ šiame stulpelyje reiškia, kad dabartinė kaina nepateikta.</p>
   <p>Vienas SKU — viena eilutė. Sumos paimtos iš paskutinio skaičiavimo failo. „—“ reiškia, kad reikšmė neišsaugota; tai nėra nulis.</p>
   <form method="get" action="{{ url_for('pricing_control') }}#price-summary" class="sku-search-form">
     <label for="summary-filter">SKU arba pavadinimas</label><input id="summary-filter" name="filter" value="{{ price_summary.query }}" placeholder="Filtruoti suvestinę">
@@ -28,7 +29,7 @@
   <div class="table-wrap summary-scroll" tabindex="0" role="region" aria-label="Kainų suvestinė su horizontaliu slinkimu"><table class="price-summary-table"><thead><tr>
     <th>SKU</th><th>Pavadinimas</th><th>Tipas</th><th>Produkto kategorija</th><th>Tarifų kategorija</th><th>Savikaina</th>
     {% for key, label in table_addons %}<th>{{ label }}</th>{% endfor %}
-    <th>Priedų suma</th><th>Korekcija %</th><th>Korekcija €</th><th>Galutinis antkainis %</th><th>Galutinis antkainis €</th><th>Galutinė kaina</th><th>Būsena / pastabos</th>
+    <th>Priedų suma</th><th>Korekcija %</th><th>Korekcija €</th><th>Galutinis antkainis %</th><th>Galutinis antkainis €</th><th>Galutinė kaina</th><th>Dabartinė kaina, €</th><th>Būsena / pastabos</th>
   </tr></thead><tbody>
   {% for row in price_summary.rows %}<tr>
     <td><a href="{{ url_for('pricing_control', sku=row['SKU'], filter=price_summary.query, page=price_summary.page) }}#price-steps"><strong>{{ row['SKU'] }}</strong></a></td>
@@ -42,8 +43,9 @@
     <td>{{ '%g %%'|format(row['Final Markup Percent']) if row.get('Final Markup Percent') is number else '—' }}</td>
     <td class="price-number">{{ money(row.get('Final Markup Amount')) }}</td>
     <td class="price-number"><strong>{{ money(row.get('Final Reform SO Unit Price')) }}</strong></td>
+    <td class="price-number">{{ money(row.get('Dabartinė kaina, €')) }}</td>
     <td>{{ row.get('Status') or row.get('Control Status') or '—' }}<small class="field-help">{{ row.get('Issues') or row.get('Issues / Review Reason') or '' }}</small></td>
-  </tr>{% else %}<tr><td colspan="19">{% if price_summary.query %}Atitikmenų nerasta.{% else %}Išsaugotos kainų suvestinės dar nėra.{% endif %}</td></tr>{% endfor %}
+  </tr>{% else %}<tr><td colspan="20">{% if price_summary.query %}Atitikmenų nerasta.{% else %}Išsaugotos kainų suvestinės dar nėra.{% endif %}</td></tr>{% endfor %}
   </tbody></table></div>
   <div class="tariff-links">
     {% if price_summary.page > 1 %}<a class="secondary" href="{{ url_for('pricing_control', filter=price_summary.query, page=price_summary.page-1, sku=sku_search.query) }}#price-summary">← Ankstesnis</a>{% endif %}

@@ -696,6 +696,8 @@ def enrich_pricing_workbook(
         control_names.append("CHANGES")
     _insert_control_sheets_first(workbook, control_names)
 
+    from current_reference_prices import add_to_workbook
+    add_to_workbook(workbook)
     destination.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(destination)
 
