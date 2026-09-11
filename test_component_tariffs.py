@@ -2,6 +2,31 @@ from component_tariffs import apply_config, apply_rules, TARIFFS
 from so_pricing_rules import empty_config, pricing_rules_from_config, PricingRule
 from reform_so_line_prices import calculate_boms, Item, key
 
+def test_fpack_named_component_never_gets_cabinet_packing_labour():
+    from reform_so_line_prices import uses_fpack_labour
+    part=PricingRule('FPACK-HARDWARE','C3','','Components / CABINET HARDWARE',0,.05)
+    assert not uses_fpack_labour(part.sku,part)
+    assert uses_fpack_labour('FPACK-CAB',PricingRule('FPACK-CAB','1','','PREPACK CABINETS'))
+    rules={key(part.sku):part,key('TOP'):PricingRule('TOP','12','','',50)}
+    rows,details=calculate_boms({'TOP':('',[Item(part.sku,2)])},
+        {key(part.sku):('Hardware',1.15,'DIRECT PRICE')}, rules,
+        authoritative_rule_tops={'TOP'})
+    assert rows[0]['addons'][0]==50
+    assert rows[0]['addons'][1]==.1
+
+def test_nested_component_handling_multiplies_quantities_without_product_charges():
+    rules={key('TOP'):PricingRule('TOP','12','','',50),
+           key('INNER'):PricingRule('INNER','12','','PREPACK CABINETS',50),
+           key('SCREW'):PricingRule('SCREW','C4','','Components / FASTENERS',0,.01)}
+    rows,details=calculate_boms({'TOP':('',[Item('INNER',2),Item('SCREW',1)])},
+        {key('SCREW'):('Screw',.1,'DIRECT PRICE')},rules,
+        graph={'INNER':[('SCREW',3)]},component_cost_only_tops={'INNER'},
+        authoritative_rule_tops={'TOP'})
+    assert rows[0]['status']=='COMPLETE'
+    assert rows[0]['addons'][0]==50
+    assert abs(rows[0]['addons'][1]-.07)<1e-9
+    assert abs(rows[0]['cost']-.7)<1e-9
+
 def test_corrected_table_and_migration_preserve_future_edits():
     doc=empty_config()
     doc['bom_categories']=[{'id':'old','name':'', 'source_category_id':'',

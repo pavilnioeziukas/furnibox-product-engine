@@ -1577,6 +1577,19 @@ def resolve_component_cost(
     return result
 
 
+def is_component_tariff(rule):
+    return bool(rule and (
+        rule.category_id in {f'C{i}' for i in range(1, 13)}
+        or any(part.strip().casefold() == 'components'
+               for part in rule.odoo_category.split('/'))
+    ))
+
+
+def uses_fpack_labour(sku, rule):
+    # Component handling takes precedence over the packaging-looking SKU prefix.
+    return text(sku).upper().startswith('FPACK-') and not is_component_tariff(rule)
+
+
 def calculate_boms(
     boms,
     prices,
@@ -1593,7 +1606,7 @@ def calculate_boms(
 
     Pricing add-on logic remains the existing business logic:
     - Level II BOM add-ons multiplied by Level II quantity.
-    - Direct Level II add-ons applied once.
+    - Component add-ons multiplied by quantity, including resolved inner BOMs.
     - Level I add-ons applied once.
     """
     if graph is None:
@@ -1834,6 +1847,22 @@ def calculate_boms(
                 if not is_component and not (
                     component_rule and component_rule.category_id in {'C11', 'C12'}
                 ):
+                    # Keep component handling when an internal product's own
+                    # selling/assembly charges are suppressed. The resolved
+                    # leaves already contain the full inner quantity chain.
+                    for leaf in resolved['leaves']:
+                        leaf_rule = rules.get(key(leaf['sku']))
+                        if (key(leaf['sku']) != key(item.sku)
+                                and is_component_tariff(leaf_rule)
+                                and not str(leaf['source']).startswith('CALCULATOR:')
+                                and not is_cabinet_part_price(prices, leaf['sku'])):
+                            nested = breakdown(leaf_rule, item_qty * float(leaf['qty']),
+                                               'NESTED COMPONENT')
+                            nested['calculation'] = (
+                                f'Component handling through {item.sku}; '
+                                'tariff × full BOM quantity; internal product charges excluded'
+                            )
+                            applied.append(nested)
                     continue
 
             has_bom = bool(
@@ -1892,7 +1921,7 @@ def calculate_boms(
                     multiplier,
                     level,
                 )
-                if text(item.sku).upper().startswith("FPACK-"):
+                if uses_fpack_labour(item.sku, rules[item_key]):
                     labour = fpack_labour_cost(item_fpack_detail_cost) * multiplier
                     item_breakdown["addons"] = (
                         labour,
@@ -1934,7 +1963,7 @@ def calculate_boms(
             in range(6)
         )
 
-        if text(top).upper().startswith("FPACK-"):
+        if uses_fpack_labour(top, rules.get(top_key)):
             # FPACK labour was separated from the cabinet-part price after
             # packaging and part costs were split.  It replaces the static
             # Assembly amount for FPACK and follows Tamara's agreed formula:

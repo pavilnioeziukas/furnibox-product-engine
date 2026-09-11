@@ -85,7 +85,7 @@ class RemainingPricingRulesTests(unittest.TestCase):
         rules, _ = apply_target_business_category_rules({key(existing.sku): existing}, dataset, empty_config(), reference={})
         self.assertEqual(rules, {key(existing.sku): existing})
 
-    def test_direct_addon_once_per_sku_not_component_quantity(self):
+    def test_direct_component_addon_per_unit_with_parent_expression(self):
         top = 'TOP'
         dataset = {'product_catalog': [component('0043509846', 'INTERIOR STORAGE')]}
         rules, _ = apply_target_business_category_rules({key(top): PricingRule(top, '', '', '', storage=4)}, dataset, empty_config(), reference={})
@@ -93,8 +93,8 @@ class RemainingPricingRulesTests(unittest.TestCase):
                 {key('0043509846'): ('Part', 10, 'PURCHASE')}, rules)
         rows, _ = calculate_boms(*args, adjustment=0)
         self.assertEqual(rows[0]['cost'], 40)
-        self.assertEqual(sum(rows[0]['addons']), 6)
-        # A full parent expression already includes the child category.
+        self.assertEqual(sum(rows[0]['addons']), 12)
+        # This legacy category has no explicit Components classification.
         rows, _ = calculate_boms(*args, adjustment=0, authoritative_rule_tops={key(top)})
         self.assertEqual(sum(rows[0]['addons']), 4)
         # Classification must never replace a missing purchase price with zero.
