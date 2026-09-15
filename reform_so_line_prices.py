@@ -2357,6 +2357,65 @@ def calculate_non_bom(
     return results
 
 
+def calculate_confirmed_purchased_products(prices, rules, dataset, existing_rows=None):
+    """Calculate confirmed purchased products once, never from BOM parts."""
+    from confirmed_purchased_products import CONFIRMED_PURCHASED_NON_BOM_SKUS, purchased_price
+
+    products = {
+        key(product.get("sku")): product
+        for product in (dataset or {}).get("products", [])
+        if text(product.get("sku"))
+    }
+    existing = {key(row.get("sku")): row for row in (existing_rows or [])}
+    results = []
+    for sku in CONFIRMED_PURCHASED_NON_BOM_SKUS:
+        sku_key = key(sku)
+        product = products.get(sku_key)
+        price, price_key = purchased_price(prices, sku)
+        rule = rules.get(sku_key)
+        prior = existing.get(sku_key)
+        issues = []
+        if product is None:
+            issues.append(f"Product not found: {sku}")
+        if price is None:
+            issues.append(f"Missing purchase price: {sku}")
+        if rule is None and prior is None:
+            issues.append(f"Missing purchased-product pricing rule: {sku}")
+        addons = prior["addons"] if prior is not None else (
+            rule.addons if rule is not None else (0.0,) * 6
+        )
+        cost = float(price[1]) if price is not None else None
+        row = dict(prior or {})
+        row.update({
+            "sku": sku,
+            "name": (
+                text(product.get("name") or product.get("name_2"))
+                if product else text((prior or {}).get("name"))
+            ),
+            "type": "NON-BOM",
+            "category": (
+                text(product.get("product_type"))
+                if product else text((prior or {}).get("category"))
+            ),
+            "pricing_category": rule.category_id if rule else "",
+            "cost": cost,
+            "addons": addons,
+            "preparation": addons[0] + addons[2] + addons[3],
+            "bag": addons[4],
+            "sticker": addons[5],
+            "adjustment": 0.0,
+            "final": cost + sum(addons) if cost is not None and not issues else None,
+            "status": "COMPLETE" if not issues else "BLOCKED",
+            "issues": "; ".join(issues),
+            "cost_source": price[2] if price is not None and len(price) > 2 else "",
+            "purchase_identity": price_key,
+        })
+        if prior is not None:
+            row["pricing_category"] = prior.get("pricing_category", "")
+        results.append(row)
+    return results
+
+
 def style(
     sheet,
     color="1F4E78",
@@ -3656,6 +3715,11 @@ def build_from_application_config(
     rules = apply_component_tariffs(rules, document,
                                    target_dataset if dataset_path is not None else None)
     boms, graph = remove_non_bom_edges(boms, graph, document)
+    from confirmed_purchased_products import (
+        CONFIRMED_PURCHASED_NON_BOM_KEYS,
+        remove_confirmed_purchased_boms,
+    )
+    remove_confirmed_purchased_boms(boms, graph)
     # A reviewed NON-BOM position requires its own positive purchase price.
     for sku, kind in document.get('pricing_type_overrides', {}).items():
         if kind == 'NON-BOM' and sku in prices and float(prices[sku][1]) <= 0:
@@ -3692,6 +3756,13 @@ def build_from_application_config(
             prices,
         )
     )
+    if dataset_path is not None:
+        non_rows = calculate_confirmed_purchased_products(
+            prices, rules, target_dataset, existing_rows=non_rows
+        ) + [
+            row for row in non_rows
+            if key(row["sku"]) not in CONFIRMED_PURCHASED_NON_BOM_KEYS
+        ]
 
     unified.finish(bom_rows + non_rows, details, registry, calculator_snapshot)
     from final_price_exceptions import apply as apply_final_price_exceptions

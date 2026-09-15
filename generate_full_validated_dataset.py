@@ -11,6 +11,7 @@ from bom_import_manufacture_v5 import load_reform_bom_lines
 from bom_import_pilot_v2 import load_operation_templates
 from bom_type_inference_v3 import canon
 from config import load_settings
+from confirmed_purchased_products import CONFIRMED_PURCHASED_NON_BOM_KEYS
 from manifest.manifest_writer import calculate_file_hash
 from odoo_client import OdooClient
 from output_paths import environment_slug
@@ -35,21 +36,13 @@ class FullDatasetTransformationError(RuntimeError):
     """Production taisyklės neleidžia saugiai užbaigti target Dataset."""
 
 
-REFORM_PURCHASED_NON_BOM_SKUS = frozenset({
-    "EUB-P-ACC05-MIS001",
-    "EUB-P-ACC05-MIS002",
-    "EUB-P-ACC05-MIS003",
-    "EUB-P-ACC05-MIS004",
-})
-
-
 def exclude_erroneous_purchased_boms(
     reform_products: dict[str, dict],
     reform_lines: dict[str, list[dict]],
 ) -> tuple[dict[str, dict], dict[str, list[dict]], list[str]]:
     """Keep confirmed purchased products while ignoring erroneous Reform BOMs."""
     excluded = sorted(
-        sku for sku in REFORM_PURCHASED_NON_BOM_SKUS if sku in reform_lines
+        sku for sku in reform_lines if sku.casefold() in CONFIRMED_PURCHASED_NON_BOM_KEYS
     )
     if not excluded:
         return reform_products, reform_lines, []
