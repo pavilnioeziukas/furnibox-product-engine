@@ -13,6 +13,7 @@ if "dotenv" not in sys.modules:
     sys.modules["dotenv"] = dotenv_stub
 
 from reform_so_line_prices import (
+    apply_confirmed_family_category_aliases,
     Item,
     add_generated_boms_to_graph,
     apply_target_business_category_rules,
@@ -57,6 +58,24 @@ class ReformSoLinePriceTests(unittest.TestCase):
             0,
             0,
         )
+
+    def test_confirmed_cabinet_family_category_aliases(self):
+        reference = {
+            key("EUB-C-CAB01-BAS001-A"): "12+9+22.1+24.1",
+            key("EUB-C-CAB01-BAS017-A"): "12+9+22.1+24.1",
+            key("EUB-C-CAB01-BNF001-A"): "12+9+23.1+24.1",
+            key("EUB-C-CAB01-BSK001-A"): "12+9+23.1+24.1",
+            key("EUB-C-CAB01-BOH004-A"): "different",
+            key("EUB-C-CAB01-COS001-A"): "12+9+22.1+24.1",
+            key("EUB-C-CAB01-COS003-A"): "12+9+22.1+24.1",
+            key("EUB-C-CAB01-HCO001-A"): "different",
+        }
+
+        result = apply_confirmed_family_category_aliases(reference)
+
+        self.assertEqual(result[key("EUB-C-CAB01-BNF001-A")], "12+9+22.1+24.1")
+        self.assertEqual(result[key("EUB-C-CAB01-BOH004-A")], "12+9+23.1+24.1")
+        self.assertEqual(result[key("EUB-C-CAB01-HCO001-A")], "12+9+22.1+24.1")
 
     def test_component_cost_breakdown_formats_level_ii_and_top_bom_groups(self):
         workbook = Workbook()
@@ -273,6 +292,26 @@ class ReformSoLinePriceTests(unittest.TestCase):
         )
         self.assertIn(key(sku), rules)
         self.assertEqual(rules[key(sku)].addons, (0, 0, 0, 0, 0, 0))
+        self.assertEqual(rules[key(sku)].category_id, "CABINET")
+        self.assertEqual(rules[key(sku)].category_name, "BENDRA SPINTELIŲ TAISYKLĖ")
+        self.assertNotIn(key(sku), authoritative)
+
+    def test_common_cabinet_rule_replaces_legacy_empty_assignment(self):
+        sku = "EUB-C-CAB01-COS003"
+        existing = PricingRule(sku, "", "", "")
+        dataset = {"products": [{
+            "sku": sku,
+            "product_type": "CABINETS",
+            "bom_type": "KIT",
+            "components": [{"sku": "FPACK-EU-CAB01-COS003", "quantity": 1}],
+        }]}
+
+        rules, authoritative = apply_target_business_category_rules(
+            {key(sku): existing}, dataset, empty_config(), reference={}
+        )
+
+        self.assertEqual(rules[key(sku)].category_id, "CABINET")
+        self.assertEqual(rules[key(sku)].addons, (0, 0, 0, 0, 0, 0))
         self.assertNotIn(key(sku), authoritative)
 
     def test_authoritative_product_category_does_not_double_child_addons(self):
@@ -393,11 +432,11 @@ class ReformSoLinePriceTests(unittest.TestCase):
 
             self.assertEqual(prices[key("MATERIAL-1")][1], 10.5)
 
-    def test_versioned_tamara_reference_wins_over_market_heuristic(self):
+    def test_confirmed_bnf_alias_wins_over_legacy_reference(self):
         sku = "EUB-C-CAB01-BNF001-A"
         apack = "APACK-EU-CAB01-BNF001-A"
         reference = load_tamara_pricing_reference()
-        self.assertEqual(reference[key(sku)], "12+9+23.1+24.1")
+        self.assertEqual(reference[key(sku)], "12+9+22.1+24.1")
         rules, authoritative = apply_target_business_category_rules(
             {},
             {"products": [{
@@ -408,7 +447,7 @@ class ReformSoLinePriceTests(unittest.TestCase):
             }]},
             empty_config(),
         )
-        self.assertEqual(rules[key(sku)].category_id, "12+9+23.1+24.1")
+        self.assertEqual(rules[key(sku)].category_id, "12+9+22.1+24.1")
         self.assertIn(key(sku), authoritative)
 
     def test_every_versioned_tamara_expression_has_configured_rates(self):

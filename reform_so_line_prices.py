@@ -668,11 +668,37 @@ def load_tamara_pricing_reference(path=TAMARA_PRICING_REFERENCE_PATH):
         raise ValueError("Nepalaikoma Tamaros kainodaros etalono versija.")
     if payload.get("conflicts"):
         raise ValueError("Tamaros kainodaros etalone yra prieštaringų SKU taisyklių.")
-    return {
+    reference = {
         key(row.get("sku")): text(row.get("expression"))
         for row in payload.get("sku_expressions") or []
         if text(row.get("sku")) and text(row.get("expression"))
     }
+    return apply_confirmed_family_category_aliases(reference)
+
+
+def apply_confirmed_family_category_aliases(reference):
+    """Apply Tamara-confirmed cabinet family equivalences within each SKU scope."""
+    result = dict(reference)
+    family_aliases = {"BNF": "BAS", "BOH": "BSK", "HCO": "COS"}
+    parsed = {}
+    pattern = re.compile(
+        r"^(.*-)(BAS|BNF|BSK|BOH|COS|HCO)(\d+)(-A)$",
+        re.IGNORECASE,
+    )
+    for sku, expression in reference.items():
+        match = pattern.match(sku)
+        if match:
+            parsed.setdefault((match.group(1), match.group(2).upper(), match.group(4)), set()).add(expression)
+
+    for sku in list(result):
+        match = pattern.match(sku)
+        if not match or match.group(2).upper() not in family_aliases:
+            continue
+        source_family = family_aliases[match.group(2).upper()]
+        source_expressions = parsed.get((match.group(1), source_family, match.group(4)), set())
+        if len(source_expressions) == 1:
+            result[sku] = next(iter(source_expressions))
+    return result
 
 
 def apply_target_business_category_rules(
@@ -773,12 +799,26 @@ def apply_target_business_category_rules(
             assign(sku, f"12+9+{pack}+24.1")
             continue
 
-        # A flat-pack cabinet gets its add-ons from the FPACK and HRD children.
-        # It still needs a zero-value Level I rule so every sellable cabinet in
-        # the current Target Dataset can enter the pricing scope.
+        # A flat-pack cabinet gets the same common cabinet pricing treatment:
+        # its add-ons come from the FPACK and HRD children.  Keep a named,
+        # zero-value Level I rule so these products are not reported as
+        # unassigned merely because no extra top-level fee is due.
         has_fpack = any(child.upper().startswith("FPACK-") for child in children)
-        if product_type == "CABINETS" and has_fpack and key(sku) not in result:
-            result[key(sku)] = PricingRule(sku, "", "", "")
+        current_rule = result.get(key(sku))
+        if (
+            product_type == "CABINETS" and has_fpack
+            and (
+                current_rule is None
+                or not current_rule.category_id
+                or not current_rule.category_name
+            )
+        ):
+            result[key(sku)] = PricingRule(
+                sku,
+                "CABINET",
+                "BENDRA SPINTELIŲ TAISYKLĖ",
+                "CABINETS",
+            )
 
     return result, authoritative
 
