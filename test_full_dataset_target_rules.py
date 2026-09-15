@@ -13,10 +13,36 @@ if "dotenv" not in sys.modules:
 from generate_full_validated_dataset import (
     add_full_target_metadata,
     apply_apack_hrd_target_rules,
+    exclude_erroneous_purchased_boms,
 )
 
 
 class FullDatasetTargetRulesTests(unittest.TestCase):
+    def test_confirmed_purchased_products_remain_in_catalog_without_bom(self):
+        sku = "EUB-P-ACC05-MIS001"
+        reform_products = {
+            sku: {
+                "is_parent": True,
+                "is_component": False,
+                "category": "INTERIOR STORAGE",
+            }
+        }
+        reform_lines = {sku: [{"component_sku": "OL8675-60"}]}
+
+        products, lines, excluded = exclude_erroneous_purchased_boms(
+            reform_products, reform_lines
+        )
+        result = add_full_target_metadata(
+            {"statistics": {}, "products": []}, products
+        )
+        catalog = {row["sku"]: row for row in result["product_catalog"]}
+
+        self.assertEqual(excluded, [sku])
+        self.assertNotIn(sku, lines)
+        self.assertFalse(products[sku]["is_parent"])
+        self.assertFalse(catalog[sku]["has_bom"])
+        self.assertEqual(catalog[sku]["role"], "NON-BOM COMPONENT")
+
     def test_full_catalog_keeps_non_bom_and_generated_products(self):
         reform_products = {
             "CABINET": {

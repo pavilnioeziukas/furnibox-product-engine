@@ -35,6 +35,35 @@ class FullDatasetTransformationError(RuntimeError):
     """Production taisyklės neleidžia saugiai užbaigti target Dataset."""
 
 
+REFORM_PURCHASED_NON_BOM_SKUS = frozenset({
+    "EUB-P-ACC05-MIS001",
+    "EUB-P-ACC05-MIS002",
+    "EUB-P-ACC05-MIS003",
+    "EUB-P-ACC05-MIS004",
+})
+
+
+def exclude_erroneous_purchased_boms(
+    reform_products: dict[str, dict],
+    reform_lines: dict[str, list[dict]],
+) -> tuple[dict[str, dict], dict[str, list[dict]], list[str]]:
+    """Keep confirmed purchased products while ignoring erroneous Reform BOMs."""
+    excluded = sorted(
+        sku for sku in REFORM_PURCHASED_NON_BOM_SKUS if sku in reform_lines
+    )
+    if not excluded:
+        return reform_products, reform_lines, []
+
+    products = {sku: dict(row) for sku, row in reform_products.items()}
+    for sku in excluded:
+        if sku in products:
+            products[sku]["is_parent"] = False
+    lines = {
+        sku: rows for sku, rows in reform_lines.items() if canon(sku) not in excluded
+    }
+    return products, lines, excluded
+
+
 def build_target_product_catalog(
     reform_products: dict[str, dict],
     dataset_record: dict,
@@ -283,6 +312,13 @@ def main() -> None:
     reform_lines = load_reform_bom_lines(
         reform_path
     )
+    reform_products, reform_lines, purchased_non_bom = (
+        exclude_erroneous_purchased_boms(reform_products, reform_lines)
+    )
+    if purchased_non_bom:
+        print("\nREFORM KLAIDA — PERKAMI PRODUKTAI PALIEKAMI BE BOM:")
+        for sku in purchased_non_bom:
+            print(f"- {sku}")
 
     odoo_map_path = (
         base / "output" / "production" / "Odoo_MAP.xlsx"
@@ -357,6 +393,7 @@ def main() -> None:
     print("\nFULL VALIDATED PRODUCT DATASET SUKURTAS")
     print("Aplinka:", dataset.environment)
     print("Reform BOM:", len(reform_lines))
+    print("Perkami produktai be klaidingo Reform BOM:", len(purchased_non_bom))
     print("Dataset produktai:", len(target_record["products"]))
     print(
         "Pilno katalogo produktai:",
