@@ -5,10 +5,18 @@ from collections import defaultdict
 from pathlib import Path
 
 
-def apply_allocation(products):
+def apply_allocation(products, source_components=None):
     from apply_apack_hrd_transfer import component_map, write_components
     rules = json.loads((Path(__file__).parent / 'manifest/apack_hrd_allocation_rules.json').read_text(encoding='utf-8'))
-    before = {sku: component_map(p) for sku, p in products.items()}
+    current = {sku: component_map(p) for sku, p in products.items()}
+    # transform_dataset may already have removed a shared HRD-A component for
+    # one analyzed APACK. Explicit family allocation must nevertheless use the
+    # immutable pre-transfer quantities for every consumer of that shared HRD.
+    before = (
+        {sku: dict(rows) for sku, rows in source_components.items()}
+        if source_components is not None
+        else current
+    )
     proposals = defaultdict(dict)
     pairs = []
     for sku, p in products.items():
@@ -39,7 +47,7 @@ def apply_allocation(products):
                     if previous is not None and abs(previous - qty) > 1e-9:
                         raise ValueError(f'{target}: conflicting allocation for shared component {c}')
                     proposals[target][c] = qty
-    after = {sku: dict(rows) for sku, rows in before.items()}
+    after = {sku: dict(rows) for sku, rows in current.items()}
     audit = []
     for sku, components in proposals.items():
         for c, qty in components.items():

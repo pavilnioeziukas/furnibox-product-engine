@@ -170,6 +170,81 @@ class ApplyApackHrdTransferTests(unittest.TestCase):
         )
         self.assertEqual(audit["statistics"]["component_transfers"], 2)
 
+    def test_explicit_family_allocation_uses_pre_transfer_shared_hrd_snapshot(self):
+        hardware = {
+            "CON7X50": 12,
+            "DOW8X30": 4,
+            "NAIL-1": 5,
+            "FPACK-UNI-P-ACC01-HRD029": 2,
+            "PRIZM-1": 4,
+            "CAB_SPACER": 4,
+        }
+        dataset = {
+            "schema_version": "1.0",
+            "dataset_id": "old-id",
+            "batch_reference": "REFORM_v08",
+            "statistics": {},
+            "products": [
+                product("APACK-EU-C-CAB01-BAS007-A", {"BOARD-7": 1}),
+                product("APACK-EU-C-CAB01-BAS008-A", {"BOARD-8": 1}),
+                product("UNI-P-ACC01-HRD200S-A", hardware),
+                product(
+                    "EU-C-CAB01-BAS007-A",
+                    {
+                        "APACK-EU-C-CAB01-BAS007-A": 1,
+                        "UNI-P-ACC01-HRD200S-A": 1,
+                    },
+                ),
+                product(
+                    "EU-C-CAB01-BAS008-A",
+                    {
+                        "APACK-EU-C-CAB01-BAS008-A": 1,
+                        "UNI-P-ACC01-HRD200S-A": 1,
+                    },
+                ),
+            ],
+        }
+        analysis = {
+            "statistics": {},
+            "results": [
+                {
+                    "status": "TRANSFERRED",
+                    "apack_sku": "APACK-EU-C-CAB01-BAS007-A",
+                    "hrd_a_sku": "UNI-P-ACC01-HRD200S-A",
+                    "analog_match_method": "PROFILE_CONSENSUS",
+                    "transfer_plan": [
+                        {"component_sku": "CON7X50", "quantity": 12}
+                    ],
+                },
+                {
+                    "status": "NO_TRANSFER",
+                    "apack_sku": "APACK-EU-C-CAB01-BAS008-A",
+                    "hrd_a_sku": "UNI-P-ACC01-HRD200S-A",
+                    "transfer_plan": [],
+                },
+            ],
+        }
+
+        transformed, _ = transform_dataset(dataset, analysis)
+        products = {row["sku"]: row for row in transformed["products"]}
+        expected_apack_hardware = {
+            sku: quantity
+            for sku, quantity in hardware.items()
+            if sku != "CAB_SPACER"
+        }
+        for apack_sku, board_sku in (
+            ("APACK-EU-C-CAB01-BAS007-A", "BOARD-7"),
+            ("APACK-EU-C-CAB01-BAS008-A", "BOARD-8"),
+        ):
+            self.assertEqual(
+                component_map(products[apack_sku]),
+                {board_sku: 1, **expected_apack_hardware},
+            )
+        self.assertEqual(
+            component_map(products["UNI-P-ACC01-HRD200S-A"]),
+            {"CAB_SPACER": 4},
+        )
+
     def test_requires_analysis_coverage_for_every_apack(self):
         dataset = self.dataset()
         dataset["products"].append(

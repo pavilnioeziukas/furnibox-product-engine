@@ -268,7 +268,9 @@ def transform_dataset(
             )
 
     from apack_hrd_allocation import apply_allocation
-    explicit_changed, allocation_audit = apply_allocation(products)
+    explicit_changed, allocation_audit = apply_allocation(
+        products, source_components=source_components
+    )
     changed_products.update(explicit_changed)
     for sku in explicit_changed:
         refresh_product_hash(products[sku])
