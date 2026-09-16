@@ -30,10 +30,11 @@ def _dataset():
 
 
 class ConfirmedPurchasedProductsTests(unittest.TestCase):
- def test_registry_has_exactly_71_unique_exact_skus_and_four_approved_aliases(self):
-    self.assertEqual(len(CONFIRMED_PURCHASED_NON_BOM_SKUS), 71)
-    self.assertEqual(len(CONFIRMED_PURCHASED_NON_BOM_KEYS), 71)
+ def test_registry_has_exactly_72_unique_exact_skus_and_four_approved_aliases(self):
+    self.assertEqual(len(CONFIRMED_PURCHASED_NON_BOM_SKUS), 72)
+    self.assertEqual(len(CONFIRMED_PURCHASED_NON_BOM_KEYS), 72)
     self.assertEqual(len(APPROVED_SUPPLIER_ALIASES), 4)
+    self.assertIn("uni-p-acc03-mis015", CONFIRMED_PURCHASED_NON_BOM_KEYS)
     self.assertIn("eub-p-acc01-hrd050-a", CONFIRMED_PURCHASED_NON_BOM_KEYS)
     self.assertIn("eub-p-acc01-hrd050", CONFIRMED_PURCHASED_NON_BOM_KEYS)
     self.assertIn("usb-p-acc01-hrd050", CONFIRMED_PURCHASED_NON_BOM_KEYS)
@@ -55,7 +56,7 @@ class ConfirmedPurchasedProductsTests(unittest.TestCase):
               for index, sku in enumerate(CONFIRMED_PURCHASED_NON_BOM_SKUS)}
     rules = {sku.casefold(): _rule(sku) for sku in CONFIRMED_PURCHASED_NON_BOM_SKUS}
     rows = calculate_confirmed_purchased_products(prices, rules, _dataset())
-    self.assertEqual(len(rows), 71)
+    self.assertEqual(len(rows), 72)
     self.assertEqual({row["sku"].casefold() for row in rows}, CONFIRMED_PURCHASED_NON_BOM_KEYS)
     self.assertTrue(all(row["type"] == "NON-BOM" and row["status"] == "COMPLETE" for row in rows))
     self.assertTrue(all(row["cost_source"].startswith("PURCHASE SOURCE") for row in rows))

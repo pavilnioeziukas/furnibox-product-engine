@@ -19,7 +19,7 @@ from generate_full_validated_dataset import (
 
 class FullDatasetTargetRulesTests(unittest.TestCase):
     def test_confirmed_purchased_products_remain_in_catalog_without_bom(self):
-        sku = "EUB-P-ACC05-MIS001"
+        sku = "UNI-P-ACC03-MIS015"
         reform_products = {
             sku: {
                 "is_parent": True,
