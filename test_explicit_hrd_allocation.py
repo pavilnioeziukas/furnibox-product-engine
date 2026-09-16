@@ -1,7 +1,9 @@
 import copy
+import json
 import unittest
 import sys
 import types
+from pathlib import Path
 if 'dotenv' not in sys.modules:
     stub = types.ModuleType('dotenv')
     stub.load_dotenv = lambda *args, **kwargs: None
@@ -13,6 +15,24 @@ def product(sku, components):
     return {'sku': sku, 'bom_type': 'MANUFACTURE', 'components': [{'sku': c, 'quantity': q} for c,q in components.items()]}
 
 class AllocationTests(unittest.TestCase):
+    def test_approved_family_pairs_have_identical_destinations(self):
+        rules = json.loads((Path(__file__).parent / 'manifest/apack_hrd_allocation_rules.json').read_text(encoding='utf-8'))
+        self.assertEqual(rules['BNF'], rules['BAS'])
+        self.assertEqual(rules['BOH'], rules['BSK'])
+        self.assertEqual(set(rules), {'BNF', 'BAS', 'UPP', 'WAL', 'TOP', 'COS', 'WAC', 'BOH', 'BSK', 'HCO', 'HIG', 'HBI'})
+
+    def test_boh_moves_lam186330_to_apack_and_keeps_lam276308_in_hrd(self):
+        a='APACK-EU-C-CAB01-BOH001-A'; h='HRD-BOH-A'; c='EU-C-CAB01-BOH001-A'
+        ps = {
+            a: product(a, {'BOARD': 1, 'LAM186330': 2}),
+            h: product(h, {'LAM276308': 3, 'CAB_SPACER': 4, 'CON7X50': 5}),
+            c: product(c, {a: 1, h: 1}),
+        }
+        changed, _ = apply_allocation(ps)
+        self.assertEqual(changed, {a, h})
+        self.assertEqual({x['sku']: x['quantity'] for x in ps[h]['components']}, {'LAM276308': 3, 'CAB_SPACER': 4})
+        self.assertEqual({x['sku']: x['quantity'] for x in ps[a]['components']}, {'BOARD': 1, 'LAM186330': 2, 'CON7X50': 5})
+
     def fixture(self):
         a='APACK-EU-C-CAB01-HCO001-A';h='HRD209-A';c='EU-C-CAB01-HCO001-A'
         return {a:product(a,{'BOARD':1}), h:product(h,{'CON7X50':43,'CAB_SPACER':4}), c:product(c,{a:1,h:1})},a,h

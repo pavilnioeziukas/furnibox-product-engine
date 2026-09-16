@@ -13,6 +13,20 @@
       "PRIZM-1"
     ]
   },
+  "BNF": {
+    "HRD-A": [
+      "CAB_SPACER"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
   "HIG": {
     "HRD-A": [
       "CAB_SPACER"
@@ -147,6 +161,22 @@
     ]
   },
   "BSK": {
+    "HRD-A": [
+      "CAB_SPACER",
+      "LAM276308"
+    ],
+    "APACK": [
+      "CON7X50",
+      "DOW8X30",
+      "FPACK-UNI-P-ACC01-HRD029",
+      "FPACK-UNI-P-ACC01-HRD030",
+      "FPACK-UNI-P-ACC01-HRD032",
+      "LAM186330",
+      "NAIL-1",
+      "PRIZM-1"
+    ]
+  },
+  "BOH": {
     "HRD-A": [
       "CAB_SPACER",
       "LAM276308"
