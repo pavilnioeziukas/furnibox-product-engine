@@ -2361,9 +2361,13 @@ def calculate_confirmed_purchased_products(prices, rules, dataset, existing_rows
     """Calculate confirmed purchased products once, never from BOM parts."""
     from confirmed_purchased_products import CONFIRMED_PURCHASED_NON_BOM_SKUS, purchased_price
 
+    catalog_rows = [
+        *(dataset or {}).get("product_catalog", []),
+        *(dataset or {}).get("products", []),
+    ]
     products = {
         key(product.get("sku")): product
-        for product in (dataset or {}).get("products", [])
+        for product in catalog_rows
         if text(product.get("sku"))
     }
     existing = {key(row.get("sku")): row for row in (existing_rows or [])}

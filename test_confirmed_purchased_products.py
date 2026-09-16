@@ -85,6 +85,18 @@ class ConfirmedPurchasedProductsTests(unittest.TestCase):
     self.assertIn("Missing purchase price", row["issues"])
     self.assertIn("Missing purchased-product pricing rule", row["issues"])
 
+ def test_non_bom_product_is_found_in_full_product_catalog(self):
+    sku = CONFIRMED_PURCHASED_NON_BOM_SKUS[0]
+    dataset = {"products": [], "product_catalog": [
+        {"sku": sku, "name_2": "Purchased product", "product_type": "INTERIOR STORAGE"}
+    ]}
+    prices = {sku.casefold(): (sku, 10.0, "LAST PURCHASE PRICE")}
+    rules = {sku.casefold(): _rule(sku)}
+    row = calculate_confirmed_purchased_products(prices, rules, dataset)[0]
+    self.assertEqual(row["status"], "COMPLETE")
+    self.assertEqual(row["name"], "Purchased product")
+    self.assertNotIn("Product not found", row["issues"])
+
 
  def test_unlisted_product_keeps_its_bom_unchanged(self):
     boms = {"OTHER": ("KEEP", [object()])}
