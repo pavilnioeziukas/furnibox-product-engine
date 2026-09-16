@@ -13,6 +13,8 @@ if "dotenv" not in sys.modules:
     sys.modules["dotenv"] = dotenv_stub
 
 from reform_so_line_prices import (
+    BASE_TARIFF_ASSEMBLED_SKUS,
+    apply_approved_base_tariffs,
     apply_confirmed_family_category_aliases,
     Item,
     add_generated_boms_to_graph,
@@ -44,6 +46,26 @@ from so_pricing_rules import (
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
+    def test_approved_assembled_variants_inherit_only_exact_base_tariffs(self):
+        base_rules = {
+            key(sku[:-2]): self.pricing_rule(sku[:-2], assembly=index + 0.25)
+            for index, sku in enumerate(BASE_TARIFF_ASSEMBLED_SKUS)
+        }
+        base_rules[key("UNLISTED")] = self.pricing_rule("UNLISTED", assembly=7)
+        result = apply_approved_base_tariffs(base_rules)
+        for sku in BASE_TARIFF_ASSEMBLED_SKUS:
+            self.assertEqual(result[key(sku)].sku, sku)
+            self.assertEqual(result[key(sku)].addons, result[key(sku[:-2])].addons)
+        self.assertNotIn(key("UNLISTED-A"), result)
+
+    def test_explicit_assembled_tariff_is_not_overwritten(self):
+        sku = BASE_TARIFF_ASSEMBLED_SKUS[0]
+        rules = {
+            key(sku[:-2]): self.pricing_rule(sku[:-2], assembly=1),
+            key(sku): self.pricing_rule(sku, assembly=2),
+        }
+        self.assertEqual(apply_approved_base_tariffs(rules)[key(sku)].assembly, 2)
+
     @staticmethod
     def pricing_rule(sku, assembly=0, storage=0, packaging=0):
         return PricingRule(

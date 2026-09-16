@@ -50,6 +50,16 @@ PRICING_EXCLUDED_SKUS = frozenset(sku.casefold() for sku in (
     "FPACK-WTP92-HRD001", "FPACK-WTP92-HRD001-A",
     "M0450161SPUS", "050119021", "290.08.005", "UNI-D-GEN99-DOC116",
 ))
+# User-approved 2026-09-16: these assembled variants use their exact base
+# product's LEVEL I BOM tariff. Do not generalize this to every -A SKU.
+BASE_TARIFF_ASSEMBLED_SKUS = (
+    "HRDW-ACC01-MIS101-A",
+    "HSHELF-BB-HRD-4-A", "HSHELF-BB-HRD-6-A",
+    "HSHELF-WW-HRD-4-A", "HSHELF-WW-HRD-6-A",
+    "HSHELFVEN-BB-HRD-6-A", "HSHELFVEN-WW-HRD-6-A",
+    "SLF-PINS-HRD-4-A", "SLF-PINS-HRD-6-A",
+    "UNI-P-ACC01-HRD500-A",
+)
 TAMARA_PRICING_REFERENCE_PATH = (
     Path(__file__).resolve().parent
     / "manifest"
@@ -674,6 +684,19 @@ def load_tamara_pricing_reference(path=TAMARA_PRICING_REFERENCE_PATH):
         if text(row.get("sku")) and text(row.get("expression"))
     }
     return apply_confirmed_family_category_aliases(reference)
+
+
+def apply_approved_base_tariffs(rules):
+    """Fill only approved missing -A rules from their exact base tariff."""
+    result = dict(rules)
+    for sku in BASE_TARIFF_ASSEMBLED_SKUS:
+        target = key(sku)
+        if target in result:
+            continue
+        base = result.get(key(sku[:-2]))
+        if base is not None:
+            result[target] = replace(base, sku=sku)
+    return result
 
 
 def apply_confirmed_family_category_aliases(reference):
@@ -3718,6 +3741,7 @@ def build_from_application_config(
     from component_tariffs import apply_rules as apply_component_tariffs
     rules = apply_component_tariffs(rules, document,
                                    target_dataset if dataset_path is not None else None)
+    rules = apply_approved_base_tariffs(rules)
     boms, graph = remove_non_bom_edges(boms, graph, document)
     from confirmed_purchased_products import (
         CONFIRMED_PURCHASED_NON_BOM_KEYS,
