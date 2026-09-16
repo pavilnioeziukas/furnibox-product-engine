@@ -50,6 +50,7 @@ PRICING_EXCLUDED_SKUS = frozenset(sku.casefold() for sku in (
     "FPACK-WTP92-HRD001", "FPACK-WTP92-HRD001-A",
     "M0450161SPUS", "050119021", "290.08.005", "UNI-D-GEN99-DOC116",
 ))
+PRICING_EXCLUDED_CATEGORIES = frozenset({"SINK"})
 # User-approved 2026-09-16: these assembled variants use their exact base
 # product's LEVEL I BOM tariff. Do not generalize this to every -A SKU.
 BASE_TARIFF_ASSEMBLED_SKUS = (
@@ -82,6 +83,14 @@ def text(value):
 
 def key(value):
     return text(value).casefold()
+
+
+def is_pricing_excluded(product):
+    return (
+        key(product.get("sku")) in PRICING_EXCLUDED_SKUS
+        or text(product.get("product_category")).upper()
+        in PRICING_EXCLUDED_CATEGORIES
+    )
 
 
 def number(value, default=0.0):
@@ -1101,7 +1110,7 @@ def load_reform_boms(
         top = text(
             product.get("sku")
         )
-        if key(top) in PRICING_EXCLUDED_SKUS:
+        if is_pricing_excluded(product):
             continue
 
         items = []
@@ -2382,7 +2391,12 @@ def calculate_non_bom(
 
 def calculate_confirmed_purchased_products(prices, rules, dataset, existing_rows=None):
     """Calculate confirmed purchased products once, never from BOM parts."""
-    from confirmed_purchased_products import CONFIRMED_PURCHASED_NON_BOM_SKUS, purchased_price
+    from confirmed_purchased_products import (
+        CONFIRMED_PURCHASED_NON_BOM_SKUS,
+        ODOO_ONLY_PURCHASED_SKUS,
+        UNRELEASED_PURCHASED_VARIANTS,
+        purchased_price,
+    )
 
     catalog_rows = [
         *(dataset or {}).get("product_catalog", []),
@@ -2401,8 +2415,14 @@ def calculate_confirmed_purchased_products(prices, rules, dataset, existing_rows
         price, price_key = purchased_price(prices, sku)
         rule = rules.get(sku_key)
         prior = existing.get(sku_key)
+        if (
+            sku in UNRELEASED_PURCHASED_VARIANTS
+            and product is None and price is None and rule is None
+            and prior is None
+        ):
+            continue
         issues = []
-        if product is None:
+        if product is None and sku not in ODOO_ONLY_PURCHASED_SKUS:
             issues.append(f"Product not found: {sku}")
         if price is None:
             issues.append(f"Missing purchase price: {sku}")
@@ -2417,12 +2437,12 @@ def calculate_confirmed_purchased_products(prices, rules, dataset, existing_rows
             "sku": sku,
             "name": (
                 text(product.get("name") or product.get("name_2"))
-                if product else text((prior or {}).get("name"))
+                if product else text((prior or {}).get("name") or (price or ("",))[0])
             ),
             "type": "NON-BOM",
             "category": (
                 text(product.get("product_type"))
-                if product else text((prior or {}).get("category"))
+                if product else text((prior or {}).get("category") or (rule.category_name if rule else ""))
             ),
             "pricing_category": rule.category_id if rule else "",
             "cost": cost,

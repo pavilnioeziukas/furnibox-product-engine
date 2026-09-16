@@ -11,6 +11,8 @@ from confirmed_purchased_products import (
     APPROVED_SUPPLIER_ALIASES,
     CONFIRMED_PURCHASED_NON_BOM_KEYS,
     CONFIRMED_PURCHASED_NON_BOM_SKUS,
+    ODOO_ONLY_PURCHASED_SKUS,
+    UNRELEASED_PURCHASED_VARIANTS,
     remove_confirmed_purchased_boms,
 )
 from reform_so_line_prices import calculate_confirmed_purchased_products
@@ -97,6 +99,19 @@ class ConfirmedPurchasedProductsTests(unittest.TestCase):
     self.assertEqual(row["status"], "COMPLETE")
     self.assertEqual(row["name"], "Purchased product")
     self.assertNotIn("Product not found", row["issues"])
+
+ def test_confirmed_odoo_only_drivers_do_not_require_reform_catalog(self):
+    prices = {sku.casefold(): (sku, 12.0, "PURCHASE PRICE") for sku in ODOO_ONLY_PURCHASED_SKUS}
+    rules = {sku.casefold(): _rule(sku) for sku in ODOO_ONLY_PURCHASED_SKUS}
+    rows = calculate_confirmed_purchased_products(prices, rules, {"products": []})
+    drivers = [row for row in rows if row["sku"] in ODOO_ONLY_PURCHASED_SKUS]
+    self.assertEqual(len(drivers), 6)
+    self.assertTrue(all(row["status"] == "COMPLETE" for row in drivers))
+    self.assertTrue(all(row["type"] == "NON-BOM" for row in drivers))
+
+ def test_unreleased_variants_are_not_invented_without_any_source(self):
+    rows = calculate_confirmed_purchased_products({}, {}, {"products": []})
+    self.assertFalse({row["sku"] for row in rows} & UNRELEASED_PURCHASED_VARIANTS)
 
 
  def test_unlisted_product_keeps_its_bom_unchanged(self):

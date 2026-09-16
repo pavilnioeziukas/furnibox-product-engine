@@ -27,6 +27,7 @@ from reform_so_line_prices import (
     exclude_bom_products_from_non_bom,
     inherit_generated_apack_rules,
     inherit_unambiguous_analog_rules,
+    is_pricing_excluded,
     key,
     fpack_labour_cost,
     load_target_dataset_graph,
@@ -46,6 +47,14 @@ from so_pricing_rules import (
 
 
 class ReformSoLinePriceTests(unittest.TestCase):
+    def test_sink_category_is_outside_our_pricing_scope(self):
+        self.assertTrue(is_pricing_excluded({
+            "sku": "UNI-P-SNK01-SNK001", "product_category": "SINK"
+        }))
+        self.assertFalse(is_pricing_excluded({
+            "sku": "UNI-P-ACC01-HRD107", "product_category": "ACCESSORIES"
+        }))
+
     def test_approved_assembled_variants_inherit_only_exact_base_tariffs(self):
         base_rules = {
             key(sku[:-2]): self.pricing_rule(sku[:-2], assembly=index + 0.25)

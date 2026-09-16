@@ -22,6 +22,19 @@ CONFIRMED_PURCHASED_NON_BOM_SKUS = (
     "USB-P-ACC02-SLF206", "USB-P-ACC02-SLF207", "USB-P-ACC02-SLF208",
 )
 
+# User-confirmed Odoo products that are not present in the Reform-derived
+# Target catalog. Their absence there is not evidence that the product is missing.
+ODOO_ONLY_PURCHASED_SKUS = frozenset({
+    "EUB-P-ACC02-MIS830", "EUB-P-ACC02-MIS831", "EUB-P-ACC02-MIS832",
+    "USB-P-ACC02-MIS830", "USB-P-ACC02-MIS831", "USB-P-ACC02-MIS832",
+})
+
+# These -A identities are retained as non-BOM safeguards, but they have no
+# product, purchase price, or rule. Do not invent three selling positions.
+UNRELEASED_PURCHASED_VARIANTS = frozenset({
+    "EUB-P-ACC01-HRD050-A", "EUB-P-ACC01-HRD051-A", "EUB-P-ACC01-HRD300-A",
+})
+
 APPROVED_SUPPLIER_ALIASES = {
     "EUB-P-ACC02-SLF201": "UTH1011", "UNI-P-ACC02-MIS950": "F0288000002",
     "UNI-P-ACC02-MIS952": "F0288000001", "UNI-P-ACC02-MIS017": "91970369",
