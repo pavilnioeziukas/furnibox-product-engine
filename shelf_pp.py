@@ -37,6 +37,12 @@ class ShelfPpTemplate:
 # klasės. Sąrašas sąmoningai baigtinis: naujas neatpažintas dydis turi sustabdyti
 # generavimą, o ne tyliai paveldėti galimai netinkamą pakuotę.
 SHELF_PP_PROFILE_FALLBACKS = {
+    # V10 SLF020/022 lentynos neturi savo PP Odoo, tačiau tokio pat dydžio
+    # FIX lentynos turi vienodą pakuotės ir etiketės BOM visoms trims spalvoms.
+    "EU-SREW-SHELF-1163X340-{COLOR}":
+        "EU-SREW-SHELF-FIX-1163X340-{COLOR}",
+    "EU-SREW-SHELF-1163X564-{COLOR}":
+        "EU-SREW-SHELF-FIX-1163X564-{COLOR}",
     "EU-SREW-SHELF-CORNER-R_LEFT-963X564-{COLOR}":
         "EU-SREW-SHELF-CORNER-R_LEFT-1238X564-{COLOR}",
     "EU-SREW-SHELF-CORNER-R_RIGHT-963X564-{COLOR}":
