@@ -596,6 +596,15 @@
       "sourceK": 16.002526315789474
     },
     {
+      "sku": "EUB-C-CAB03-PNL013",
+      "detail": "EU-PNL-2000x150-NO",
+      "length": 2000,
+      "width": 150,
+      "color": "NO",
+      "current": null,
+      "sourceK": 12.237631578947369
+    },
+    {
       "sku": "USB-C-CAB03-PNL001",
       "detail": "US-PNL-914x686-NO",
       "length": 914,
