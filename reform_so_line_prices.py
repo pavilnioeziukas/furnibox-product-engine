@@ -708,6 +708,16 @@ def apply_approved_base_tariffs(rules):
     return result
 
 
+def apply_missing_pnl013_rule(rules):
+    """Use the approved equal-length NO panel tariff for the new PNL013."""
+    result = dict(rules)
+    target = "EUB-C-CAB03-PNL013"
+    source = result.get(key("EUB-C-CAB03-PNL011"))
+    if key(target) not in result and source is not None:
+        result[key(target)] = replace(source, sku=target)
+    return result
+
+
 def apply_confirmed_family_category_aliases(reference):
     """Apply Tamara-confirmed cabinet family equivalences within each SKU scope."""
     result = dict(reference)
@@ -3722,6 +3732,7 @@ def build_from_application_config(
         known = {key(p["sku"]) for p in pricing_products}
         pricing_products.extend({"sku": p["sku"], "product_category": p.get("product_type", "")}
                                 for p in target_dataset["products"] if key(p["sku"]) not in known)
+        rules = apply_missing_pnl013_rule(rules)
         rules = inherit_generated_apack_rules(
             rules,
             target_dataset,
