@@ -8,6 +8,7 @@ from openpyxl import Workbook, load_workbook
 
 from refresh_reform_pricing import (
     blocked_component_price_requirements,
+    mark_approved_bom_impacts,
     read_pricing_status,
     read_current_sales_prices,
     refresh,
@@ -21,6 +22,159 @@ from refresh_reform_pricing import (
 
 
 class RefreshReformPricingTests(unittest.TestCase):
+    def test_refresh_uses_audited_staged_input_for_every_bom_reader(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "original.xlsx"
+            bom.write_bytes(b"original")
+            output = base / "result"
+            calls = []
+
+            def stage(source, destination):
+                self.assertEqual(source, bom)
+                destination.write_bytes(b"staged")
+                return [{"sku": "EUB-C-CAB03-PNL013", "action": "ADDED_APPROVED_BOM"}]
+
+            def fake_run_step(title, *args):
+                calls.append((title, args))
+                if "Galutinės Reform pardavimo kainos" in title:
+                    Path(args[args.index("--output-dir") + 1], "Reviewed_Pricing_Corrections_Applied.json").write_text(
+                        '{"applied_sku_versions": {}}', encoding="utf-8",
+                    )
+                if "reconciliation" in title.lower():
+                    Path(args[args.index("--output") + 1]).write_text(
+                        json.dumps({"mode": "READ_ONLY", "environment": "production", "summary": {}}), encoding="utf-8",
+                    )
+
+            with (
+                patch("refresh_reform_pricing.audit_input", side_effect=[
+                    {"status": "REVIEW", "issues": [{"type": "MISSING_APPROVED_BOM", "sku": "EUB-C-CAB03-PNL013"}]},
+                    {"status": "PASS", "issues": []},
+                ]),
+                patch("refresh_reform_pricing.stage_approved_v10_input", side_effect=stage),
+                patch("refresh_reform_pricing.run_step", side_effect=fake_run_step),
+                patch("refresh_reform_pricing.audit_generated_boms", return_value={"status": "PASS", "issues": []}),
+                patch("refresh_reform_pricing.read_pricing_status", return_value=({"COMPLETE": 1}, [])),
+                patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
+                patch("refresh_reform_pricing.write_furnix_parts_price_review"),
+                patch("refresh_reform_pricing.write_pricing_chain_audit"),
+                patch("refresh_reform_pricing.enrich_pricing_workbook"),
+                patch("refresh_reform_pricing.report_result_step"),
+                patch("refresh_reform_pricing.shutil.copy2") as copy_file,
+            ):
+                self.assertEqual(refresh(bom, output), 0)
+
+            staged = str(output / "Reform_Approved_BOM_Input.xlsx")
+            for _, args in calls:
+                if "--bom-input" in args:
+                    self.assertEqual(args[args.index("--bom-input") + 1], staged)
+                if "--input" in args:
+                    self.assertEqual(args[args.index("--input") + 1], staged)
+            self.assertEqual(json.loads((output / "Approved_BOM_Replay.json").read_text(encoding="utf-8"))["status"], "APPLIED")
+            self.assertEqual(json.loads((output / "Approved_Reform_Original_Input_Check.json").read_text(encoding="utf-8"))["status"], "REVIEW")
+            self.assertEqual(json.loads((output / "Approved_Reform_Input_Check.json").read_text(encoding="utf-8"))["status"], "PASS")
+            result = json.loads((output / "Reform_Pricing_Result.json").read_text(encoding="utf-8"))
+            self.assertEqual(result["original_bom_input"], str(bom))
+            self.assertEqual(result["bom_input"], staged)
+            self.assertEqual(result["approved_bom_replay_status"], "APPLIED")
+            self.assertTrue(any(
+                call.args[0].name == "Reviewed_Pricing_Corrections_Applied.json"
+                and call.args[1] == output / "Reviewed_Pricing_Corrections_Applied.json"
+                for call in copy_file.call_args_list
+            ))
+
+    def test_reform_input_format_error_stops_before_price_calculation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "Reform.xlsx"
+            bom.write_bytes(b"source")
+            output = base / "result"
+            with (
+                patch("refresh_reform_pricing.audit_input", return_value={
+                    "status": "REVIEW", "issues": [{"type": "INVALID_REFORM_INPUT_FORMAT"}],
+                }),
+                patch("refresh_reform_pricing.run_step") as run_step,
+            ):
+                with self.assertRaisesRegex(ValueError, "formatas neatpažintas"):
+                    refresh(bom, output)
+            run_step.assert_not_called()
+            report = json.loads((output / "Approved_Reform_Input_Check.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "REVIEW")
+
+    def test_approved_bom_review_blocks_only_dependent_sale_positions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            dataset = base / "dataset.json"
+            dataset.write_text(json.dumps({"products": [
+                {"sku": "SHELF", "components": [{"sku": "PNL013", "quantity": 1}]},
+                {"sku": "CABINET", "components": [{"sku": "SHELF", "quantity": 1}]},
+                {"sku": "OTHER", "components": [{"sku": "OTHER-PART", "quantity": 1}]},
+            ]}), encoding="utf-8")
+            candidate = base / "candidate.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "SO LINE PRICES"
+            sheet.append(["SKU", "Status", "Issues"])
+            for sku in ("CABINET", "SHELF", "OTHER"):
+                sheet.append([sku, "COMPLETE", None])
+            workbook.save(candidate)
+
+            impact = mark_approved_bom_impacts(
+                candidate, dataset,
+                {"issues": [{"type": "MISSING_APPROVED_BOM", "sku": "PNL013"}]},
+                {"issues": []},
+            )
+            self.assertEqual(impact["affected_sale_skus"], ["CABINET", "SHELF"])
+            result = load_workbook(candidate, data_only=True)
+            rows = {row[0].value: row[1].value for row in result.active.iter_rows(min_row=2)}
+            self.assertEqual(rows, {"CABINET": "BLOCKED", "SHELF": "BLOCKED", "OTHER": "COMPLETE"})
+            result.close()
+
+    def test_approved_bom_review_is_excluded_from_complete_only_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            dataset = base / "dataset.json"
+            dataset.write_text(json.dumps({"products": [
+                {"sku": "AFFECTED", "components": [{"sku": "PNL013", "quantity": 1}]},
+            ]}), encoding="utf-8")
+            candidate = base / "candidate.xlsx"
+            partial = base / "partial.xlsx"
+            workbook = Workbook()
+            prices = workbook.active
+            prices.title = "SO LINE PRICES"
+            prices.append(["SKU", "Position Type", "Status", "Issues"])
+            prices.append(["AFFECTED", "BOM", "COMPLETE", None])
+            prices.append(["UNAFFECTED", "BOM", "COMPLETE", None])
+            costs = workbook.create_sheet("BOM COMPONENT COSTS")
+            costs.append(["Top BOM SKU"])
+            costs.append(["AFFECTED"])
+            costs.append(["UNAFFECTED"])
+            breakdown = workbook.create_sheet("BOM CATEGORY BREAKDOWN")
+            breakdown.append(["Top SKU"])
+            breakdown.append(["AFFECTED"])
+            breakdown.append(["UNAFFECTED"])
+            non_bom = workbook.create_sheet("NON-BOM RULES")
+            non_bom.append(["SKU", "Status"])
+            workbook.create_sheet("DIAGNOSTICS")
+            workbook.create_sheet("INFO")
+            workbook.save(candidate)
+
+            impact = mark_approved_bom_impacts(
+                candidate, dataset,
+                {"issues": [{"type": "MISSING_APPROVED_BOM", "sku": "PNL013"}]},
+                {"issues": []},
+            )
+            self.assertEqual(impact["unmatched_issue_skus"], [])
+            statuses, blocked = read_pricing_status(candidate)
+            self.assertEqual(statuses, {"BLOCKED": 1, "COMPLETE": 1})
+            write_complete_only_price_workbook(candidate, partial, blocked)
+            result = load_workbook(partial, data_only=True, read_only=True)
+            self.assertEqual(
+                [row[0] for row in result["SO LINE PRICES"].iter_rows(min_row=2, values_only=True)],
+                ["UNAFFECTED"],
+            )
+            result.close()
+
     def test_extracts_component_price_requirements_from_blockers(self):
         result = blocked_component_price_requirements([
             {
@@ -73,6 +227,12 @@ class RefreshReformPricingTests(unittest.TestCase):
                     )
 
             with (
+                patch("refresh_reform_pricing.audit_input", return_value={
+                    "status": "PASS", "issues": [], "checked_boms": 8,
+                }),
+                patch("refresh_reform_pricing.audit_generated_boms", return_value={
+                    "status": "PASS", "issues": [], "checked_parent_boms": 11,
+                }),
                 patch(
                     "refresh_reform_pricing.run_step",
                     side_effect=fake_run_step,
@@ -133,6 +293,92 @@ class RefreshReformPricingTests(unittest.TestCase):
                 list(range(1, 8)),
             )
 
+    def test_partial_replay_keeps_repairs_and_blocks_only_conflict(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "original.xlsx"
+            bom.write_bytes(b"original")
+            output = base / "result"
+            calls = []
+            conflict = {"type": "CONFLICTING_APPROVED_BOM", "sku": "UNI-P-ACC01-HRD207D"}
+
+            def stage(source, destination):
+                self.assertEqual(source, bom)
+                destination.write_bytes(b"partially-staged")
+                return [
+                    {"sku": "UNI-P-ACC01-HRD207D", "action": "CONFLICT_REVIEW"},
+                    {"sku": "EUB-C-CAB03-PNL013", "action": "ADDED_APPROVED_BOM"},
+                ]
+
+            def fake_run_step(title, *args):
+                calls.append(args)
+                if "reconciliation" in title.lower():
+                    Path(args[args.index("--output") + 1]).write_text(
+                        json.dumps({"mode": "READ_ONLY", "environment": "production", "summary": {}}),
+                        encoding="utf-8",
+                    )
+
+            blocked = [{"sku": "AFFECTED", "position_type": "BOM", "status": "BLOCKED", "issues": "HRD207D conflict"}]
+            with (
+                patch("refresh_reform_pricing.audit_input", side_effect=[
+                    {"status": "REVIEW", "issues": [conflict, {"type": "MISSING_APPROVED_BOM", "sku": "EUB-C-CAB03-PNL013"}]},
+                    {"status": "REVIEW", "issues": [conflict]},
+                ]),
+                patch("refresh_reform_pricing.stage_approved_v10_input", side_effect=stage),
+                patch("refresh_reform_pricing.run_step", side_effect=fake_run_step),
+                patch("refresh_reform_pricing.audit_generated_boms", return_value={"status": "PASS", "issues": []}),
+                patch("refresh_reform_pricing.mark_approved_bom_impacts", return_value={"affected_sale_skus": ["AFFECTED"]}) as impact,
+                patch("refresh_reform_pricing.read_pricing_status", return_value=({"COMPLETE": 10, "BLOCKED": 1}, blocked)),
+                patch("refresh_reform_pricing.write_blocker_report"),
+                patch("refresh_reform_pricing.write_complete_only_price_workbook") as partial_writer,
+                patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
+                patch("refresh_reform_pricing.write_furnix_parts_price_review"),
+                patch("refresh_reform_pricing.write_pricing_chain_audit"),
+                patch("refresh_reform_pricing.enrich_pricing_workbook"),
+                patch("refresh_reform_pricing.report_result_step"),
+                patch("refresh_reform_pricing.shutil.copy2"),
+            ):
+                self.assertEqual(refresh(bom, output), 2)
+
+            staged = str(output / "Reform_Approved_BOM_Input.xlsx")
+            self.assertTrue(all(args[args.index("--bom-input") + 1] == staged
+                                for args in calls if "--bom-input" in args))
+            self.assertEqual(impact.call_args.args[2]["issues"], [conflict])
+            self.assertEqual(json.loads((output / "Approved_BOM_Replay.json").read_text(encoding="utf-8"))["status"], "PARTIAL_REVIEW")
+            self.assertEqual(json.loads((output / "Reform_Pricing_Result.json").read_text(encoding="utf-8"))["approved_bom_replay_status"], "PARTIAL_REVIEW")
+            partial_writer.assert_called_once()
+            self.assertFalse((output / "Reform_SO_Line_Prices.xlsx").exists())
+
+    def test_affected_price_cannot_be_released_if_block_marker_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "original.xlsx"
+            bom.write_bytes(b"original")
+            output = base / "result"
+
+            def fake_run_step(title, *args):
+                if "reconciliation" in title.lower():
+                    Path(args[args.index("--output") + 1]).write_text(
+                        json.dumps({"mode": "READ_ONLY", "environment": "production", "summary": {}}),
+                        encoding="utf-8",
+                    )
+
+            with (
+                patch("refresh_reform_pricing.audit_input", return_value={
+                    "status": "REVIEW", "issues": [{"type": "CONFLICTING_APPROVED_BOM", "sku": "HRD207D"}],
+                }),
+                patch("refresh_reform_pricing.stage_approved_v10_input", side_effect=ValueError("CONFLICT")),
+                patch("refresh_reform_pricing.run_step", side_effect=fake_run_step),
+                patch("refresh_reform_pricing.audit_generated_boms", return_value={"status": "PASS", "issues": []}),
+                patch("refresh_reform_pricing.mark_approved_bom_impacts", return_value={"affected_sale_skus": ["AFFECTED"]}),
+                patch("refresh_reform_pricing.read_pricing_status", return_value=({"COMPLETE": 1}, [])),
+                patch("refresh_reform_pricing.enrich_pricing_workbook") as release,
+            ):
+                with self.assertRaisesRegex(ValueError, "nepažymėtos BLOCKED: AFFECTED"):
+                    refresh(bom, output)
+            release.assert_not_called()
+            self.assertFalse((output / "Reform_SO_Line_Prices.xlsx").exists())
+
     def test_blocked_refresh_publishes_safe_complete_only_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -159,6 +405,12 @@ class RefreshReformPricingTests(unittest.TestCase):
                 "issues": "Missing component price: PART",
             }]
             with (
+                patch("refresh_reform_pricing.audit_input", return_value={
+                    "status": "PASS", "issues": [], "checked_boms": 8,
+                }),
+                patch("refresh_reform_pricing.audit_generated_boms", return_value={
+                    "status": "PASS", "issues": [], "checked_parent_boms": 11,
+                }),
                 patch("refresh_reform_pricing.run_step", side_effect=fake_run_step),
                 patch(
                     "refresh_reform_pricing.read_pricing_status",
