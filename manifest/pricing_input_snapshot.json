@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "purpose": "Block pricing release when effective R001/R007 inputs drift from the accepted Tamara catalog baseline",
   "reference": {
     "file": "Furnibox_pilnas_kainodaros_failas_V10_pagrindu_Tamaros_perziurai_2026-09-17.xlsx",
@@ -14,13 +14,13 @@
     {"rule": "R007", "sku": "UNI-D-GEN99-DOC200", "price": 0.02}
   ],
   "tamara_catalog_adjustments": {
-    "status": "USER_ACCEPTED_WORKING_ASSUMPTION",
-    "accepted_on": "2026-09-21",
+    "status": "APPROVED_BY_EDGARAS_ON_BEHALF_OF_TAMARA",
+    "approved_on": "2026-09-21",
     "difference_count_vs_2026_09_17_plus_overlays": 114,
     "r001_count": 73,
     "r007_count": 41,
-    "note": "Current persisted purchase price adjustments are treated as Tamara-provided catalog prices."
+    "note": "Edgaras approved the current R001/R007 snapshot on behalf of Tamara. Each generated price must retain its concrete source comment: explicit Tamara adjustment comment or Production Odoo Last Purchase Price."
   },
   "expected_record_count": 2837,
-  "expected_sha256": "ae7106f0db556f7287b5cc4df47018d05bcc4e4b2cf02b75105f844be0b038e9"
+  "expected_sha256": "1d151132e514232c69e4bc56b3099720490885672d5dc59e9390a36993147218"
 }
