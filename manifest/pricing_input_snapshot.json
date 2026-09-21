@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "Block pricing release when effective R001/R007 inputs drift from the approved baseline",
+  "purpose": "Block pricing release when effective R001/R007 inputs drift from the accepted Tamara catalog baseline",
   "reference": {
     "file": "Furnibox_pilnas_kainodaros_failas_V10_pagrindu_Tamaros_perziurai_2026-09-17.xlsx",
     "pricing_run": "REFORM-20260917T093351",
@@ -13,6 +13,14 @@
     {"rule": "R007", "sku": "EUB-D-GEN99-DOC001", "price": 0.06},
     {"rule": "R007", "sku": "UNI-D-GEN99-DOC200", "price": 0.02}
   ],
+  "tamara_catalog_adjustments": {
+    "status": "USER_ACCEPTED_WORKING_ASSUMPTION",
+    "accepted_on": "2026-09-21",
+    "difference_count_vs_2026_09_17_plus_overlays": 114,
+    "r001_count": 73,
+    "r007_count": 41,
+    "note": "Current persisted purchase price adjustments are treated as Tamara-provided catalog prices."
+  },
   "expected_record_count": 2837,
-  "expected_sha256": "14e2bf6e2120748f5675ffbdb4eed1ae487adae59487e38edbdd35954b955ead"
+  "expected_sha256": "ae7106f0db556f7287b5cc4df47018d05bcc4e4b2cf02b75105f844be0b038e9"
 }
