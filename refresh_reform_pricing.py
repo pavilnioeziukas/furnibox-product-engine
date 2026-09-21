@@ -23,6 +23,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from pricing_control import enrich_pricing_workbook
 from approved_bom_replay import stage_approved_v10_input
 from reform_input_acceptance import audit_generated_boms, audit_input
+from pricing_input_control import validate_pricing_input_snapshot
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1179,6 +1180,10 @@ def refresh(
             *scope_arguments,
         )
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
+        validate_pricing_input_snapshot(
+            candidate,
+            output_dir / "Pricing_Input_Snapshot.json",
+        )
         generated_review = audit_generated_boms(candidate)
         (output_dir / "Approved_Generated_BOM_Check.json").write_text(
             json.dumps(generated_review, ensure_ascii=False, indent=2) + "\n",
