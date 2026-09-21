@@ -3832,6 +3832,12 @@ def build_from_application_config(
     if document.get('review_corrections_applied'):
         save_config(config_path, document)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    (output_path.parent / "Reviewed_Pricing_Corrections_Applied.json").write_text(
+        json.dumps(
+            {"applied_sku_versions": document.get("review_corrections_applied", {})},
+            ensure_ascii=False, indent=2,
+        ) + "\n", encoding="utf-8",
+    )
     (output_path.parent / "Calculator_Settings.json").write_text(
         json.dumps(calculator_snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
 

@@ -21,6 +21,9 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
 from pricing_control import enrich_pricing_workbook
+from approved_bom_replay import stage_approved_v10_input
+from reform_input_acceptance import audit_generated_boms, audit_input
+from pricing_input_control import validate_pricing_input_snapshot
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -93,6 +96,86 @@ def read_pricing_status(path: Path) -> tuple[Counter, list[dict]]:
             })
     workbook.close()
     return statuses, blocked
+
+
+def mark_approved_bom_impacts(
+    candidate: Path, dataset_path: Path, input_review: dict, generated_review: dict,
+) -> dict:
+    """Block only sale SKUs depending on a disputed approved BOM."""
+    from collections import defaultdict, deque
+
+    reverse = defaultdict(set)
+    dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    for product in dataset.get("products") or []:
+        parent = str(product.get("sku") or "").strip().upper()
+        for component in product.get("components") or []:
+            child = str(component.get("sku") or "").strip().upper()
+            if parent and child:
+                reverse[child].add(parent)
+
+    reasons = defaultdict(set)
+    issue_roots = set()
+    for issue in input_review.get("issues") or []:
+        sku = str(issue.get("sku") or "").strip().upper()
+        if not sku:
+            continue
+        issue_roots.add(sku)
+        label = f"APPROVED BOM INPUT REVIEW: {sku} ({issue['type']})"
+        queue = deque([sku])
+        seen = set()
+        while queue:
+            current = queue.popleft()
+            if current in seen:
+                continue
+            seen.add(current)
+            reasons[current].add(label)
+            queue.extend(reverse[current] - seen)
+    for issue in generated_review.get("issues") or []:
+        top = str(issue.get("top_bom_sku") or issue.get("sku") or "").strip().upper()
+        if top:
+            issue_roots.add(top)
+            label = f"APPROVED GENERATED BOM REVIEW: {top} ({issue['type']})"
+            queue = deque([top])
+            seen = set()
+            while queue:
+                current = queue.popleft()
+                if current in seen:
+                    continue
+                seen.add(current)
+                reasons[current].add(label)
+                queue.extend(reverse[current] - seen)
+
+    workbook = load_workbook(candidate)
+    try:
+        sheet = workbook["SO LINE PRICES"]
+        columns = {str(cell.value or ""): cell.column for cell in sheet[1]}
+        affected = set()
+        for row_number in range(2, sheet.max_row + 1):
+            sku = str(sheet.cell(row_number, columns["SKU"]).value or "").strip().upper()
+            if sku not in reasons:
+                continue
+            affected.add(sku)
+            sheet.cell(row_number, columns["Status"], "BLOCKED")
+            issue_cell = sheet.cell(row_number, columns["Issues"])
+            existing = str(issue_cell.value or "").strip()
+            issue_cell.value = "; ".join(filter(None, [existing, *sorted(reasons[sku])]))
+        if affected:
+            workbook.save(candidate)
+        unresolved = []
+        for root in issue_roots:
+            queue = deque([root])
+            seen = set()
+            while queue:
+                current = queue.popleft()
+                if current in seen:
+                    continue
+                seen.add(current)
+                queue.extend(reverse[current] - seen)
+            if not seen.intersection(affected):
+                unresolved.append(root)
+        return {"affected_sale_skus": sorted(affected), "unmatched_issue_skus": sorted(unresolved)}
+    finally:
+        workbook.close()
 
 
 def write_blocker_report(path: Path, statuses: Counter, blocked: list[dict]) -> None:
@@ -996,6 +1079,43 @@ def refresh(
 ) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     PRODUCTION_DIR.mkdir(parents=True, exist_ok=True)
+    original_bom_input = bom_input
+    replay_status = "NOT_NEEDED"
+    input_review = audit_input(bom_input)
+    (output_dir / "Approved_Reform_Input_Check.json").write_text(
+        json.dumps(input_review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+    )
+    if any(issue["type"] == "INVALID_REFORM_INPUT_FORMAT" for issue in input_review["issues"]):
+        raise ValueError(
+            "Įkelto Reform BOM failo formatas neatpažintas. "
+            "Žr. Approved_Reform_Input_Check.json; saugaus pozicijų atskyrimo atlikti negalima."
+        )
+    if input_review["issues"]:
+        staged_input = output_dir / "Reform_Approved_BOM_Input.xlsx"
+        try:
+            replay_actions = stage_approved_v10_input(bom_input, staged_input)
+            staged_review = audit_input(staged_input)
+        except ValueError as error:
+            replay_status = "REVIEW"
+            staged_input.unlink(missing_ok=True)
+            (output_dir / "Approved_BOM_Replay.json").write_text(
+                json.dumps({"status": "REVIEW", "reason": str(error)}, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        else:
+            replay_status = "PARTIAL_REVIEW" if staged_review["issues"] else "APPLIED"
+            (output_dir / "Approved_Reform_Original_Input_Check.json").write_text(
+                json.dumps(input_review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+            )
+            (output_dir / "Approved_BOM_Replay.json").write_text(
+                json.dumps({"status": replay_status, "actions": replay_actions}, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            bom_input = staged_input
+            input_review = staged_review
+            (output_dir / "Approved_Reform_Input_Check.json").write_text(
+                json.dumps(input_review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+            )
     pricing_scope_snapshot = None
     if production_bom_scope is not None:
         pricing_scope_snapshot = json.loads(production_bom_scope.read_text(encoding="utf-8"))
@@ -1060,8 +1180,41 @@ def refresh(
             *scope_arguments,
         )
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
+        validate_pricing_input_snapshot(
+            candidate,
+            output_dir / "Pricing_Input_Snapshot.json",
+        )
+        generated_review = audit_generated_boms(candidate)
+        (output_dir / "Approved_Generated_BOM_Check.json").write_text(
+            json.dumps(generated_review, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if any(not issue.get("sku") and not issue.get("top_bom_sku") for issue in generated_review["issues"]):
+            raise ValueError(
+                "Sugeneruoto BOM patikros duomenys nepakankami paveiktoms pozicijoms nustatyti. "
+                "Žr. Approved_Generated_BOM_Check.json; kainos neišleistos."
+            )
+        impact = None
+        if input_review["issues"] or generated_review["issues"]:
+            impact = mark_approved_bom_impacts(candidate, target_dataset, input_review, generated_review)
+            (output_dir / "Approved_BOM_Price_Impact.json").write_text(
+                json.dumps(impact, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+            )
+            if not impact["affected_sale_skus"]:
+                raise ValueError(
+                    "Patvirtinto BOM neatitikimas nebuvo susietas su jokia kainodaros pozicija; "
+                    "saugaus dalinio failo sukurti negalima. Žr. Approved_BOM_Price_Impact.json."
+                )
         report_result_step(1, 7, "Tikrinamos kainos ir BLOCKED pozicijos")
         statuses, blocked = read_pricing_status(candidate)
+        if impact is not None:
+            blocked_skus = {str(item["sku"] or "").strip().upper() for item in blocked}
+            unblocked_impacts = set(impact["affected_sale_skus"]) - blocked_skus
+            if unblocked_impacts:
+                raise ValueError(
+                    "Patvirtinto BOM neatitikimo paveiktos kainos nepažymėtos BLOCKED: "
+                    + ", ".join(sorted(unblocked_impacts))
+                )
         report_result_step(2, 7, "Kuriamas kainodaros grandinės auditas")
         write_pricing_chain_audit(
             candidate,
@@ -1092,6 +1245,8 @@ def refresh(
         result = {
             "generated_at": generated_at,
             "bom_input": str(bom_input),
+            "original_bom_input": str(original_bom_input),
+            "approved_bom_replay_status": replay_status,
             "statuses": dict(statuses),
             "blocked": blocked,
             "target_reconciliation": reconciliation_summary,
@@ -1121,6 +1276,9 @@ def refresh(
         calculator_snapshot = candidate.parent / "Calculator_Settings.json"
         if calculator_snapshot.exists():
             shutil.copy2(calculator_snapshot, output_dir / "Calculator_Settings.json")
+        reviewed_corrections = candidate.parent / "Reviewed_Pricing_Corrections_Applied.json"
+        if reviewed_corrections.exists():
+            shutil.copy2(reviewed_corrections, output_dir / reviewed_corrections.name)
 
         if blocked:
             report_result_step(

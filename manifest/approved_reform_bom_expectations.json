@@ -1,0 +1,49 @@
+{
+  "version": "2026-09-17-v10-approved-corrections",
+  "source": "User-approved Tamara HRD207D correction and seven missing V10 BOM positions",
+  "boms": {
+    "UNI-P-ACC01-HRD207D": {
+      "CON7X50": 10,
+      "DOW8X30": 4,
+      "NAIL-1": 5,
+      "FPACK-UNI-P-ACC01-HRD029": 2,
+      "CAB_SPACER": 4,
+      "PRIZM-1": 4,
+      "LAM186330": 4,
+      "LAM276308": 1
+    },
+    "EUB-C-CAB03-PNL013": {
+      "EU-PNL-2000x150-NO": 1
+    },
+    "EUB-C-CAB01-SLF020": {
+      "EU-SREW-SHELF-1163x564-WW": 1,
+      "SLF-PINS-HRD-6": 1
+    },
+    "EUB-C-CAB02-SLF020": {
+      "EU-SREW-SHELF-1163x564-BB": 1,
+      "SLF-PINS-HRD-6": 1
+    },
+    "EUB-C-CAB03-SLF020": {
+      "EU-SREW-SHELF-1163x564-NO": 1,
+      "SLF-PINS-HRD-6": 1
+    },
+    "EUB-C-CAB01-SLF022": {
+      "EU-SREW-SHELF-1163x340-WW": 1,
+      "SLF-PINS-HRD-4": 1
+    },
+    "EUB-C-CAB02-SLF022": {
+      "EU-SREW-SHELF-1163x340-BB": 1,
+      "SLF-PINS-HRD-4": 1
+    },
+    "EUB-C-CAB03-SLF022": {
+      "EU-SREW-SHELF-1163x340-NO": 1,
+      "SLF-PINS-HRD-4": 1
+    }
+  },
+  "post_generation_boms": {
+    "UNI-P-ACC01-HRD207D-A": {
+      "CAB_SPACER": 4,
+      "LAM276308": 1
+    }
+  }
+}

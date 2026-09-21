@@ -29,7 +29,7 @@ class ComponentPriceWorkbookTests(unittest.TestCase):
         ):
             self.assertEqual(
                 resolve_shared_data_dir(),
-                Path("/tmp/canonical-shared"),
+                Path("/tmp/canonical-shared").resolve(),
             )
 
     def test_adjustment_without_purchase_history_is_included_as_reform_price(self):

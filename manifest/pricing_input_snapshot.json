@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "purpose": "Block pricing release when effective R001/R007 inputs drift from the accepted Tamara catalog baseline",
+  "reference": {
+    "file": "Furnibox_pilnas_kainodaros_failas_V10_pagrindu_Tamaros_perziurai_2026-09-17.xlsx",
+    "pricing_run": "REFORM-20260917T093351",
+    "git_commit": "32d96656ad75df9109e8192ef73942e847ef0d08"
+  },
+  "approved_overlays": [
+    {"rule": "R001", "sku": "US-VENRAIL-875-WW", "price": 9.39},
+    {"rule": "R001", "sku": "US-VENRAIL-875-BB", "price": 9.39},
+    {"rule": "R001", "sku": "2365619846", "price": 115.479},
+    {"rule": "R007", "sku": "EUB-D-GEN99-DOC001", "price": 0.06},
+    {"rule": "R007", "sku": "UNI-D-GEN99-DOC200", "price": 0.02}
+  ],
+  "tamara_catalog_adjustments": {
+    "status": "APPROVED_BY_EDGARAS_ON_BEHALF_OF_TAMARA",
+    "approved_on": "2026-09-21",
+    "difference_count_vs_2026_09_17_plus_overlays": 114,
+    "r001_count": 73,
+    "r007_count": 41,
+    "note": "Edgaras approved the current R001/R007 snapshot on behalf of Tamara. Each generated price must retain its concrete source comment: explicit Tamara adjustment comment or Production Odoo Last Purchase Price."
+  },
+  "expected_record_count": 2837,
+  "expected_sha256": "1d151132e514232c69e4bc56b3099720490885672d5dc59e9390a36993147218"
+}

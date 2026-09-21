@@ -4,6 +4,10 @@
       "adjusted_purchase_price": 0.13,
       "comment": "User confirmed 2026-09-16"
     },
+    "2365619846": {
+      "adjusted_purchase_price": 109.98,
+      "comment": "Tamara adjustment and last purchase price source confirmed from prior pricing files"
+    },
     "79T853E": {
       "adjusted_purchase_price": 1.63,
       "comment": "User confirmed 2026-09-16"
@@ -15,6 +19,10 @@
     "EU FP PACK": {
       "adjusted_purchase_price": 2.09,
       "comment": "Tamara approved 2026-09-01"
+    },
+    "EUB-D-GEN99-DOC001": {
+      "adjusted_purchase_price": 0.06,
+      "comment": "Approved purchase price restored from prior complete Reform pricing output"
     },
     "L0377": {
       "adjusted_purchase_price": 0.15,
@@ -44,9 +52,21 @@
       "adjusted_purchase_price": 5.26,
       "comment": "User confirmed purchased non-BOM product 2026-09-16"
     },
+    "UNI-D-GEN99-DOC200": {
+      "adjusted_purchase_price": 0.02,
+      "comment": "Approved purchase price restored from prior complete Reform pricing output"
+    },
     "US FP PACK": {
       "adjusted_purchase_price": 2.09,
       "comment": "Tamara approved 2026-09-01"
+    },
+    "US-VENRAIL-875-BB": {
+      "adjusted_purchase_price": 9.39,
+      "comment": "Tamara purchase price restored from prior pricing workbook"
+    },
+    "US-VENRAIL-875-WW": {
+      "adjusted_purchase_price": 9.39,
+      "comment": "Tamara purchase price restored from prior pricing workbook"
     }
   }
 }

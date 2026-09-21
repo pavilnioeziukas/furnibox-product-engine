@@ -1081,6 +1081,8 @@ class ReformSoLinePriceTests(unittest.TestCase):
             ws.append(["PART", "Part", 5, 1, 5]); wb.save(prices)
 
             self.assertEqual(build_from_application_config(bom_input, prices, config, output), (1, 0, 0))
+            applied = json.loads((output.parent / "Reviewed_Pricing_Corrections_Applied.json").read_text(encoding="utf-8"))
+            self.assertIn("applied_sku_versions", applied)
             result = load_workbook(output, data_only=True)["SO LINE PRICES"]
             headers = {cell.value: cell.column for cell in result[1]}
             self.assertAlmostEqual(result.cell(2, headers["Final Reform SO Unit Price"]).value, 41.16)
