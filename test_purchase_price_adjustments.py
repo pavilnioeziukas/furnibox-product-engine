@@ -12,14 +12,19 @@ class PurchasePriceAdjustmentDefaultsTest(unittest.TestCase):
             adjustments = load_adjustments(Path(directory) / "missing.json")
 
         expected = {
+            "2365619846": 109.98,
             "EU FP PACK": 2.09,
+            "EUB-D-GEN99-DOC001": 0.06,
             "US FP PACK": 2.09,
+            "US-VENRAIL-875-BB": 9.39,
+            "US-VENRAIL-875-WW": 9.39,
             "N PACK EU": 4.89,
             "N PACK US": 4.89,
             "SHELF PACK": 1.29,
             "L0377": 0.15,
             "STICKER UP": 0.18,
             "TERMO 90X48": 0.02,
+            "UNI-D-GEN99-DOC200": 0.02,
         }
         self.assertEqual(
             {
