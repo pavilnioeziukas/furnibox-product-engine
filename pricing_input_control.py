@@ -86,14 +86,22 @@ def build_pricing_input_snapshot(workbook_path: Path) -> dict[str, Any]:
             records.values(),
             key=lambda record: (record["rule"], record["sku"].casefold()),
         )
+        canonical_prices = [
+            {
+                "rule": record["rule"],
+                "sku": record["sku"],
+                "price": record["price"],
+            }
+            for record in ordered
+        ]
         canonical = json.dumps(
-            ordered,
+            canonical_prices,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "record_count": len(ordered),
             "sha256": hashlib.sha256(canonical).hexdigest(),
             "records": ordered,

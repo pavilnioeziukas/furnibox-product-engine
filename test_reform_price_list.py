@@ -25,9 +25,12 @@ class ReformPriceListTests(unittest.TestCase):
             ws.append(["ACCS-1", "Accessory", "Reform Supply", 2, 2.5, 1.05, 2.625])
             ws.append(["PART-1", "Old cabinet row", "Furnix", 9, 9, 1, 9])
             adjustments = wb.create_sheet("PURCHASE PRICE ADJUSTMENTS")
-            adjustments.append(["Internal Reference", "Adjusted Purchase Price"])
-            adjustments.append(["ACCS-1", 2.75])
-            adjustments.append(["PART-1", 9])
+            adjustments.append([
+                "Internal Reference", "Adjusted Purchase Price",
+                "Real Purchase Price (reference)", "Comment",
+            ])
+            adjustments.append(["ACCS-1", 2.75, 2, "Tamara catalog 2026-09-01"])
+            adjustments.append(["PART-1", 9, 9, ""])
             wb.save(components)
 
             wb = Workbook()
@@ -66,11 +69,60 @@ class ReformPriceListTests(unittest.TestCase):
             component_row = rows["ACCS-1"]
             self.assertEqual(
                 prices.cell(component_row, headers["Price Source"]).value,
-                "APPROVED PURCHASE PRICE ADJUSTMENT × REFORM MARKUP",
+                "APPROVED PURCHASE PRICE ADJUSTMENT — Tamara catalog 2026-09-01 × REFORM MARKUP",
+            )
+            self.assertEqual(
+                prices.cell(component_row, headers["Price Source Comment"]).value,
+                "Tamara catalog 2026-09-01",
             )
             self.assertEqual(prices.cell(component_row, headers["Adjusted Furnibox Purchase Price"]).value, 2.75)
             self.assertEqual(prices.cell(component_row, headers["Reform Markup Factor"]).value, 1.05)
             self.assertEqual(result["DIAGNOSTICS"]["B2"].value, "PART-1")
+
+    def test_blank_adjustment_row_uses_odoo_last_purchase_price_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            components = base / "Last_Purchase_Prices.xlsx"
+            cabinet_parts = base / "Existing_and_New_Cabinet_Parts_Prices.xlsx"
+            output = base / "Reform_Final_Prices.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "COMPONENT PRICES"
+            ws.append([
+                "Internal Reference", "Name", "Vendor", "Real Purchase Price",
+                "Adjusted Purchase Price", "Markup Factor", "Reform Price",
+            ])
+            ws.append(["OD-1", "Odoo item", "Vendor", 1.25, 1.25, 1, 1.25])
+            adjustments = wb.create_sheet("PURCHASE PRICE ADJUSTMENTS")
+            adjustments.append([
+                "Internal Reference", "Adjusted Purchase Price",
+                "Real Purchase Price (reference)", "Comment",
+            ])
+            adjustments.append(["OD-1", 1.25, 1.25, ""])
+            wb.save(components)
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "CABINET PART PRICES"
+            ws.append([
+                "Internal Reference", "Furnix Unit Cost",
+                "Furnix Sales Price to Furnibox", "Product Status", "BOM Source",
+            ])
+            wb.save(cabinet_parts)
+
+            build_reform_price_list(components, cabinet_parts, output)
+            result = load_workbook(output, data_only=False)
+            prices = result["REFORM PRICE LIST"]
+            headers = {cell.value: cell.column for cell in prices[1]}
+            self.assertEqual(
+                prices.cell(2, headers["Price Source"]).value,
+                "PRODUCTION ODOO LAST PURCHASE PRICE",
+            )
+            self.assertEqual(
+                prices.cell(2, headers["Price Source Comment"]).value,
+                "Production Odoo Last Purchase Price",
+            )
 
 
 if __name__ == "__main__":

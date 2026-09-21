@@ -58,6 +58,8 @@ def load_component_prices(path: Path) -> list[dict]:
     adjustment_price = _required(
         adjustment_headers, "Adjusted Purchase Price", adjustment_sheet.title
     )
+    adjustment_comment = adjustment_headers.get("Comment")
+    adjustment_reference = adjustment_headers.get("Real Purchase Price (reference)")
     for values in adjustment_sheet.iter_rows(min_row=2, values_only=True):
         sku = str(values[adjustment_sku - 1] or "").strip()
         if not sku:
@@ -66,7 +68,25 @@ def load_component_prices(path: Path) -> list[dict]:
         if key in adjustments:
             workbook.close()
             raise ValueError(f"Tamaros korekcijose kartojasi SKU: {sku}")
-        adjustments[key] = values[adjustment_price - 1]
+        adjusted_price = values[adjustment_price - 1]
+        comment = (
+            str(values[adjustment_comment - 1] or "").strip()
+            if adjustment_comment is not None
+            else ""
+        )
+        reference_price = (
+            values[adjustment_reference - 1]
+            if adjustment_reference is not None
+            else None
+        )
+        is_explicit = bool(comment)
+        if not is_explicit and reference_price not in (None, ""):
+            is_explicit = adjusted_price != reference_price
+        if is_explicit:
+            adjustments[key] = {
+                "price": adjusted_price,
+                "comment": comment,
+            }
 
     rows = []
     seen = set()
@@ -81,8 +101,14 @@ def load_component_prices(path: Path) -> list[dict]:
         seen.add(key)
         row = {name: values[column - 1] for name, column in columns.items()}
         row["Has Approved Adjustment"] = key in adjustments
-        row["Adjusted Purchase Price"] = adjustments.get(
-            key, row["Real Purchase Price"]
+        adjustment = adjustments.get(key)
+        row["Adjusted Purchase Price"] = (
+            adjustment["price"] if adjustment else row["Real Purchase Price"]
+        )
+        row["Price Source Comment"] = (
+            adjustment["comment"]
+            if adjustment and adjustment["comment"]
+            else "Production Odoo Last Purchase Price"
         )
         rows.append(row)
     workbook.close()
@@ -142,6 +168,7 @@ def build_reform_price_list(
         "Internal Reference", "Name", "Price Source", "Vendor / Supply Source",
         "Real Furnibox Purchase Price", "Adjusted Furnibox Purchase Price",
         "Reform Markup Factor", "Reform Purchase Price", "Status / BOM Source",
+        "Price Source Comment",
     ])
 
     for row in sorted(cabinet_parts, key=lambda item: str(item["Internal Reference"]).casefold()):
@@ -150,6 +177,7 @@ def build_reform_price_list(
             row["Internal Reference"], "", "CABINET PART CALCULATION", "Furnix",
             purchase_price, purchase_price, None,
             purchase_price, f'{row["Product Status"]} / {row["BOM Source"]}',
+            "Furnix cabinet part calculation",
         ])
 
     for row in sorted(components, key=lambda item: str(item["Internal Reference"]).casefold()):
@@ -159,15 +187,18 @@ def build_reform_price_list(
         source = (
             "APPROVED PURCHASE PRICE ADJUSTMENT"
             if row.get("Has Approved Adjustment")
-            else "LAST PURCHASE PRICE"
+            else "PRODUCTION ODOO LAST PURCHASE PRICE"
         )
+        source_comment = row.get("Price Source Comment", "")
+        if row.get("Has Approved Adjustment") and source_comment:
+            source += f" — {source_comment}"
         factor = row["Markup Factor"]
         if isinstance(factor, (int, float)) and factor != 1:
             source += " × REFORM MARKUP"
         prices.append([
             sku, row["Name"], source, row["Vendor"],
             row["Real Purchase Price"], row["Adjusted Purchase Price"],
-            factor, None, "",
+            factor, None, "", source_comment,
         ])
         excel_row = prices.max_row
         prices.cell(excel_row, 8).value = f"=F{excel_row}*G{excel_row}"
@@ -183,7 +214,7 @@ def build_reform_price_list(
     prices.freeze_panes = "A2"
     prices.auto_filter.ref = prices.dimensions
     prices.sheet_view.showGridLines = False
-    widths = [32, 45, 27, 35, 29, 31, 22, 25, 31]
+    widths = [32, 45, 60, 35, 29, 31, 22, 25, 31, 60]
     for index, width in enumerate(widths, start=1):
         prices.column_dimensions[prices.cell(1, index).column_letter].width = width
     for row_number in range(2, prices.max_row + 1):

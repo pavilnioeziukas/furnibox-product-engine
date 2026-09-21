@@ -11,7 +11,11 @@ from pricing_input_control import (
 )
 
 
-def write_pricing_workbook(path: Path, component_price: float = 1.25) -> None:
+def write_pricing_workbook(
+    path: Path,
+    component_price: float = 1.25,
+    component_source: str = "APPROVED PURCHASE PRICE ADJUSTMENT",
+) -> None:
     workbook = Workbook()
     components = workbook.active
     components.title = "BOM COMPONENT COSTS"
@@ -19,8 +23,8 @@ def write_pricing_workbook(path: Path, component_price: float = 1.25) -> None:
         "Purchased Component SKU", "Purchase Unit Price", "Cost Source",
     ])
     components.append(["PART-B", 2.5, "APPROVED PURCHASE PRICE ADJUSTMENT"])
-    components.append(["PART-A", component_price, "APPROVED PURCHASE PRICE ADJUSTMENT"])
-    components.append(["PART-A", component_price, "APPROVED PURCHASE PRICE ADJUSTMENT"])
+    components.append(["PART-A", component_price, component_source])
+    components.append(["PART-A", component_price, component_source])
     non_bom = workbook.create_sheet("NON-BOM RULES")
     non_bom.append(["SKU", "Purchase Price"])
     non_bom.append(["DIRECT-1", 4.0])
@@ -41,6 +45,21 @@ class PricingInputControlTests(unittest.TestCase):
                     ("R001", "PART-B", "2.5"),
                     ("R007", "DIRECT-1", "4"),
                 ],
+            )
+
+    def test_snapshot_hash_tracks_prices_not_source_wording(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            first = base / "first.xlsx"
+            second = base / "second.xlsx"
+            write_pricing_workbook(first)
+            write_pricing_workbook(
+                second,
+                component_source="PRODUCTION ODOO LAST PURCHASE PRICE",
+            )
+            self.assertEqual(
+                build_pricing_input_snapshot(first)["sha256"],
+                build_pricing_input_snapshot(second)["sha256"],
             )
 
     def test_validation_writes_pass_snapshot(self):
