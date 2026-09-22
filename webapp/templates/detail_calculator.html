@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Detalių skaičiuoklė · {{ kinds[kind] }}{% endblock %}
+{% block content %}
+<style>
+.detail-tabs{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.detail-tabs a{padding:10px 18px;border-radius:6px;background:#e7efeb}.detail-tabs a[aria-current=page]{background:#164e3b;color:white}
+.detail-fields{display:flex;flex-wrap:wrap;gap:16px;margin:18px 0}.detail-fields label{display:flex;flex-direction:column;gap:6px;max-width:260px}.detail-fields input,.detail-fields select{padding:9px;width:180px;max-width:100%;border:1px solid #a9b5be;border-radius:5px}.detail-select{max-width:100%;padding:9px}.detail-warning{background:#fff2cc;padding:12px}.detail-total{font-size:26px;font-weight:700}.detail-table{max-height:500px;overflow:auto}.topnav{flex-wrap:wrap}
+</style>
+<h1>Detalių skaičiuoklė</h1>
+<p>Atskira lentynų, panelių ir „Cabinet Parts“ skaičiavimo kopija. Pradiniai tarifai perimti iš esamų nustatymų; Tamaros patikslinimus įrašykite į šios kopijos parametrus.</p>
+<nav class="detail-tabs" aria-label="Detalių grupės">{% for key,label in kinds.items() %}<a href="{{ url_for('detail_calculators.calculator',kind=key) }}" {% if key == kind %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+<p>Kopijos parametrai išsaugomi atskirai. Jų pakeitimai netaikomi SO kainodarai ar „Odoo“.</p>
+{% if saved %}<p class="notice" role="status">Šios grupės parametrai išsaugoti detalių skaičiuoklės kopijoje.</p>{% endif %}
+{% if error %}<p class="detail-warning" role="alert">{{ error }}</p>{% endif %}
+<section class="panel"><h2>{{ kinds[kind] }}</h2>
+<form method="get"><label for="detail-row">Produktas / šaltinio eilutė</label>
+<select id="detail-row" name="row" class="detail-select">
+{% if kind == 'cabinet' %}<option value="-1" {% if selected == -1 %}selected{% endif %}>Rankinė detalė pagal matmenis</option>{% endif %}
+{% for item in rows %}<option value="{{ loop.index0 }}" {% if selected == loop.index0 %}selected{% endif %}>{{ item.sku }}{% if item.source_row %} · eil. {{ item.source_row }} · {{ item.kind }}{% endif %}</option>{% endfor %}</select> <button class="secondary">Pasirinkti</button></form>
+{% if kind == 'cabinet' and not rows %}<p class="detail-warning">Šioje aplinkoje nėra patvirtinto „Cabinet Parts“ katalogo. Galite skaičiuoti rankinę detalę pagal matmenis, spalvą ir tipą.</p>{% endif %}
+{% if row.issues %}<p class="detail-warning">{{ row.issues|join('. ') }}</p>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="row" value="{{ selected }}">
+{% for group in groups %}<h3>{{ 'Ploto ribos ir koeficientai' if group == 'area' else 'Kopijos tarifai ir parametrai' }}</h3>
+<div class="detail-fields">{% for key,value in config[group].items() %}<label>{{ labels.get(key, key ~ ', €/m²') }}<input name="{{ group }}_{{ key }}" type="number" min="0" {% if key == 'output_decimals' %}max="8" step="1"{% else %}step="any"{% endif %} value="{{ value }}" required></label>{% endfor %}</div>{% endfor %}
+<button class="secondary" name="action" value="save">Išsaugoti kopijos parametrus</button>
+<h3>Pasirinktos detalės duomenys</h3><div class="detail-fields">
+<label>Ilgis, mm<input name="length" type="number" min="0.001" step="any" value="{{ row.length }}" required></label>
+<label>Plotis, mm<input name="width" type="number" min="0.001" step="any" value="{{ row.width }}" required></label>
+{% if kind == 'shelf' %}
+<label>Lentynos tipas<select name="shelf_kind">{% for key in config.shelf %}<option {% if key == row.kind %}selected{% endif %}>{{ key }}</option>{% endfor %}</select></label>
+<label>Pakuotė, €<input name="packaging" type="number" min="0" step="any" value="{{ row.packaging if row.packaging is not none else '' }}"></label>
+<label>Kartonas, €<input name="cardboard" type="number" min="0" step="any" value="{{ row.cardboard if row.cardboard is not none else '' }}"></label>
+<label>Šaltinio papildomas daugiklis<input name="source_multiplier" type="number" min="0" step="any" value="{{ row.source_multiplier|default(1) }}" required></label>
+{% else %}
+<label>Spalva<select name="color">{% for color in ['WW','BB','NO'] %}<option {% if color == row.color %}selected{% endif %}>{{ color }}</option>{% endfor %}</select></label>
+{% if kind == 'cabinet' %}<label>Detalės tipas<select name="part_type"><option value="STANDARD" {% if row.part_type == 'STANDARD' %}selected{% endif %}>Įprasta detalė</option><option value="BACK" {% if row.part_type == 'BACK' %}selected{% endif %}>BACK</option></select></label>{% endif %}
+{% endif %}</div>
+<button class="primary" name="action" value="calculate">Skaičiuoti</button>
+{% if rows %}<button class="secondary" name="action" value="export">Atsisiųsti visų eilučių CSV</button>{% endif %}
+<p>„Skaičiuoti“ taiko įvestas reikšmes tik šiam bandymui. Parametrus kitam kartui išsaugo atskiras mygtukas. Detalės matmenys ir pakuotė neišsaugomi.</p>
+<p>Visų eilučių lentelė ir CSV naudoja įvestus grupės parametrus bei pradines kiekvienos eilutės reikšmes. Pasirinktos detalės matmenų pakeitimai matomi tik jos rezultate.</p>
+</form></section>
+{% if result %}<section class="panel"><h2>{{ row.sku }}</h2><p>Plotas: {{ '%.6f'|format(result.area) }} m²</p>
+{% if result.total is not none %}<p class="detail-total">{{ 'Furnix → Furnibox kaina' if kind == 'cabinet' else 'Viso' }}: {{ ('%.' ~ decimals ~ 'f')|format(result.total) }} €</p>
+<table><thead><tr><th>Skaičiavimo dalis</th><th>Reikšmė</th></tr></thead><tbody>{% for label,value in result.parts %}<tr><td>{{ label }}</td><td>{{ '%.4f'|format(value) }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="detail-warning">{{ result.message }}</p>{% endif %}</section>{% endif %}
+<details class="panel"><summary>Skaičiavimo formulė</summary>
+{% if kind == 'shelf' %}<p>U = (plotas × tipo tarifas − pakuotė − kartonas) × ploto koeficientas × šaltinio daugiklis. Viso = U + pakuotė + kartonas.</p><p>Plotui mažesniam nei {{ config.area.small_limit }} m² taikomas {{ config.area.small }}, mažesniam nei {{ config.area.medium_limit }} m² — {{ config.area.medium }}, likusiam — {{ config.area.large }} koeficientas.</p>
+{% elif kind == 'panel' %}<p>Bazė K = plotas × (medžiagos tarifas + bazinis darbas) + fiksuota dalis. Viso = K + plotas × pakuotės tarifas + plotas × papildomo darbo tarifas.</p>
+{% else %}<p>Savikaina = plotas × (medžiagos tarifas + apdirbimo tarifas) + mažos detalės priedas. BACK savikaina = plotas × BACK tarifas + mažos detalės priedas. Priedas taikomas, kai plotas mažesnis už nustatytą ribą.</p><p>Furnix → Furnibox kaina = savikaina × (1 + perdavimo antkainis / 100).</p>{% endif %}</details>
+{% if results %}<h2>Visos šaltinio eilutės ({{ results|length }})</h2><div class="detail-table"><table><thead><tr><th>SKU</th><th>Šaltinio eilutė</th><th>Viso, €</th><th>Pastabos</th></tr></thead><tbody>{% for item,calculated in results %}<tr><td>{{ item.sku }}</td><td>{{ item.source_row|default('') }}</td><td>{{ ('%.' ~ decimals ~ 'f')|format(calculated.total) if calculated.total is not none else 'Trūksta duomenų' }}</td><td>{{ item.issues|default([])|join('. ') }} {{ calculated.message }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

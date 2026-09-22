@@ -29,7 +29,7 @@ def number(value, name, positive=False):
     return result
 
 
-def calculate(kind, row, rates):
+def calculate(kind, row, rates, *, area_coefficients=None):
     rates = {key: number(rates[key], key) for key in defaults(kind)}
     area = number(row['length'], 'Ilgis', True) * number(row['width'], 'Plotis', True) / 1_000_000
     if kind == 'panel':
@@ -52,7 +52,12 @@ def calculate(kind, row, rates):
         cardboard = number(row['cardboard'], 'Kartonas')
         if row['kind'] not in rates:
             raise ValueError('Nežinomas lentynos tipas')
-        coefficient = 3 if area < .1 else 1.5 if area < .2 else 1
+        if area_coefficients is None:
+            coefficient = 3 if area < .1 else 1.5 if area < .2 else 1
+        else:
+            coefficient = (area_coefficients['small'] if area < area_coefficients['small_limit']
+                           else area_coefficients['medium'] if area < area_coefficients['medium_limit']
+                           else area_coefficients['large'])
         multiplier = row.get('source_multiplier', 1)
         wood = (area * rates[row['kind']] - packaging - cardboard) * coefficient * multiplier
         parts = [('Tarifas, €/m²', rates[row['kind']]), ('Ploto koeficientas', coefficient),

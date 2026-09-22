@@ -126,6 +126,13 @@ MAX_UPLOAD_BYTES = SETTINGS.max_upload_mb * 1024 * 1024
 app = Flask(__name__)
 from webapp.calculators import calculators
 app.register_blueprint(calculators)
+from webapp.detail_calculators import detail_calculators
+app.config['DETAIL_CALCULATOR_PATHS'] = {
+    'copy': SHARED_DATA_DIR / 'detail_calculator_settings.json',
+    'cabinet': CABINET_PARTS_PARAMETERS_PATH,
+    'dataset': PRODUCTION_DATASET_PATH,
+}
+app.register_blueprint(detail_calculators)
 
 app.secret_key = SETTINGS.web_secret or secrets.token_hex(32)
 
