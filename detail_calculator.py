@@ -69,10 +69,13 @@ def compute(kind, row, config):
     sku = ('BACK' if row['part_type'] == 'BACK' else 'PART') + '-' + row['color']
     calculated = calculate_unit_price(sku, (number(row['length'], 'Ilgis', True),
                                            number(row['width'], 'Plotis', True)), parameters)
-    markup, total = furnix_transfer_price(calculated.unit_price, parameters)
+    # Match CABINET PART PRICES: round unit cost before applying transfer markup.
+    unit_cost = round(calculated.unit_price, parameters.output_decimals)
+    markup, total = furnix_transfer_price(unit_cost, parameters)
+    total = round(total, parameters.output_decimals)
     area = calculated.area_m2
     return dict(area=area, total=total, message='', parts=[
         ('Medžiaga / BACK', area * (calculated.back_rate_per_m2 + calculated.material_rate_per_m2)),
         ('Apdirbimas', area * calculated.processing_rate_per_m2),
         ('Mažos detalės priedas', calculated.small_part_surcharge),
-        ('Savikaina', calculated.unit_price), ('Furnix perdavimo antkainis', markup)])
+        ('Savikaina', unit_cost), ('Furnix perdavimo antkainis', markup)])

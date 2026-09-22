@@ -52,7 +52,7 @@ def test_editable_shelf_coefficients_and_boundaries(config, area, coefficient):
 def test_cabinet_formula_markup_and_small_part_boundary(config, part_type, area, expected):
     config['cabinet']['furnix_markup_percent'] = 10
     row = dict(length=1000, width=area*1000, color='WW', part_type=part_type)
-    assert model.compute('cabinet', row, config)['total'] == pytest.approx(expected * 1.1)
+    assert model.compute('cabinet', row, config)['total'] == round(round(expected, 4) * 1.1, 4)
 
 
 @pytest.mark.parametrize('group,key,value', [('area', 'small_limit', .3), ('area', 'medium', float('nan')),
@@ -133,3 +133,18 @@ def test_cabinet_catalog_and_shelf_save_are_isolated(monkeypatch, tmp_path):
     assert '8.3212' in original
     copied = client.get('/detail-calculator/shelf').get_data(as_text=True)
     assert '10.4616' in copied
+
+
+def test_cabinet_uses_latest_pricing_catalog_when_approved_catalog_is_absent(monkeypatch, tmp_path):
+    from test_webapp import load_webapp
+    monkeypatch.setenv('PRODUCT_ENGINE_SHARED_DATA_DIR', str(tmp_path / 'shared'))
+    webapp = load_webapp(monkeypatch, tmp_path)
+    dataset = tmp_path / 'Furnibox_Target_Dataset.json'
+    dataset.write_text(json.dumps({'product_catalog': [
+        {'sku': 'PART-600x400-WW', 'product_type': 'Cabinet Parts'}]}))
+    monkeypatch.setattr(webapp, '_latest_job_for', lambda action: {
+        'files': [{'name': dataset.name, 'path': str(dataset)}]})
+    page = webapp.app.test_client().get('/detail-calculator/cabinet').get_data(as_text=True)
+    assert 'PART-600x400-WW' in page
+    assert 'Paskutinio kainodaros perskaičiavimo' in page
+    assert 'Detalių: 1' in page

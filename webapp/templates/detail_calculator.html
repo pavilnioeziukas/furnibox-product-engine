@@ -12,6 +12,7 @@
 {% if saved %}<p class="notice" role="status">Šios grupės parametrai išsaugoti detalių skaičiuoklės kopijoje.</p>{% endif %}
 {% if error %}<p class="detail-warning" role="alert">{{ error }}</p>{% endif %}
 <section class="panel"><h2>{{ kinds[kind] }}</h2>
+{% if kind == 'cabinet' and rows %}<p>Šaltinis: {{ source_label }}. Detalių: {{ rows|length }}.</p>{% endif %}
 <form method="get"><label for="detail-row">Produktas / šaltinio eilutė</label>
 <select id="detail-row" name="row" class="detail-select">
 {% if kind == 'cabinet' %}<option value="-1" {% if selected == -1 %}selected{% endif %}>Rankinė detalė pagal matmenis</option>{% endif %}

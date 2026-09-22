@@ -47,6 +47,14 @@ def calculator(kind='shelf'):
     stored = model.load(paths['copy'], paths['cabinet'])
     config = copy.deepcopy(stored)
     rows = cabinet_rows(paths['dataset']) if kind == 'cabinet' else source(kind)['rows']
+    source_label = 'Patvirtintas detalių katalogas'
+    if kind == 'cabinet' and not rows:
+        from webapp.app import _latest_job_for, _job_file
+        latest = _latest_job_for('refresh_reform_pricing')
+        dataset = _job_file(latest, 'Furnibox_Target_Dataset.json')
+        if dataset:
+            rows = cabinet_rows(dataset)
+            source_label = 'Paskutinio kainodaros perskaičiavimo detalių katalogas'
     values = request.form if request.method == 'POST' else request.args
     try:
         selected = int(values.get('row', -1 if kind == 'cabinet' else 0))
@@ -120,5 +128,6 @@ def calculator(kind='shelf'):
     return render_template('detail_calculator.html', kind=kind, kinds=KINDS, config=config,
                            groups=groups, labels=LABELS, rows=rows, row=row, selected=selected,
                            result=result, results=results, error=error, saved=saved, csrf_token=token,
+                           source_label=source_label,
                            has_copy=Path(paths['copy']).exists(),
                            decimals=config['cabinet']['output_decimals'] if kind == 'cabinet' else 4)
