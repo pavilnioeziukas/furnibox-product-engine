@@ -111,7 +111,7 @@ def calculator(kind='shelf'):
                 raise ValueError('Nėra katalogo eilučių eksportui. Rankinės detalės rezultatą žiūrėkite apačioje.')
             output = io.StringIO(newline='')
             writer = csv.writer(output, delimiter=';')
-            writer.writerow(['SKU', 'Šaltinio eilutė', 'Plotas m²', 'Viso EUR', 'Pastabos'])
+            writer.writerow(['SKU', 'Šaltinio eilutė', 'Plotas m²', 'Furnix UAB pardavimo kaina Furnibox UAB, EUR', 'Pastabos'])
             for item, calculated in results:
                 total = calculated['total']
                 if total is not None and kind == 'cabinet':
