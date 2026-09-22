@@ -36,7 +36,9 @@ def test_snapshot_is_independent_in_both_directions(config, tmp_path):
 def test_default_copy_matches_every_existing_source_row(config):
     for kind in ('shelf', 'panel'):
         for row in source(kind)['rows']:
-            assert model.compute(kind, row, config) == calculate(kind, row, config[kind])
+            result = model.compute(kind, row, config)
+            result.pop('edging')
+            assert result == calculate(kind, row, config[kind])
 
 
 @pytest.mark.parametrize('area,coefficient', [(.099999, 4), (.1, 2), (.199999, 2), (.2, .5)])
@@ -90,6 +92,8 @@ def test_pages_save_export_and_auth(monkeypatch, tmp_path):
     exported = list(csv.reader(io.StringIO(response.get_data(as_text=True).lstrip('\ufeff')), delimiter=';'))
     assert len(exported) == len(source('panel')['rows']) + 1
     first = source('panel')['rows'][0]
+    assert exported[0][8] == 'Briaunos sunaudojimas, m/vnt.'
+    assert float(exported[1][8]) == pytest.approx(2 * (first['length'] + first['width']) / 1000 * 1.1)
     assert float(exported[1][3]) == pytest.approx(calculate('panel', first, dict(config['panel'], work=29))['total'])
     form['action'] = 'save'
     form['panel_work'] = 'nan'

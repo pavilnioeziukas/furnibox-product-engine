@@ -8,6 +8,7 @@ from flask import Blueprint, abort, current_app, render_template, request, Respo
 import detail_calculator as model
 from cabinet_parts_price_v1 import load_target_cabinet_parts, parse_dimensions, parse_color
 from price_calculators import source, number
+from detail_edging import RULES as EDGING_RULES, infer_rule, quantity as edging_quantity
 
 detail_calculators = Blueprint('detail_calculators', __name__)
 KINDS = {'shelf': 'Lentynos', 'panel': 'Panelės', 'cabinet': 'Cabinet Parts'}
@@ -34,6 +35,7 @@ def cabinet_rows(dataset_path):
         for sku in sorted(load_target_cabinet_parts(Path(dataset_path)).values()):
             length, width = parse_dimensions(sku)
             rows.append(dict(sku=sku, length=length, width=width, color=parse_color(sku),
+                             edging_rule=infer_rule(sku),
                              part_type='BACK' if 'BACK' in sku.upper() else 'STANDARD'))
     return rows
 
@@ -63,7 +65,7 @@ def calculator(kind='shelf'):
     if selected < -1 or selected >= len(rows) or (selected == -1 and kind != 'cabinet'):
         abort(400)
     row = dict(rows[selected]) if selected >= 0 else dict(
-        sku='Rankinė detalė', length=600, width=400, color='WW', part_type='STANDARD')
+        sku='Rankinė detalė', length=600, width=400, color='WW', part_type='STANDARD', edging_rule='UNKNOWN')
     token = session.setdefault('detail_calculator_csrf', secrets.token_urlsafe(32))
     error = None
     saved = False
@@ -96,6 +98,9 @@ def calculator(kind='shelf'):
                     if row['color'] not in ('WW', 'BB', 'NO'):
                         raise ValueError('Pasirinkite WW, BB arba NO spalvą.')
                     if kind == 'cabinet':
+                        row['edging_rule'] = values.get('edging_rule', row.get('edging_rule', 'UNKNOWN'))
+                        if row['edging_rule'] not in EDGING_RULES:
+                            raise ValueError('Nežinoma briaunavimo taisyklė.')
                         row['part_type'] = values.get('part_type')
                         if row['part_type'] not in ('BACK', 'STANDARD'):
                             raise ValueError('Nežinomas detalės tipas.')
@@ -104,21 +109,24 @@ def calculator(kind='shelf'):
             try:
                 calculated = model.compute(kind, item, config)
             except ValueError as exc:
-                calculated = dict(total=None, area=None, message=str(exc))
+                calculated = dict(total=None, area=None, message=str(exc), edging=edging_quantity(kind, item))
             results.append((item, calculated))
         if request.method == 'POST' and action == 'export':
             if not rows:
                 raise ValueError('Nėra katalogo eilučių eksportui. Rankinės detalės rezultatą žiūrėkite apačioje.')
             output = io.StringIO(newline='')
             writer = csv.writer(output, delimiter=';')
-            writer.writerow(['SKU', 'Šaltinio eilutė', 'Plotas m²', 'Furnix UAB pardavimo kaina Furnibox UAB, EUR', 'Pastabos'])
+            writer.writerow(['SKU', 'Šaltinio eilutė', 'Plotas m²', 'Furnix UAB pardavimo kaina Furnibox UAB, EUR', 'Pastabos',
+                             'Briaunavimo taisyklė', 'Briaunavimo ilgis, m/vnt.', 'Medžiagos koeficientas', 'Briaunos sunaudojimas, m/vnt.'])
             for item, calculated in results:
                 total = calculated['total']
                 if total is not None and kind == 'cabinet':
                     total = round(total, config['cabinet']['output_decimals'])
                 writer.writerow([item['sku'], item.get('source_row', ''), calculated['area'],
                                  total if total is not None else '',
-                                 '; '.join(item.get('issues', []) + [calculated['message']]).strip('; ')])
+                                 '; '.join(item.get('issues', []) + [calculated['message']]).strip('; '),
+                                 calculated['edging']['label'], calculated['edging']['length_m'],
+                                 calculated['edging']['factor'], calculated['edging']['material_m']])
             return Response('\ufeff'+output.getvalue(), mimetype='text/csv; charset=utf-8',
                             headers={'Content-Disposition': f'attachment; filename="detail_{kind}.csv"'})
     except (ValueError, KeyError) as exc:
@@ -129,5 +137,6 @@ def calculator(kind='shelf'):
                            groups=groups, labels=LABELS, rows=rows, row=row, selected=selected,
                            result=result, results=results, error=error, saved=saved, csrf_token=token,
                            source_label=source_label,
+                           edging_rules=EDGING_RULES,
                            has_copy=Path(paths['copy']).exists(),
                            decimals=config['cabinet']['output_decimals'] if kind == 'cabinet' else 4)

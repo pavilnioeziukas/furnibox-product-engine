@@ -10,6 +10,7 @@ import calculator_settings
 from cabinet_parts_price_parameters import load_parameters, validate_parameters
 from cabinet_parts_price_v1 import calculate_unit_price, furnix_transfer_price
 from price_calculators import calculate, defaults, number
+from detail_edging import quantity as edging_quantity
 
 AREA_DEFAULTS = dict(small_limit=.1, medium_limit=.2, small=3, medium=1.5, large=1)
 
@@ -63,7 +64,9 @@ def load(path, cabinet_path):
 
 def compute(kind, row, config):
     if kind != 'cabinet':
-        return calculate(kind, row, config[kind], area_coefficients=config['area'])
+        result = calculate(kind, row, config[kind], area_coefficients=config['area'])
+        result['edging'] = edging_quantity(kind, row)
+        return result
     parameters = validate_parameters(config['cabinet'])
     # Use the established Cabinet Parts calculation, including BACK and strict < boundary.
     sku = ('BACK' if row['part_type'] == 'BACK' else 'PART') + '-' + row['color']
@@ -74,7 +77,7 @@ def compute(kind, row, config):
     markup, total = furnix_transfer_price(unit_cost, parameters)
     total = round(total, parameters.output_decimals)
     area = calculated.area_m2
-    return dict(area=area, total=total, message='', parts=[
+    return dict(area=area, total=total, message='', edging=edging_quantity(kind, row), parts=[
         ('Medžiaga / BACK', area * (calculated.back_rate_per_m2 + calculated.material_rate_per_m2)),
         ('Apdirbimas', area * calculated.processing_rate_per_m2),
         ('Mažos detalės priedas', calculated.small_part_surcharge),

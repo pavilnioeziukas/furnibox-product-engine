@@ -34,13 +34,20 @@
 {% else %}
 <label>Spalva<select name="color">{% for color in ['WW','BB','NO'] %}<option {% if color == row.color %}selected{% endif %}>{{ color }}</option>{% endfor %}</select></label>
 {% if kind == 'cabinet' %}<label>Detalės tipas<select name="part_type"><option value="STANDARD" {% if row.part_type == 'STANDARD' %}selected{% endif %}>Įprasta detalė</option><option value="BACK" {% if row.part_type == 'BACK' %}selected{% endif %}>BACK</option></select></label>{% endif %}
-{% endif %}</div>
+{% endif %}
+{% if kind == 'cabinet' %}<label>Briaunavimas<select name="edging_rule">{% for key,label in edging_rules.items() %}<option value="{{ key }}" {% if key == row.edging_rule %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endif %}</div>
 <button class="primary" name="action" value="calculate">Skaičiuoti</button>
 {% if rows %}<button class="secondary" name="action" value="export">Atsisiųsti visų eilučių CSV</button>{% endif %}
 <p>„Skaičiuoti“ taiko įvestas reikšmes tik šiam bandymui. Parametrus kitam kartui išsaugo atskiras mygtukas. Detalės matmenys ir pakuotė neišsaugomi.</p>
 <p>Visų eilučių lentelė ir CSV naudoja įvestus grupės parametrus bei pradines kiekvienos eilutės reikšmes. Pasirinktos detalės matmenų pakeitimai matomi tik jos rezultate.</p>
 </form></section>
 {% if result %}<section class="panel"><h2>{{ row.sku }}</h2><p>Plotas: {{ '%.6f'|format(result.area) }} m²</p>
+<h3>Briaunavimas</h3>
+{% if result.edging.material_m is not none %}
+<p>{{ result.edging.label }}. Briaunavimo ilgis: <strong>{{ '%.4f'|format(result.edging.length_m) }} m/vnt.</strong></p>
+<p>Briaunos medžiagos sunaudojimas: {{ '%.4f'|format(result.edging.length_m) }} × 1,1 = <strong>{{ '%.4f'|format(result.edging.material_m) }} m/vnt.</strong></p>
+{% else %}<p class="detail-warning">Šiai detalei briaunavimo taisyklė nenustatyta. Pasirinkite taisyklę lauke „Briaunavimas“ ir spauskite „Skaičiuoti“.</p>{% endif %}
+<p>Koeficientas 1,1 taikomas tik briaunos medžiagos kiekiui. Pagal šį kiekį papildoma kaina kol kas nepridedama.</p>
 {% if result.total is not none %}<p class="detail-total">Furnix → Furnibox pardavimo kaina: {{ ('%.' ~ decimals ~ 'f')|format(result.total) }} €</p>
 <table><thead><tr><th>Skaičiavimo dalis</th><th>Reikšmė</th></tr></thead><tbody>{% for label,value in result.parts %}<tr><td>{{ label }}</td><td>{{ '%.4f'|format(value) }}</td></tr>{% endfor %}</tbody></table>
 {% else %}<p class="detail-warning">{{ result.message }}</p>{% endif %}</section>{% endif %}
@@ -48,5 +55,5 @@
 {% if kind == 'shelf' %}<p>U = (plotas × tipo tarifas − pakuotė − kartonas) × ploto koeficientas × šaltinio daugiklis. Viso = U + pakuotė + kartonas.</p><p>Plotui mažesniam nei {{ config.area.small_limit }} m² taikomas {{ config.area.small }}, mažesniam nei {{ config.area.medium_limit }} m² — {{ config.area.medium }}, likusiam — {{ config.area.large }} koeficientas.</p>
 {% elif kind == 'panel' %}<p>Bazė K = plotas × (medžiagos tarifas + bazinis darbas) + fiksuota dalis. Viso = K + plotas × pakuotės tarifas + plotas × papildomo darbo tarifas.</p>
 {% else %}<p>Savikaina = plotas × (medžiagos tarifas + apdirbimo tarifas) + mažos detalės priedas. BACK savikaina = plotas × BACK tarifas + mažos detalės priedas. Priedas taikomas, kai plotas mažesnis už nustatytą ribą.</p><p>Furnix → Furnibox kaina = savikaina × (1 + perdavimo antkainis / 100).</p>{% endif %}</details>
-{% if results %}<h2>Visos šaltinio eilutės ({{ results|length }})</h2><div class="detail-table"><table><thead><tr><th>SKU</th><th>Šaltinio eilutė</th><th>Furnix → Furnibox pardavimo kaina, €</th><th>Pastabos</th></tr></thead><tbody>{% for item,calculated in results %}<tr><td>{{ item.sku }}</td><td>{{ item.source_row|default('') }}</td><td>{{ ('%.' ~ decimals ~ 'f')|format(calculated.total) if calculated.total is not none else 'Trūksta duomenų' }}</td><td>{{ item.issues|default([])|join('. ') }} {{ calculated.message }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if results %}<h2>Visos šaltinio eilutės ({{ results|length }})</h2><div class="detail-table"><table><thead><tr><th>SKU</th><th>Šaltinio eilutė</th><th>Furnix → Furnibox pardavimo kaina, €</th><th>Briaunos sunaudojimas, m/vnt.</th><th>Pastabos</th></tr></thead><tbody>{% for item,calculated in results %}<tr><td>{{ item.sku }}</td><td>{{ item.source_row|default('') }}</td><td>{{ ('%.' ~ decimals ~ 'f')|format(calculated.total) if calculated.total is not none else 'Trūksta duomenų' }}</td><td>{{ '%.4f'|format(calculated.edging.material_m) if calculated.edging.material_m is not none else 'Taisyklė nenustatyta' }}</td><td>{{ item.issues|default([])|join('. ') }} {{ calculated.message }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% endblock %}
