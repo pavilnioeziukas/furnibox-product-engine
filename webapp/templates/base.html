@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='pricing.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='chunked-upload.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='pricing-navigation.css') }}">
 </head>
 <body>
   <header class="topbar">
@@ -17,13 +18,8 @@
     <nav class="topnav">
       <a href="{{ url_for('index') }}">Veiksmai</a>
       {% if product_engine.show_pricing_nav %}
-        <a href="{{ url_for('pricing_control') }}">Kainodaros kontrolė</a>
-        <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
-        <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
-        <a href="{{ url_for('calculators.settings') }}">Tarifai ir antkainis</a>
-        <a href="{{ url_for('calculators.calculator', kind='panel') }}">Panelių skaičiuoklė</a>
-        <a href="{{ url_for('calculators.shelf_home') }}">Lentynų skaičiuoklė</a>
-        <a href="{{ url_for('detail_calculators.calculator') }}">Detalių skaičiuoklė</a>
+        <a href="{{ url_for('calculators.reform_home') }}" {% if request.blueprint == 'calculators' or request.endpoint in ['pricing_control', 'pricing_rules', 'purchase_pricing'] %}aria-current="page"{% endif %}>Kainos Reform</a>
+        <a href="{{ url_for('detail_calculators.calculator') }}" {% if request.blueprint == 'detail_calculators' %}aria-current="page"{% endif %}>Kainos Furnibox</a>
       {% endif %}
       {% if bootstrap_manager_enabled %}
         <a href="{{ url_for('bootstraps') }}">Bootstraps</a>
@@ -35,6 +31,7 @@
   </header>
   <main class="shell">
     {% for message in get_flashed_messages() %}<div class="notice">{{ message }}</div>{% endfor %}
+    {% if product_engine.show_pricing_nav %}{% include 'pricing_navigation.html' %}{% endif %}
     {% block content %}{% endblock %}
   </main>
   {% block scripts %}{% endblock %}

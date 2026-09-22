@@ -9,6 +9,11 @@ from unified_calculator_pricing import led_results
 calculators = Blueprint('calculators', __name__)
 
 
+@calculators.get('/reform-pricing')
+def reform_home():
+    return render_template('reform_pricing_home.html')
+
+
 @calculators.route('/calculators/settings', methods=['GET', 'POST'])
 def settings():
     data = calculator_settings.load()

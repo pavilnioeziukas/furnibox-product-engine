@@ -5,7 +5,7 @@
 .detail-tabs{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.detail-tabs a{padding:10px 18px;border-radius:6px;background:#e7efeb}.detail-tabs a[aria-current=page]{background:#164e3b;color:white}
 .detail-fields{display:flex;flex-wrap:wrap;gap:16px;margin:18px 0}.detail-fields label{display:flex;flex-direction:column;gap:6px;max-width:260px}.detail-fields input,.detail-fields select{padding:9px;width:180px;max-width:100%;border:1px solid #a9b5be;border-radius:5px}.detail-select{max-width:100%;padding:9px}.detail-warning{background:#fff2cc;padding:12px}.detail-total{font-size:26px;font-weight:700}.detail-table{max-height:500px;overflow:auto}.topnav{flex-wrap:wrap}
 </style>
-<h1>Detalių skaičiuoklė</h1>
+<h1>Kainos Furnibox – detalių skaičiuoklė</h1>
 <p><strong>Furnix UAB → Furnibox UAB</strong></p><p>Skaičiuoklė skirta apskaičiuoti, už kiek Furnix UAB parduoda lentynų detales, paneles ir „Cabinet Parts“ Furnibox UAB.</p><p>Tarifus ir koeficientus dar patikslins Tamara. Iki tol rezultatai preliminarūs, skaičiuojami pagal nukopijuotas pradines reikšmes.</p>
 <nav class="detail-tabs" aria-label="Detalių grupės">{% for key,label in kinds.items() %}<a href="{{ url_for('detail_calculators.calculator',kind=key) }}" {% if key == kind %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 <p>Kopijos parametrai išsaugomi atskirai. Jų pakeitimai netaikomi SO kainodarai ar „Odoo“.</p>

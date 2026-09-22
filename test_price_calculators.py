@@ -77,7 +77,8 @@ def test_separate_workspaces_and_family_filters(monkeypatch,tmp_path):
     from test_webapp import load_webapp
     c=load_webapp(monkeypatch,tmp_path).app.test_client()
     home=c.get('/calculators/shelves').get_data(as_text=True)
-    assert 'LED + ROD' in home and 'Panelių skaičiuoklė' in home
+    assert 'LED + ROD' in home and '/calculators/panel' in home
+    assert 'Kainos Reform' in home and 'Kainos Furnibox' in home
     for family in ('PAPR','FIX','FIXVEN','OVEN','CORNER'):
         response=c.get('/calculators/shelf?family='+family)
         assert response.status_code==200

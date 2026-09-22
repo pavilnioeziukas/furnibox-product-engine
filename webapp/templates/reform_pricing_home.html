@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Kainos Reform · {{ product_engine.app_name }}{% endblock %}
+{% block content %}
+<h1>Kainos Reform</h1>
+<p>Čia rasite pardavimo klientui Reform kainų peržiūrą, detalių skaičiuokles ir šios kainodaros nustatymus.</p>
+<div class="pricing-options">
+  <section class="panel"><h2>Reform pardavimo kainos</h2><p>Raskite produktą pagal kodą ir peržiūrėkite galutinę SO kainą bei jos sudedamąsias dalis.</p><a class="primary" href="{{ url_for('pricing_control') }}">Atidaryti kainų peržiūrą</a></section>
+  <section class="panel"><h2>Panelės</h2><p>Panelių skaičiavimas pagal medžiagos, darbo ir pakuotės tarifus, naudojamus Reform kainodaroje.</p><a class="secondary" href="{{ url_for('calculators.calculator',kind='panel') }}">Atidaryti panelių skaičiuoklę</a></section>
+  <section class="panel"><h2>Lentynos</h2><p>Lentynų medinės dalies, pakuotės ir komplektų skaičiavimai, naudojami Reform kainodaroje.</p><a class="secondary" href="{{ url_for('calculators.shelf_home') }}">Atidaryti lentynų skaičiuoklę</a></section>
+</div>
+<section class="panel"><h2>Reform kainodaros nustatymai</h2><p><a href="{{ url_for('calculators.settings') }}">Panelių ir lentynų tarifai bei galutinis antkainis</a></p><p><a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a></p><p><a href="{{ url_for('purchase_pricing') }}">Cabinet Parts savikainos parametrai, naudojami Reform kainodaroje</a></p></section>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% set reform = request.blueprint == 'calculators' or request.endpoint in ['pricing_control', 'pricing_rules', 'purchase_pricing'] %}
+{% if reform %}
+<section class="pricing-context pricing-context-reform" aria-label="Kainos Reform">
+  <div><strong>Kainos Reform</strong><span>Pardavimo kainos klientui Reform</span></div>
+  <a href="{{ url_for('detail_calculators.calculator') }}">Reikia Furnix → Furnibox kainos? →</a>
+</section>
+<nav class="pricing-subnav" aria-label="Reform kainodara">
+{% for endpoint,label,kwargs in [
+ ('calculators.reform_home','Pradžia',{}),
+ ('pricing_control','Kainų peržiūra',{}),
+ ('calculators.calculator','Panelės',{'kind':'panel'}),
+ ('calculators.shelf_home','Lentynos',{}),
+ ('calculators.settings','Tarifai ir antkainis',{}),
+ ('pricing_rules','SO taisyklės',{}),
+ ('purchase_pricing','Savikainos parametrai',{})] %}
+<a href="{{ url_for(endpoint, **kwargs) }}">{{ label }}</a>
+{% endfor %}
+</nav>
+{% elif request.blueprint == 'detail_calculators' %}
+<section class="pricing-context pricing-context-furnibox" aria-label="Kainos Furnibox">
+  <div><strong>Kainos Furnibox</strong><span>Furnix UAB parduoda → Furnibox UAB perka</span></div>
+  <a href="{{ url_for('calculators.reform_home') }}">Reikia kainos klientui Reform? →</a>
+</section>
+{% endif %}
