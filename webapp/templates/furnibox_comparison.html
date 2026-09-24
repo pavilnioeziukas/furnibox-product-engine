@@ -6,11 +6,21 @@
 </style>
 <h1>Furnibox · Detalių kainų palyginimas</h1>
 <p><strong>Furnix → Furnibox → Reform</strong> · {{ total }} katalogo pozicijos · kainos €/vnt., be PVM.</p>
-<p>Pagal Tamaros {{ source.source_date }} failą. Geltoname stulpelyje galite keisti kiekvienos detalės Furnix koeficientą.</p>
-<p><strong>Reali pirkimo kaina iš Furnix = plokštė + briaunavimas × Furnix koeficientas</strong> (visa „Plokštė + briaunavimas“ suma dauginama iš koeficiento). Furnibox koeficientas = Reform kaina / nauja pirkimo kaina.</p>
+<p>Pagal Tamaros {{ source.source_date }} failą. Furnix koeficientą nustatykite visai kategorijai žemiau.</p>
+<p><strong>Reali pirkimo kaina iš Furnix = (plokštė + briaunavimas) × Furnix koeficientas</strong> (visa „Plokštė + briaunavimas“ suma dauginama iš koeficiento). Furnibox koeficientas = Reform kaina / nauja pirkimo kaina.</p>
 <p class="comparison-note">„Reali pirkimo kaina“ – Tamaros failo skaičiuojamas rezultatas. Ankstesnė pirkimo kaina ir jos faktinė / apskaičiuota būsena rodomos atskirai. Abu „Realus Furnibox koef.“ stulpeliai kartojami pagal failą. Odoo kainos nekeičiamos.</p>
 {% if error %}<p class="comparison-error" role="alert">{{ error }}</p>{% endif %}
 {% if saved %}<p class="notice" role="status">Pakeitimai išsaugoti, kainos perskaičiuotos.</p>{% endif %}
+<section class="panel">
+<h2>Furnix koeficientai pagal kategoriją</h2>
+<p>Pasirinkite kategoriją ir įveskite koeficientą. Jis bus pritaikytas <strong>visoms kategorijos detalėms</strong>, nepriklausomai nuo matmenų, spalvos, EU / US varianto ar lentelės filtrų.</p>
+<form method="post" class="comparison-filters">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="category_coefficient">
+<label>Kategorija<select name="category" required><option value="">Pasirinkite kategoriją</option>{% for c in categories %}<option value="{{ c.name }}">{{ c.name }} · {{ c.count }} det. · dabar: {{ c.value }}</option>{% endfor %}</select></label>
+<label>Naujas Furnix koeficientas<input type="number" name="coefficient" min="0.000001" step="any" required placeholder="Pvz. 2,2"></label>
+<button>Taikyti visai kategorijai</button></form>
+<p class="comparison-note">PNL ir PCL – atskiros kategorijos; LED, LEDROD ir ROD taip pat atskirtos. Jei kategorijoje rodomi keli ankstesni koeficientai, išsaugojus visiems bus taikomas naujas vienodas koeficientas.</p>
+</section>
 <details class="panel"><summary>Plokštės ir briaunavimo tarifai</summary>
 <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="rates">
 <div class="comparison-rates">{% for key,label in labels.items() %}<label>{{ label }}<input type="number" name="{{ key }}" value="{{ rates[key] }}" step="any" min="{{ '0.000001' if key.endswith('factor') else '0' }}" required></label>{% endfor %}</div>
@@ -21,7 +31,7 @@
 <p>Rasta {{ matched }} pozicijų. Puslapis {{ page }} / {{ pages }}.</p>
 <div class="comparison-scroll"><table class="comparison-table"><thead><tr>{% for key,label in columns %}<th>{{ label }}</th>{% endfor %}</tr></thead><tbody>
 {% for row in rows %}<tr>{% for key,label in columns %}
-{% if key=='coefficient' %}<td class="input-cell">{% if row.coefficient is not none %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="coefficient"><input type="hidden" name="sku" value="{{ row.sku }}"><label><span class="comparison-note">{{ row.sku }}</span><br><input aria-label="Furnix koeficientas {{ row.sku }}" type="number" min="0.000001" step="any" name="coefficient" value="{{ row.coefficient }}" required></label> <button>Išsaugoti</button></form>{% else %}—{% endif %}</td>
+{% if key=='coefficient' %}<td class="numeric">{% if row.coefficient is not none %}<strong>{{ '%g'|format(row.coefficient) }}</strong><br><span class="comparison-note">{{ row.category }}</span>{% else %}—{% endif %}</td>
 {% else %}<td class="{{ 'numeric' if row[key] is number else '' }}">{% if row[key] is number %}{{ '%.4f'|format(row[key]*100 if key in ['difference_pct','reform_markup'] else row[key]) }}{% if key in ['difference_pct','reform_markup'] %}%{% endif %}{% elif row[key] is none %}{{ 'Netaikoma' if key=='material' else '—' }}{% else %}{{ row[key] }}{% endif %}</td>{% endif %}
 {% endfor %}</tr>{% endfor %}</tbody></table></div>
 <nav class="comparison-paging" aria-label="Puslapiai">{% if page>1 %}<a href="{{ url_for('furnibox_comparison.index',q=q,group=group,status=status,page=page-1) }}">← Ankstesnis</a>{% endif %}{% if page<pages %}<a href="{{ url_for('furnibox_comparison.index',q=q,group=group,status=status,page=page+1) }}">Kitas →</a>{% endif %}</nav>

@@ -59,7 +59,7 @@ def test_http_csrf_export_filter_and_saving(tmp_path):
     assert client.post('/detail-comparison',data={'action':'coefficient'}).status_code==400
     with client.session_transaction() as session:token=session['comparison_csrf']
     sku=model.source()['rows'][2]['sku']
-    response=client.post('/detail-comparison',data={'csrf_token':token,'action':'coefficient','sku':sku,'coefficient':'3'})
+    response=client.post('/detail-comparison',data={'csrf_token':token,'action':'category_coefficient','category':'BACK-SREW','coefficient':'3'})
     assert response.status_code==302
     response=client.get('/detail-comparison',query_string={'q':sku,'export':'csv'})
     data=list(csv.reader(io.StringIO(response.data.decode('utf-8-sig')),delimiter=';'))
@@ -83,3 +83,37 @@ def test_full_page_navigation_and_auth(monkeypatch,tmp_path):
     monkeypatch.setattr(web,'auth_enabled',lambda:True)
     assert client.get('/detail-comparison').status_code==302
     assert client.get('/detail-comparison?export=csv').status_code==302
+
+
+def test_category_bulk_scope_and_legacy_override(tmp_path):
+    _, before = model.results(tmp_path)
+    target = next(r for r in before if r['category'] == 'BACK-SREW')
+    model.save_coefficient(tmp_path, target['sku'], 9)
+    model.save_category_coefficient(tmp_path, 'BACK-SREW', '2,7')
+    _, after = model.results(tmp_path)
+    changed = [r for r in after if r['category'] == 'BACK-SREW']
+    assert len(changed) == 196
+    assert {r['sku'].split('-')[0] for r in changed} == {'EU','US'}
+    for old, new in zip(before, after):
+        if new['category'] == 'BACK-SREW':
+            assert new['coefficient'] == 2.7
+            assert new['calculated_purchase'] == pytest.approx(new['material'] * 2.7)
+            assert new['purchase'] == old['purchase']
+        else:
+            assert new == old
+    for value in ['nan','0','-2']:
+        with pytest.raises(ValueError): model.save_category_coefficient(tmp_path, 'PNL', value)
+    with pytest.raises(ValueError): model.save_category_coefficient(tmp_path, '../fake', 2)
+
+
+def test_category_mapping_catalog():
+    rows = model.source()['rows']
+    groups = {}
+    for row in rows:
+        groups.setdefault(model.category(row), set()).add(row['coefficient'])
+    assert all(len(values) == 1 for values in groups.values())
+    assert groups['PNL'] == {2}
+    assert groups['PCL'] == {2.2}
+    assert groups['LED'] == groups['LEDROD'] == groups['ROD'] == {4}
+    assert model.category(dict(rows[2], sku='EUB-C-CAB01-PNL001')) == 'PNL'
+    assert model.category(dict(rows[2], sku='USB-C-CAB02-SLF006')) == 'SHELF'

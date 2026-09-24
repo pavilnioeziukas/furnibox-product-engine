@@ -11,13 +11,13 @@ comparison = Blueprint('furnibox_comparison', __name__)
 COLUMNS = [
  ('sku','Detalės kodas'), ('group','Grupė'), ('furnibox_coefficient','Realus Furnibox koef.'),
  ('reform','Reform pardavimo kaina, €/vnt.'), ('purchase','Furnibox pirkimo kaina, €/vnt.'),
- ('calculated_purchase','Reali pirkimo kaina iš Furnix, €/vnt.'), ('coefficient','Furnix koef. (įvedamas ranka)'),
+ ('calculated_purchase','Reali pirkimo kaina iš Furnix, €/vnt.'), ('coefficient','Furnix kategorijos koef.'),
  ('furnibox_coefficient','Realus Furnibox koef.'), ('material','Plokštė + briaunavimas, €/vnt.'),
  ('difference','Skirtumas: pirkimas − plokštė ir briauna, €/vnt.'),
  ('difference_pct','Skirtumo dalis Furnix pardavimo kainoje, %'),
  ('reform_difference','Skirtumas Reform − pirkimas, €/vnt.'), ('reform_markup','Reform antkainis nuo pirkimo, %'),
  ('basis','Pirkimo kainos pagrindas'), ('note','Duomenų pastaba'), ('po','Pirkimo užsakymas'),
- ('date','Patvirtinimo data'), ('status','Katalogo būsena'), ('name','Detalės pavadinimas')]
+ ('date','Patvirtinimo data'), ('status','Katalogo būsena'), ('name','Detalės pavadinimas'), ('category','Koeficiento kategorija')]
 
 
 @comparison.route('/detail-comparison', methods=['GET','POST'])
@@ -30,8 +30,8 @@ def index():
             abort(400)
         try:
             action = request.form.get('action')
-            if action == 'coefficient':
-                model.save_coefficient(directory, request.form.get('sku'), request.form.get('coefficient'))
+            if action == 'category_coefficient':
+                model.save_category_coefficient(directory, request.form.get('category'), request.form.get('coefficient'))
             elif action == 'rates':
                 model.save_rates(directory, request.form)
             else:
@@ -71,4 +71,5 @@ def index():
     return render_template('furnibox_comparison.html', rows=rows[(page-1)*100:page*100], total=len(all_rows),
         matched=len(rows), groups=sorted({r['group'] for r in all_rows}), q=request.args.get('q',''), group=group,
         status=status, page=page, pages=pages, rates=rates, labels=model.RATE_LABELS, columns=COLUMNS,
+        categories=model.category_summary(all_rows),
         csrf_token=token, error=error, saved=request.args.get('saved')=='1', source=model.source())

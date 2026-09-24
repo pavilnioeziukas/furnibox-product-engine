@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from functools import lru_cache
 from pathlib import Path
@@ -96,4 +97,46 @@ def results(directory):
         value = json.loads(path.read_text(encoding='utf-8'))
         overrides[value['sku']] = number(value['coefficient'], 'Furnix koeficientas', positive=True)
     rates = load_rates(directory)
-    return rates, [calculate(row, rates, overrides.get(row['sku'])) for row in source()['rows']]
+    categories = {}
+    for path in (Path(directory)/'category_coefficients').glob('*.json'):
+        value = json.loads(path.read_text(encoding='utf-8'))
+        categories[value['category']] = number(value['coefficient'], 'Furnix koeficientas', positive=True)
+    return rates, [dict(calculate(row, rates, categories.get(category(row), overrides.get(row['sku']))),
+                        category=category(row)) for row in source()['rows']]
+
+
+def category(row):
+    if row['coefficient'] is None:
+        return 'Netaikoma'
+    sku = row['sku'].upper()
+    special = re.search(r'-(PNL|PCL|SLF)\d+$', sku)
+    if special:
+        return 'SHELF' if special[1] == 'SLF' else special[1]
+    prefix = re.split(r'-\d', re.sub(r'^(EU|US)-', '', sku), maxsplit=1)[0]
+    if prefix.startswith('SREW-SHELF'):
+        kind = prefix.removeprefix('SREW-SHELF').lstrip('-')
+        return 'CORNER' if kind.startswith('CORNER') else kind or 'SHELF'
+    return prefix
+
+
+def category_summary(rows):
+    groups = {}
+    for row in rows:
+        if row['coefficient'] is None:
+            continue
+        item = groups.setdefault(row['category'], {'count': 0, 'values': set()})
+        item['count'] += 1
+        item['values'].add(row['coefficient'])
+    return [dict(name=name, count=item['count'],
+                 value=', '.join(f'{v:g}' for v in sorted(item['values'])))
+            for name, item in sorted(groups.items())]
+
+
+def save_category_coefficient(directory, name, value):
+    valid = {category(row) for row in source()['rows'] if row['coefficient'] is not None}
+    if name not in valid:
+        raise ValueError('Pasirinkite galiojančią detalių kategoriją.')
+    coefficient = number(value, 'Furnix koeficientas', positive=True)
+    key = hashlib.sha256(name.encode()).hexdigest()
+    _write(Path(directory)/'category_coefficients'/f'{key}.json',
+           dict(category=name, coefficient=coefficient))
