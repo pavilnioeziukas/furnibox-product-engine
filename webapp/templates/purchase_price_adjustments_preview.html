@@ -15,6 +15,8 @@
   Patikrinkite Excel rastus kainų skirtumus ir tik tada pritaikykite pakeitimus.
 </p>
 
+{% include 'purchase_price_import_limits.html' %}
+
 <section class="panel">
   <h2>Importo suvestinė</h2>
 
@@ -25,7 +27,7 @@
         <td><strong>{{ source_filename }}</strong></td>
       </tr>
       <tr>
-        <td>Excel kainų eilučių</td>
+        <td>Importui atrinktų kainų eilučių</td>
         <td>{{ summary["TOTAL"] }}</td>
       </tr>
       <tr>
@@ -49,7 +51,8 @@
 
   {% if changed_total == 0 %}
     <p>
-      Excel faile nėra naujų ar pasikeitusių pirkimo kainų korekcijų.
+      Importui atrinktose eilutėse nėra naujų ar pasikeitusių korekcijų.
+      Praleistos eilutės į šią suvestinę neįtrauktos — žr. importo ribojimus aukščiau.
     </p>
   {% else %}
     <p>
@@ -106,6 +109,13 @@
 </section>
 
 <section class="panel" style="margin-top: 24px;">
+  <h2>Kas nutiks pritaikius?</h2>
+  <p>Bus išsaugotos čia parodytos naujos ir pasikeitusios korekcijos.
+    Prieš pakeitimą sukuriama saugomų korekcijų atsarginė kopija.
+    Odoo kainos ir jau atsisiųsti failai nesikeis.</p>
+  <p>Kad korekcijos būtų panaudotos naujame kainų faile, po pritaikymo skiltyje
+    „Veiksmai“ paleiskite „Atnaujinti Reform kainodarą“.
+    Galutinio failo sukūrimas priklauso ir nuo etalono patikros rezultato.</p>
   <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
     <a
       class="secondary"

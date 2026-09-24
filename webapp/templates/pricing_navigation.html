@@ -1,4 +1,4 @@
-{% set reform = request.blueprint == 'calculators' or request.endpoint in ['pricing_control', 'pricing_rules', 'purchase_pricing'] %}
+{% set reform = request.blueprint == 'calculators' or request.endpoint in ['pricing_control', 'pricing_rules', 'purchase_pricing', 'preview_purchase_price_excel', 'apply_purchase_price_excel'] %}
 {% if reform %}
 <section class="pricing-context pricing-context-reform" aria-label="Kainos Reform">
   <div><strong>Kainos Reform</strong><span>Pardavimo kainos klientui Reform</span></div>
@@ -12,7 +12,7 @@
  ('calculators.shelf_home','Lentynos',{}),
  ('calculators.settings','Tarifai ir antkainis',{}),
  ('pricing_rules','SO taisyklės',{}),
- ('purchase_pricing','Savikainos parametrai',{})] %}
+ ('purchase_pricing','Pirkimo kainos',{})] %}
 <a href="{{ url_for(endpoint, **kwargs) }}">{{ label }}</a>
 {% endfor %}
 </nav>

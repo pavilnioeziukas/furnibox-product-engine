@@ -5,15 +5,33 @@
 {% block content %}
 <section class="page-head">
   <div>
-    <p class="eyebrow">Aplikacijos konfigūracija</p>
-    <h1>Pirkimo kainodara</h1>
+    <p class="eyebrow">Pirkimo kainos</p>
+    <h1>Pirkimo kainos ir korekcijos</h1>
   </div>
 </section>
 
 <p class="lead">
-  Cabinet Parts savikainos ir Furnix → Furnibox perdavimo kainos parametrai.
-  Šios reikšmės naudojamos kainų skaičiavime; Excel nebėra vykdymo šaltinis.
+  Čia įkelkite Tamaros pakoreguotą Excel ir peržiūrėkite pirkimo kainų pakeitimus.
+  Žemiau taip pat rasite Cabinet Parts savikainos parametrus.
 </p>
+
+<section class="panel" style="margin-bottom: 24px;">
+  <h2>Gavote Tamaros pakoreguotą failą?</h2>
+  <p>Naudokite grąžintą <strong>Furnibox_Tamara_Purchase_Prices.xlsx</strong>,
+    kuriame Tamara pakeitė <strong>F stulpelį</strong>. SKU ir stulpelių struktūra turi likti tie patys.
+    Komentaras kainos nekeičia.</p>
+  <ol>
+    <li><strong>Įkelkite ir peržiūrėkite.</strong> Tai galite atlikti gavę failą.
+      Vien įkėlimas aktyvių kainų nekeičia.</li>
+    <li><strong>Pritaikykite patikrintas korekcijas.</strong> Pakeičiamos saugomos pirkimo kainų korekcijos;
+      prieš pakeitimą sukuriama jų atsarginė kopija.</li>
+    <li><strong>Perskaičiuokite kainodarą.</strong> Skiltyje „Veiksmai“ paleiskite
+      „Atnaujinti Reform kainodarą“. Naujos korekcijos bus naudojamos skaičiuojant naują failą.
+      Jei etalono patikra nepraeina, galutinis Reform kainų failas gali būti nesugeneruotas.</li>
+  </ol>
+  <p>Odoo kainos ir jau atsisiųsti failai šiais veiksmais nekeičiami.</p>
+  <a class="primary" href="#purchase-price-adjustments">Įkelti Tamaros failą →</a>
+</section>
 
 <section class="panel">
   <h2>Cabinet Parts parametrai</h2>
@@ -200,7 +218,7 @@
   </p>
 
   <h3 style="margin-top: 24px;">
-    Atnaujinti korekcijas iš Excel
+    Įkelti Tamaros failą — atnaujinti korekcijas iš Excel
   </h3>
 
   <p>
@@ -209,6 +227,8 @@
     naujas bei pasikeitusias kainas. Duomenys bus pakeisti tik po
     atskiro patvirtinimo.
   </p>
+
+  {% include 'purchase_price_import_limits.html' %}
 
   <form
     method="post"
