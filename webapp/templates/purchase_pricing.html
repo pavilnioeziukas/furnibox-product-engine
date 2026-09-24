@@ -11,24 +11,48 @@
 </section>
 
 <p class="lead">
-  Čia įkelkite Tamaros pakoreguotą Excel ir peržiūrėkite pirkimo kainų pakeitimus.
+  Čia rasite visą pirkimo kainų koregavimo eigą: nuo failo paruošimo Tamarai iki jos pakeitimų pritaikymo.
   Žemiau taip pat rasite Cabinet Parts savikainos parametrus.
 </p>
 
 <section class="panel" style="margin-bottom: 24px;">
-  <h2>Gavote Tamaros pakoreguotą failą?</h2>
-  <p>Naudokite grąžintą <strong>Furnibox_Tamara_Purchase_Prices.xlsx</strong>,
-    kuriame Tamara pakeitė <strong>F stulpelį</strong>. SKU ir stulpelių struktūra turi likti tie patys.
-    Komentaras kainos nekeičia.</p>
+  <h2>Kaip paruošti failą Tamarai ir pritaikyti jos korekcijas?</h2>
+  <p><strong>Furnibox_Tamara_Purchase_Prices.xlsx</strong> yra Product Engine paruošiamas
+    pirkimo kainų peržiūros failas. Jame Tamara įrašo koreguotas pirkimo kainas,
+    kurias vėliau įkeliate atgal į šį įrankį.</p>
   <ol>
-    <li><strong>Įkelkite ir peržiūrėkite.</strong> Tai galite atlikti gavę failą.
-      Vien įkėlimas aktyvių kainų nekeičia.</li>
+    <li><strong>Suformuokite aktualų failą.</strong> Atidarykite
+      <a href="{{ url_for('index') }}">„Veiksmai“</a>, raskite
+      „Atnaujinti Reform kainodarą“ ir spauskite „Paleisti“.
+      Failas formuojamas šio paleidimo metu: nuskaitomos paskutinės pirkimo kainos iš Odoo,
+      panaudojamos jau saugomos Tamaros korekcijos ir apskaičiuojamos Cabinet Parts kainos.
+      Prieš naują kainų peržiūrą paleiskite šį veiksmą iš naujo — anksčiau atsisiųstas Excel savaime neatsinaujina.</li>
+    <li><strong>Atsisiųskite ir perduokite Tamarai.</strong> Palaukite, kol paleidimas baigsis.
+      Jo puslapyje, skiltyje „Rezultatai“, atsisiųskite
+      <strong>Furnibox_Tamara_Purchase_Prices.xlsx</strong> ir perduokite Tamarai.
+      Tą patį paleidimą vėliau rasite „Veiksmai“ → „Paskutiniai paleidimai“ → „Atidaryti“.
+      Veiksmas „Nuskaityti paskutines pirkimo kainas“ sukuria kitą failą —
+      <strong>Last_Purchase_Prices.xlsx</strong>; Tamaros korekcijoms naudokite aukščiau nurodytą peržiūros failą.</li>
+    <li><strong>Tamara pakoreguoja F stulpelį.</strong> Lape „COMPONENTS“ E stulpelyje pateikta
+      paskutinė faktinė pirkimo kaina, o F — koreguojama Furnibox (Tamaros) pirkimo kaina,
+      įskaitant jau taikomas korekcijas. Tamara keičia reikiamas F reikšmes ir išsaugo Excel.
+      SKU, lapų pavadinimus ir stulpelių struktūrą palikite tuos pačius.
+      Komentaras kainos nekeičia. „CABINET PARTS“ koregavimo ribojimai aprašyti prie įkėlimo.</li>
+    <li><strong>Įkelkite grąžintą failą ir peržiūrėkite skirtumus.</strong> Grįžkite į
+      „Kainos Reform“ → „Pirkimo kainos“ → „Įkelti Tamaros failą“.
+      Pasirinkite Tamaros išsaugotą Excel ir spauskite „Įkelti ir patikrinti Excel“.
+      Tai galite atlikti vos gavę failą. Vien įkėlimas aktyvių kainų nekeičia;
+      peržiūroje kainos palyginamos su šiuo metu saugomomis korekcijomis.</li>
     <li><strong>Pritaikykite patikrintas korekcijas.</strong> Pakeičiamos saugomos pirkimo kainų korekcijos;
       prieš pakeitimą sukuriama jų atsarginė kopija.</li>
     <li><strong>Perskaičiuokite kainodarą.</strong> Skiltyje „Veiksmai“ paleiskite
       „Atnaujinti Reform kainodarą“. Naujos korekcijos bus naudojamos skaičiuojant naują failą.
       Jei etalono patikra nepraeina, galutinis Reform kainų failas gali būti nesugeneruotas.</li>
   </ol>
+  <p><strong>Jei paleidimas rodo FAIL:</strong> patikrinkite vykdymo žurnalą ir „Rezultatus“.
+    Jei nepraėjo galutinės Reform kainodaros etalono patikra, Tamaros peržiūros failas vis tiek gali būti sukurtas.
+    Jei „Furnibox_Tamara_Purchase_Prices.xlsx“ rezultatų sąraše nėra, failo paruošimas nebaigtas —
+    pirmiausia reikia išsiaiškinti paleidimo klaidą.</p>
   <p>Odoo kainos ir jau atsisiųsti failai šiais veiksmais nekeičiami.</p>
   <a class="primary" href="#purchase-price-adjustments">Įkelti Tamaros failą →</a>
 </section>
