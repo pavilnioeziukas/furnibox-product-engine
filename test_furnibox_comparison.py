@@ -83,6 +83,7 @@ def test_full_page_navigation_and_auth(monkeypatch,tmp_path):
     monkeypatch.setattr(web,'auth_enabled',lambda:True)
     assert client.get('/detail-comparison').status_code==302
     assert client.get('/detail-comparison?export=csv').status_code==302
+    assert client.get('/detail-comparison?export=xlsx').status_code==302
 
 
 def test_category_bulk_scope_and_legacy_override(tmp_path):
@@ -117,3 +118,36 @@ def test_category_mapping_catalog():
     assert groups['LED'] == groups['LEDROD'] == groups['ROD'] == {4}
     assert model.category(dict(rows[2], sku='EUB-C-CAB01-PNL001')) == 'PNL'
     assert model.category(dict(rows[2], sku='USB-C-CAB02-SLF006')) == 'SHELF'
+
+
+def test_excel_export_current_settings_filters_and_types(tmp_path):
+    from openpyxl import load_workbook
+    app = Flask(__name__); app.secret_key = 'test'
+    app.config['DETAIL_CALCULATOR_PATHS'] = {'copy': tmp_path/'copy.json'}
+    app.register_blueprint(comparison)
+    model.save_category_coefficient(tmp_path/'furnibox_comparison', 'BACK-SREW', 3.5)
+    client = app.test_client()
+    response = client.get('/detail-comparison?export=xlsx&page=19')
+    assert response.status_code == 200
+    assert response.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    book = load_workbook(io.BytesIO(response.data), data_only=False)
+    sheet = book['Detalių kainos']
+    assert sheet.max_row == 1889 and sheet.freeze_panes == 'C6'
+    assert sheet['A8'].value == model.source()['rows'][2]['sku']
+    assert sheet['G8'].value == 3.5
+    assert sheet['F8'].value == pytest.approx(sheet['I8'].value * 3.5)
+    assert sheet['K8'].number_format == '0.00%'
+    assert sheet['I6'].value == 'Netaikoma'
+    assert 'Naudoti parametrai' in book.sheetnames
+    from webapp.furnibox_comparison import COLUMNS
+    _, expected = model.results(tmp_path/'furnibox_comparison')
+    for cells, row in zip(sheet.iter_rows(min_row=6), expected):
+        for cell, (key, _) in zip(cells, COLUMNS):
+            if isinstance(row[key], (int, float)):
+                assert cell.value == pytest.approx(row[key])
+            assert cell.data_type != 'f'
+    response = client.get('/detail-comparison?export=xlsx&q=EU-BACK-SREW-1187x379-BB')
+    filtered = load_workbook(io.BytesIO(response.data))['Detalių kainos']
+    assert filtered.max_row == 6
+    response = client.get('/detail-comparison?export=xlsx&q=nonexistent_xyz')
+    assert load_workbook(io.BytesIO(response.data))['Detalių kainos'].max_row == 5
