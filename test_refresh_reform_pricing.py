@@ -22,6 +22,40 @@ from refresh_reform_pricing import (
 
 
 class RefreshReformPricingTests(unittest.TestCase):
+    def test_purchase_review_survives_failed_selling_price_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bom = base / "original.xlsx"
+            bom.write_bytes(b"original")
+            output = base / "result"
+
+            def fake_run_step(title, *args):
+                if "reconciliation" in title.lower():
+                    Path(args[args.index("--output") + 1]).write_text(
+                        json.dumps({"mode": "READ_ONLY", "environment": "production", "summary": {}}),
+                        encoding="utf-8",
+                    )
+
+            def publish_review(source, destination, blocked):
+                self.assertEqual(blocked, [{"sku": "NEEDS-PRICE"}])
+                destination.write_bytes(b"purchase review")
+
+            with (
+                patch("refresh_reform_pricing.audit_input", return_value={"status": "PASS", "issues": []}),
+                patch("refresh_reform_pricing.stage_approved_v10_input", return_value=[]),
+                patch("refresh_reform_pricing.run_step", side_effect=fake_run_step),
+                patch("refresh_reform_pricing.read_pricing_status", return_value=({}, [{"sku": "NEEDS-PRICE"}])),
+                patch("refresh_reform_pricing.write_furnibox_purchase_prices", side_effect=publish_review),
+                patch("refresh_reform_pricing.validate_pricing_input_snapshot", side_effect=ValueError("baseline mismatch")),
+                patch("refresh_reform_pricing.enrich_pricing_workbook") as release,
+                patch("refresh_reform_pricing.shutil.copy2"),
+            ):
+                with self.assertRaisesRegex(ValueError, "baseline mismatch"):
+                    refresh(bom, output)
+                release.assert_not_called()
+            self.assertEqual((output / "Furnibox_Tamara_Purchase_Prices.xlsx").read_bytes(), b"purchase review")
+            self.assertFalse((output / "Reform_SO_Line_Prices.xlsx").exists())
+
     def test_refresh_uses_audited_staged_input_for_every_bom_reader(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

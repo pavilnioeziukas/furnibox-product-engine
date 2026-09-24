@@ -1180,10 +1180,21 @@ def refresh(
             *scope_arguments,
         )
         candidate = candidate_dir / "Reform_SO_Line_Prices.xlsx"
-        validate_pricing_input_snapshot(
-            candidate,
-            output_dir / "Pricing_Input_Snapshot.json",
-        )
+        try:
+            validate_pricing_input_snapshot(
+                candidate,
+                output_dir / "Pricing_Input_Snapshot.json",
+            )
+        except ValueError:
+            # This workbook requests purchase-price review, not selling-price
+            # approval. Preserve the failed release check after publishing it.
+            _, review_blocked = read_pricing_status(candidate)
+            write_furnibox_purchase_prices(
+                PRODUCTION_DIR / "Reform_Final_Prices.xlsx",
+                output_dir / "Furnibox_Tamara_Purchase_Prices.xlsx",
+                review_blocked,
+            )
+            raise
         generated_review = audit_generated_boms(candidate)
         (output_dir / "Approved_Generated_BOM_Check.json").write_text(
             json.dumps(generated_review, ensure_ascii=False, indent=2) + "\n",
