@@ -133,6 +133,8 @@ app.config['DETAIL_CALCULATOR_PATHS'] = {
     'dataset': PRODUCTION_DATASET_PATH,
 }
 app.register_blueprint(detail_calculators)
+from webapp.furnibox_comparison import comparison
+app.register_blueprint(comparison)
 
 app.secret_key = SETTINGS.web_secret or secrets.token_hex(32)
 

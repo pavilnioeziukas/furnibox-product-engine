@@ -19,7 +19,7 @@
       <a href="{{ url_for('index') }}">Veiksmai</a>
       {% if product_engine.show_pricing_nav %}
         <a href="{{ url_for('calculators.reform_home') }}" {% if request.blueprint == 'calculators' or request.endpoint in ['pricing_control', 'pricing_rules', 'purchase_pricing'] %}aria-current="page"{% endif %}>Kainos Reform</a>
-        <a href="{{ url_for('detail_calculators.calculator') }}" {% if request.blueprint == 'detail_calculators' %}aria-current="page"{% endif %}>Kainos Furnibox</a>
+        <a href="{{ url_for('furnibox_comparison.index') }}" {% if request.blueprint in ['detail_calculators','furnibox_comparison'] %}aria-current="page"{% endif %}>Kainos Furnibox</a>
       {% endif %}
       {% if bootstrap_manager_enabled %}
         <a href="{{ url_for('bootstraps') }}">Bootstraps</a>

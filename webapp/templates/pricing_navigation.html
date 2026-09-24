@@ -2,7 +2,7 @@
 {% if reform %}
 <section class="pricing-context pricing-context-reform" aria-label="Kainos Reform">
   <div><strong>Kainos Reform</strong><span>Pardavimo kainos klientui Reform</span></div>
-  <a href="{{ url_for('detail_calculators.calculator') }}">Reikia Furnix → Furnibox kainos? →</a>
+  <a href="{{ url_for('furnibox_comparison.index') }}">Reikia Furnix → Furnibox kainos? →</a>
 </section>
 <nav class="pricing-subnav" aria-label="Reform kainodara">
 {% for endpoint,label,kwargs in [
@@ -16,7 +16,7 @@
 <a href="{{ url_for(endpoint, **kwargs) }}">{{ label }}</a>
 {% endfor %}
 </nav>
-{% elif request.blueprint == 'detail_calculators' %}
+{% elif request.blueprint in ['detail_calculators','furnibox_comparison'] %}
 <section class="pricing-context pricing-context-furnibox" aria-label="Kainos Furnibox">
   <div><strong>Kainos Furnibox</strong><span>Furnix UAB parduoda → Furnibox UAB perka</span></div>
   <a href="{{ url_for('calculators.reform_home') }}">Reikia kainos klientui Reform? →</a>
