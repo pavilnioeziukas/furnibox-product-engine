@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Pardavimo kiekiai · Furnibox{% endblock %}
 {% block content %}
+<a class="back" href="{{ url_for('reports.index') }}">← Visos ataskaitos</a>
 <section class="hero"><div><p class="eyebrow">Pardavimų ataskaita</p><h1>Cabinet ir shelf kiekiai</h1><p>Patvirtintų SO kiekiai ir išrašytų sąskaitų kiekiai, atėmus kreditines.</p></div></section>
 <form class="panel" method="get" style="display:flex;flex-wrap:wrap;align-items:end;gap:20px">
   <label>Nuo <input type="date" name="start" value="{{ start }}" required></label>

@@ -6,6 +6,9 @@ on:
     paths:
       - sales_quantity_report.py
       - webapp/sales_quantities.py
+      - webapp/reports.py
+      - webapp/templates/reports.html
+      - webapp/templates/base.html
       - webapp/templates/sales_quantities.html
       - test_sales_quantity_report.py
 jobs:
