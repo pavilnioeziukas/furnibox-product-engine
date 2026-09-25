@@ -487,6 +487,8 @@ ACTIONS = load_actions(
     enabled_actions=SETTINGS.enabled_actions,
     action_modules=SETTINGS.action_modules,
 )
+app.config['REPORT_ACTIONS'] = ACTIONS
+app.config['REPORT_PRICING_ENABLED'] = SETTINGS.show_pricing_nav
 
 
 _jobs_lock = threading.Lock()

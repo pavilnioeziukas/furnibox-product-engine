@@ -34,7 +34,7 @@
 <section class="section-head"><div><p class="eyebrow">2 žingsnis</p><h2>Veiksmai</h2></div><p>Vienu metu vykdykite vieną sunkų veiksmą.</p></section>
 <section class="action-grid">
   {% for key, action in actions.items() %}
-    <article class="action-card">
+    <article class="action-card" id="action-{{ key }}" style="scroll-margin-top:24px">
       <div class="action-number">{{ loop.index }}</div>
       <h3>{{ action.title }}</h3>
       <p>{{ action.description }}</p>
@@ -52,7 +52,7 @@
   {% endfor %}
 </section>
 
-<section class="section-head"><div><p class="eyebrow">Kontrolė</p><h2>Paskutiniai paleidimai</h2></div></section>
+<section class="section-head" id="recent-runs"><div><p class="eyebrow">Kontrolė</p><h2>Paskutiniai paleidimai</h2></div></section>
 <div class="table-wrap">
   <table>
     <thead><tr><th>Veiksmas</th><th>Būsena</th><th>Pradėta (UTC)</th><th>Rezultatai</th><th></th></tr></thead>

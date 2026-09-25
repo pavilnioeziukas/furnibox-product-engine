@@ -5,15 +5,26 @@
   <div>
     <p class="eyebrow">{{ product_engine.brand_name }} · Ataskaitos</p>
     <h1>Ataskaitos</h1>
-    <p>Pasirinkite ataskaitą ir peržiūrėkite pasirinkto laikotarpio duomenis.</p>
+    <p>Pardavimų, pirkimo kainų, sandėlio ir gamybos ataskaitos vienoje vietoje.</p>
   </div>
 </section>
-<div class="action-grid">
-  <article class="action-card">
-    <span class="eyebrow">Pardavimai</span>
-    <h2>Cabinet ir shelf kiekiai</h2>
-    <p>Patvirtintų SO ir pardavimo sąskaitų kiekiai, atėmus kreditines. Surenkamos ir flatpack spintelės detalizuojamos pagal tipus.</p>
-    <a class="primary" style="text-align:center;text-decoration:none" href="{{ url_for('sales_quantities.index') }}">Atidaryti ataskaitą</a>
-  </article>
-</div>
+<section class="panel">
+  <p style="margin-top:0">Peržiūros atsidaro iš karto. Generuojamoms ataskaitoms atversime jų paruošimo formą: jei reikia, įveskite SO numerį ir spauskite „Paleisti“.</p>
+  <a class="back" href="{{ url_for('index', _anchor='recent-runs') }}">Anksčiau sugeneruotos ataskaitos ir failai →</a>
+</section>
+{% for group in groups %}
+<section aria-label="{{ group.title }}">
+  <div class="section-head"><h2>{{ group.title }}</h2></div>
+  <div class="action-grid">
+  {% for card in group.cards %}
+    <article class="action-card">
+      <span class="eyebrow">{{ card.kind }}</span>
+      <h3>{{ card.title }}</h3>
+      <p>{{ card.description }}</p>
+      <a class="primary" style="text-align:center;text-decoration:none" href="{{ url_for(card.endpoint, _anchor='action-' ~ card.action) if card.action else url_for(card.endpoint) }}">{{ 'Paruošti ataskaitą' if card.action else 'Atidaryti' }}</a>
+    </article>
+  {% endfor %}
+  </div>
+</section>
+{% endfor %}
 {% endblock %}
