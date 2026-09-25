@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Ataskaitos · {{ product_engine.brand_name }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">{{ product_engine.brand_name }} · Ataskaitos</p>
+    <h1>Ataskaitos</h1>
+    <p>Pasirinkite ataskaitą ir peržiūrėkite pasirinkto laikotarpio duomenis.</p>
+  </div>
+</section>
+<div class="action-grid">
+  <article class="action-card">
+    <span class="eyebrow">Pardavimai</span>
+    <h2>Cabinet ir shelf kiekiai</h2>
+    <p>Patvirtintų SO ir pardavimo sąskaitų kiekiai, atėmus kreditines. Surenkamos ir flatpack spintelės detalizuojamos pagal tipus.</p>
+    <a class="primary" style="text-align:center;text-decoration:none" href="{{ url_for('sales_quantities.index') }}">Atidaryti ataskaitą</a>
+  </article>
+</div>
+{% endblock %}
