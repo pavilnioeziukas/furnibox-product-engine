@@ -124,6 +124,8 @@ MAX_UPLOAD_BYTES = SETTINGS.max_upload_mb * 1024 * 1024
 
 
 app = Flask(__name__)
+from webapp.sales_quantities import sales_quantities
+app.register_blueprint(sales_quantities)
 from webapp.calculators import calculators
 app.register_blueprint(calculators)
 from webapp.detail_calculators import detail_calculators
