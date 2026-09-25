@@ -1,9 +1,10 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Blueprint, current_app, render_template, request
-from sales_quantity_report import build_report, period
+from sales_quantity_report import build_report, period, whole_quantity
 
 sales_quantities = Blueprint('sales_quantities', __name__)
+sales_quantities.add_app_template_filter(whole_quantity, 'whole_quantity')
 
 
 def report_client():

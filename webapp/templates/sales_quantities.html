@@ -13,11 +13,15 @@
 <p><strong>{{ report.company }}</strong> · {{ report.start }} – {{ report.end }} <span class="muted">· Atnaujinta {{ report.generated }}</span></p>
 <div class="table-wrap"><table>
 <thead><tr><th>Kategorija</th><th>Patvirtintų SO qty</th><th>Sąskaitų qty</th><th>Kreditinių qty</th><th>Sąskaitų qty po kreditinių</th></tr></thead>
-<tbody>{% for row in report.summary %}<tr><td>{{ row.label }}</td><td>{{ "%.3f"|format(row.so) }}</td><td>{{ "%.3f"|format(row.invoice) }}</td><td>{{ "%.3f"|format(row.credit) }}</td><td><strong>{{ "%.3f"|format(row.net) }}</strong></td></tr>{% endfor %}</tbody>
+<tbody>{% for row in report.summary %}
+<tr style="background:#edf3ee;font-weight:700"><th scope="row" style="color:var(--ink);font-size:14px;text-transform:none;letter-spacing:normal">{{ row.label }}{% if row.types %} · iš viso{% endif %}</th><td>{{ row.so|whole_quantity }}</td><td>{{ row.invoice|whole_quantity }}</td><td>{{ row.credit|whole_quantity }}</td><td><strong>{{ row.net|whole_quantity }}</strong></td></tr>
+{% for item in row.types %}<tr><th scope="row" style="padding-left:36px;text-transform:none;letter-spacing:normal">{{ item.label }}</th><td>{{ item.so|whole_quantity }}</td><td>{{ item.invoice|whole_quantity }}</td><td>{{ item.credit|whole_quantity }}</td><td><strong>{{ item.net|whole_quantity }}</strong></td></tr>{% endfor %}
+{% endfor %}</tbody>
 </table></div>
+<p class="muted">Kiekiai rodomi suapvalinti iki sveikų skaičių. Bendros sumos skaičiuojamos iš nesuapvalintų kiekių. Spintelių tipai nustatomi pagal „Internal Reference“ (BAS, UPP, TOP ir kt.).</p>
 {% if not report.details %}<p class="empty">Pasirinktu laikotarpiu atitinkančių prekių eilučių nerasta.</p>{% endif %}
 <details class="panel" style="margin-top:24px"><summary>Dokumentų eilutės ({{ report.details|length }})</summary><div style="overflow:auto;max-height:65vh"><table><thead><tr><th>Tipas</th><th>Dokumentas</th><th>Data</th><th>Internal Reference</th><th>Kategorija</th><th>Qty</th><th>Vienetas</th></tr></thead><tbody>
-{% for row in report.details %}<tr><td>{{ {'so':'SO','invoice':'Sąskaita','credit':'Kreditinė'}[row.kind] }}</td><td>{{ row.document }}</td><td>{{ row.date }}</td><td>{{ row.code }}</td><td>{{ row.category }}</td><td>{{ "%.3f"|format(row.quantity) }}</td><td>{{ row.unit }}</td></tr>{% endfor %}
+{% for row in report.details %}<tr><td>{{ {'so':'SO','invoice':'Sąskaita','credit':'Kreditinė'}[row.kind] }}</td><td>{{ row.document }}</td><td>{{ row.date }}</td><td>{{ row.code }}</td><td>{{ row.category }} · {{ row.product_type }}</td><td>{{ row.quantity|whole_quantity }}</td><td>{{ row.unit }}</td></tr>{% endfor %}
 </tbody></table></div></details>
 <details class="panel" style="margin-top:16px"><summary>Neįtraukti produktų kodai ({{ report.excluded|length }})</summary><p>FPACK, APACK, furnitūra ir kiti komponentai atskirai neskaičiuojami. Neatpažinti kodai pateikiami čia patikrai.</p><div style="overflow:auto;max-height:40vh"><table><thead><tr><th>Internal Reference</th><th>Pavadinimas</th></tr></thead><tbody>{% for code, name in report.excluded|dictsort %}<tr><td>{{ code }}</td><td>{{ name }}</td></tr>{% endfor %}</tbody></table></div></details>
 {% endif %}
