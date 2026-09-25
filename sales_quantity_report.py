@@ -1,6 +1,6 @@
 """Read-only SO and posted invoice quantities, classified by Internal Reference."""
 from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import re
 from zoneinfo import ZoneInfo
 
@@ -14,6 +14,12 @@ def classify(code):
     if not match:
         return None
     return 'shelf' if match[1] == 'SLF' else ('assembled' if match[2] else 'flatpack')
+
+
+def whole_quantity(value):
+    """Round only for display; keep unrounded quantities in all calculations."""
+    rounded = Decimal(str(value)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    return '0' if rounded == 0 else str(rounded)
 
 
 def period(start, end):
@@ -64,6 +70,7 @@ def build_report(client, start, end):
         products.update({p['id']: p for p in read('product.product', [['id', 'in', product_ids[offset:offset+500]]], ['default_code', 'name', 'uom_id'])})
     units = {u['id']: u for u in read('uom.uom', [], ['name', 'factor', 'category_id', 'uom_type'])} if product_ids else {}
     summary = {key: {'label': label, 'so': Decimal(0), 'invoice': Decimal(0), 'credit': Decimal(0), 'net': Decimal(0)} for key, label in LABELS.items()}
+    types = {'assembled': {}, 'flatpack': {}}
     details, excluded = [], {}
     for lines, docs, link, quantity, unit in (
         (so_lines, {d['id']: d for d in orders}, 'order_id', 'product_uom_qty', 'product_uom'),
@@ -82,14 +89,25 @@ def build_report(client, start, end):
             doc = docs[relation_id(line[link])]
             kind = 'so' if link == 'order_id' else ('credit' if doc['move_type'] == 'out_refund' else 'invoice')
             summary[category][kind] += qty
+            product_type = CODE.fullmatch(code.upper())[1]
+            if category in types:
+                type_row = types[category].setdefault(product_type, {
+                    'label': product_type, 'so': Decimal(0), 'invoice': Decimal(0),
+                    'credit': Decimal(0), 'net': Decimal(0)})
+                type_row[kind] += qty
             signed = -qty if kind == 'credit' else qty
             doc_date = doc[confirmation] if kind == 'so' else doc['invoice_date']
             if kind == 'so':
                 doc_date = datetime.fromisoformat(doc_date).replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/Vilnius')).strftime('%Y-%m-%d %H:%M:%S')
             details.append({'kind': kind, 'document': doc['name'], 'date': doc_date, 'code': code,
-                'category': LABELS[category], 'quantity': signed, 'unit': target_unit['name']})
-    for row in summary.values():
+                'category': LABELS[category], 'product_type': product_type,
+                'quantity': signed, 'unit': target_unit['name']})
+    for category, row in summary.items():
         row['net'] = row['invoice'] - row['credit']
+        row['types'] = []
+        for key, type_row in sorted(types.get(category, {}).items()):
+            type_row['net'] = type_row['invoice'] - type_row['credit']
+            row['types'].append(type_row)
     return {'start': start, 'end': end, 'company': company[1], 'confirmation_field': confirmation,
         'summary': list(summary.values()), 'details': details, 'excluded': excluded,
         'generated': datetime.now(ZoneInfo('Europe/Vilnius')).strftime('%Y-%m-%d %H:%M:%S')}
