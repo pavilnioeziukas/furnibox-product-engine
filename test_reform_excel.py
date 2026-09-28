@@ -127,3 +127,26 @@ def test_upload_requires_csrf_and_file_page_renders(setup):
     app, client = setup
     assert client.post('/reform/excel/upload', data={}).status_code == 400
     assert 'Upload and compare' in client.get('/reform/?view=files').text
+
+def test_full_catalogue_roundtrip_and_read_only_bom(setup):
+    app, client = setup
+    with app.app_context(), db() as conn:
+        data = baseline(conn)
+        data['products']['UNUSED'] = dict(data['products']['PANEL-01'], sku='UNUSED', name='Unused card')
+        data['boms']['2'] = copy.deepcopy(data['boms']['1'])
+        data['boms']['2'].update(id='2', sku='UNUSED', read_only='Internal assembly')
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    response = client.get('/reform/excel/download?scope=all')
+    book = load_workbook(io.BytesIO(response.data))
+    assert book['Products'].max_row == 5
+    assert book['BOMs'].max_row == 3
+    assert book['Read-only']['B2'].value == '2'
+    assert 'No changes detected' in upload_book(client, book).text
+    book['Components']['E4'] = 9
+    assert 'read-only' in upload_book(client, book).text
+    book['Components']['E4'] = 2
+    book['Components']['E2'] = 7
+    assert 'Excel changes saved' in upload_book(client, book).text
+    with app.app_context(), db() as conn:
+        work = unpack(conn.execute('SELECT payload FROM drafts').fetchone()[0])
+        assert work['target']['boms']['2'] == data['boms']['2']

@@ -25,8 +25,10 @@ def exchange_table(conn):
     conn.execute('CREATE TABLE IF NOT EXISTS file_exports (id TEXT PRIMARY KEY, owner TEXT NOT NULL, created TEXT NOT NULL, payload BLOB NOT NULL)')
 
 
-def scope_for(work, sku):
+def scope_for(work, sku, full=False):
     target = visible_work(work)['target']
+    if full:
+        return {k: target[k] for k in ('products', 'boms')}
     if sku and sku not in target['products']:
         raise ValueError('Select a product from the Reform catalogue.')
     products, boms, pending = {}, {}, [sku] if sku else []
@@ -62,7 +64,8 @@ def make_book(token, record):
     guide.title = 'Instructions'
     for row in [
         ['REFORM BOM EXCHANGE', ''],
-        ['Product', record['sku'] or 'New products and BOMs'],
+        ['Product', 'Full Reform catalogue' if record.get('full') else record['sku'] or 'New products and BOMs'],
+        ['Read-only records', 'Records listed in Read-only must remain unchanged. Internal assembly components are excluded from this Reform view.'],
         ['Source captured (UTC)', record['work']['base']['captured_at']],
         ['1. Edit', 'Products: edit names/categories; append new products with code, name, category and unit. Existing codes and units stay unchanged.'],
         ['2. Define BOMs', 'BOMs: edit reference or output quantity. For a new BOM, add a unique key starting NEW-, for example NEW-1.'],
@@ -91,6 +94,12 @@ def make_book(token, record):
             sheet.append(row)
         sheet.freeze_panes = 'A2'
         sheet.auto_filter.ref = sheet.dimensions
+    locked = wb.create_sheet('Read-only')
+    locked.append(['Record type', 'Key', 'Reason'])
+    for kind in ('products', 'boms'):
+        for key, value in scope[kind].items():
+            if value.get('read_only'):
+                locked.append([kind, key, value['read_only']])
     catalogue = wb.create_sheet('Catalogue')
     catalogue.append(['Product code', 'Name', 'Category', 'Unit'])
     products = record['work']['target']['products']
@@ -188,7 +197,15 @@ def apply_book(wb, record, reserved):
     seen = set()
     for n, row in rows_from(wb, 'Products'):
         code, name, category, unit = map(text, row)
+        if row[0] in scope['products']:
+            code = row[0]
         prefix = f'Products, row {n}: '
+        old = scope['products'].get(code)
+        if old and row[:2] == [code, old['name']] and text(row[2]) == text(old.get('category', '')) and row[3] == old['uom']:
+            if code.casefold() in seen:
+                raise ValueError(prefix + 'duplicate product code.')
+            seen.add(code.casefold())
+            continue
         if not code or len(code) > 100 or not name or len(name) > 300 or not reform_visible(code):
             raise ValueError(prefix + 'enter a valid Reform product code and name.')
         if code.casefold() in seen:
@@ -222,10 +239,17 @@ def apply_book(wb, record, reserved):
     keys, editable = {}, {}
     for n, row in rows_from(wb, 'BOMs'):
         key, code, reference = map(text, row[:3])
+        if row[1] in target['products']:
+            code = row[1]
         prefix = f'BOMs, row {n}: '
         if not key or key in keys or len(key) > 100:
             raise ValueError(prefix + 'BOM key is missing or duplicated.')
         old = scope['boms'].get(key)
+        if old and code == old['sku'] and reference == old['code'].strip() and row[3] == old['quantity']:
+            bom = copy.deepcopy(old)
+            bom['components'] = []
+            keys[key], editable[key] = key, bom
+            continue
         if old:
             if code != old['sku']:
                 raise ValueError(prefix + 'the product of an existing BOM cannot change.')
@@ -254,6 +278,8 @@ def apply_book(wb, record, reserved):
     seen_lines = set()
     for n, row in rows_from(wb, 'Components'):
         key, lid, action, code = map(text, row[:4])
+        if row[3] in target['products']:
+            code = row[3]
         prefix = f'Components, row {n}: '
         if key not in keys or action not in ('KEEP', 'REMOVE'):
             raise ValueError(prefix + 'use a BOM key from BOMs and Action KEEP or REMOVE.')
@@ -262,6 +288,9 @@ def apply_book(wb, record, reserved):
             if not old or (key, lid) in seen_lines:
                 raise ValueError(prefix + 'Line ID is invalid or duplicated for this BOM.')
             seen_lines.add((key, lid))
+        if old and action == 'KEEP' and code == old['sku'] and row[4] == old['quantity']:
+            editable[key]['components'].append(copy.deepcopy(old))
+            continue
         if action == 'REMOVE':
             if not old:
                 raise ValueError(prefix + 'only an existing component can be marked REMOVE.')
@@ -285,6 +314,12 @@ def apply_book(wb, record, reserved):
     for key, bom in editable.items():
         positions = {l['id']: i for i, l in enumerate(scope['boms'].get(key, {}).get('components', []))}
         bom['components'].sort(key=lambda l: positions.get(l['id'], len(positions)))
+        old = scope['boms'].get(key)
+        if old and bom == old:
+            continue  # Preserve the full stored BOM, including hidden internal rows.
+        if old and old.get('read_only'):
+            raise ValueError(f'BOM {key} is read-only and must remain unchanged.')
+        target['boms'][keys[key]] = bom
     delta = changes(record['work']['base'], target)
     validate_proposal(target, delta)
     return target
@@ -298,12 +333,13 @@ def excel_download():
             if digest(work['base']) != digest(baseline(conn)):
                 raise ValueError('Your draft uses an older source. Resolve it before downloading an Excel file.')
             sku = request.args.get('product', '').strip()
-            record = {'work': work, 'revision': revision, 'sku': sku, 'scope': scope_for(work, sku), 'options': options_for(work)}
+            full = request.args.get('scope') == 'all'
+            record = {'work': work, 'revision': revision, 'sku': sku, 'full': full, 'scope': scope_for(work, sku, full), 'options': options_for(work)}
             token = secrets.token_urlsafe(32)
             data = make_book(token, record)
             exchange_table(conn)
             conn.execute('INSERT INTO file_exports VALUES (?,?,?,?)', (token, owner(), now(), pack(record)))
-        return send_file(data, as_attachment=True, download_name='Reform-BOM.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return send_file(data, as_attachment=True, download_name='Reform-Full-Catalogue.xlsx' if full else 'Reform-BOM.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     except ValueError as exc:
         flash(str(exc))
         return redirect(url_for('reform.index', view='files'))
