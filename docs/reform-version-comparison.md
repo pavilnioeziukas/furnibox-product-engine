@@ -15,3 +15,9 @@ Ekrane rodoma iki 1 000 filtruotų pakeitimų eilučių; Excel pateikiamos visos
 
 Patikra: `python -m unittest test_reform_version_diff -v`.
 
+
+## Skaitoma pakeitimų ataskaita
+
+Pagrindinis vaizdas rodo išvadą, unikalių SKU išskaidymą pagal kategoriją ir savo BOM turėjimą, naujų BOM grupes pagal kategoriją ir kodo pradžią. SKU ir BOM skaičiai nesumuojami. Viena SKU sąrašo eilutė atitinka vieną kodą, o viena BOM sąrašo eilutė — vieną BOM su išskleidžiama komplektacija. Esamų BOM pakeitimai pateikiami sakiniais. Pašalinti SKU ir pašalinti BOM atskiriami.
+
+Excel skyriai: Santrauka, Nauji SKU, Nauji BOM, BOM komponentai, Esamų BOM pakeitimai, Pašalintos pozicijos, Pakeitimai (pilnas techninis priedas). Trūkstami komponentų pavadinimai neinventuojami. Ankstesnės JSON ataskaitos pateikiamos nauju formatu jų neperskaičiuojant ir nekeičiant šaltinio failų.
