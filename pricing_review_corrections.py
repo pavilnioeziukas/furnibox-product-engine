@@ -54,7 +54,34 @@ def apply_review(document, review=None, known_skus=()):
             rule = compose_bom_category_rule('', expression, document)
             category.update(name=rule.category_name, source_category_id=expression,
                             **dict(zip(ADDON_FIELDS, rule.addons)))
+    _apply_hrd022_non_bom(document, known)
     return document
+
+
+def _apply_hrd022_non_bom(document, known):
+    """2026-09-28: purchased item; retain its approved final price exception."""
+    sku = 'UNI-P-ACC01-HRD022'
+    normalized = sku.casefold()
+    version = '2026-09-28-hrd022-non-bom-v1'
+    applied = document.setdefault('review_corrections_applied', {})
+    if normalized not in known or applied.get(normalized) == version:
+        return
+    category_id = 'NONBOM-APPROVED-FINAL-PRICE'
+    if not any(row['id'] == category_id for row in document['non_bom_categories']):
+        document['non_bom_categories'].append({
+            'id': category_id, 'name': 'Patvirtinta galutinė kaina',
+            # No manufacturing surcharges for this purchased item. The final
+            # selling price is applied by final_price_exceptions after pricing.
+            'preparation': 0, 'storage': 0, 'bag': 0, 'sticker': 0,
+        })
+    for field in ('bom_skus', 'bom_products', 'non_bom_skus'):
+        document[field] = [row for row in document[field] if row['sku'].casefold() != normalized]
+    document['non_bom_skus'].append({
+        'sku': sku, 'name': '4 x LEG EU SET - F08/139',
+        'product_category': 'All / CABINET ACCESSORIES', 'category_id': category_id,
+    })
+    document.setdefault('pricing_type_overrides', {})[normalized] = 'NON-BOM'
+    applied[normalized] = version
 
 
 def explicit_bom_skus(document):
