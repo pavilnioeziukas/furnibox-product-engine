@@ -63,7 +63,6 @@
     "TB 1200X800",
     "TB 2400X1000",
     "TB 2400X800",
-    "UNI-P-ACC01-HRD022",
     "UNI-P-ACC01-HRD022-A",
     "UNI-P-ACC01-HRD023",
     "UNI-P-ACC01-HRD023-A",
@@ -116,5 +115,5 @@
     "USB-C-CAB03-PNL010"
   ],
   "approved_on": "2026-09-07",
-  "approval_scope": "All 110 listed SKUs approved for additional pricing only; Odoo and release Target remain unchanged"
+  "approval_scope": "Originally 110 SKUs approved on 2026-09-07; UNI-P-ACC01-HRD022 removed on 2026-09-28 because the business owner confirmed it has no BOM. The remaining 109 SKUs are approved for additional pricing only; Odoo and release Target remain unchanged"
 }
