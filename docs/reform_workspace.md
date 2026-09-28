@@ -132,3 +132,9 @@ on Windows). Real BAS001 export: 14 cards, 3 BOMs, 13 component rows. An unchang
 return, quantity edit, comparison and submission were verified in an isolated
 copy of the preview database. All six visible workbook sheets were rendered and
 reviewed. Linux CI now includes test_reform_excel.py.
+
+## Full catalogue export
+
+Excel exchange offers a distinct `Download full catalogue` action (`/reform/excel/download?scope=all`). It exports all products and current BOMs in the Reform-visible snapshot, including component rows and products without BOMs. Existing APACK / -A filters remain in effect. Read-only records are identified in a separate reference sheet. Unchanged historical records and internal dependencies are preserved on return; edits to read-only BOMs are rejected. The source capture timestamp remains visible: downloading is an export of the workspace snapshot, not a new Odoo read.
+
+Validated 2026-09-28: full snapshot roundtrip without changes, editable quantity changes and rejection of read-only BOM changes. 8 Excel exchange tests pass. Fresh Odoo read at 14:10 UTC confirms the displayed product and BOM data match the deployed snapshot.
