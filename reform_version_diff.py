@@ -16,7 +16,9 @@ def text(value):
 def read_version(path):
     wb = load_workbook(path, read_only=True, data_only=True)
     try:
-        sheet = next((s for s in ('BOM - Full DB', 'BOM - Input', 'BOM VERTICAL') if s in wb.sheetnames), None)
+        # This is the same authoritative input used by the Product Engine.
+        # Full DB is a derived expansion and may retain stale cached rows.
+        sheet = next((s for s in ('BOM - Input', 'BOM - Full DB', 'BOM VERTICAL') if s in wb.sheetnames), None)
         if sheet is None:
             raise ValueError(f'{path.name}: nerastas Reform BOM duomenų lapas.')
         ws = wb[sheet]
@@ -41,12 +43,12 @@ def read_version(path):
             raise ValueError(f'{path.name}: nerasti komponentų stulpeliai.')
         quantities = {}
         for prefix in prefixes:
-            qty = next((h for h in (prefix+'Qty', prefix+'Quantity', 'Qty' if vertical else '') if h in headers), None)
+            qty = next((h for h in (prefix+'Qty', prefix+'Qty.', prefix+'Quantity', 'Qty' if vertical else '') if h in headers), None)
             if qty is None:
                 raise ValueError(f'{path.name}: trūksta {prefix}Qty stulpelio.')
             quantities[prefix] = qty
         component_headers = {h for h in headers if any(h.startswith(p) for p in prefixes)} | set(quantities.values())
-        ignored = {'REF', 'BOM SKU Code', 'SKU Code'}
+        ignored = {'REF', 'BOM SKU Code', 'SKU Code', 'Row ID', 'Part #', 'Part Column'}
         metadata = set(headers) - component_headers - ignored
         products = {}
         for number, row in enumerate(rows, number+1):
@@ -71,7 +73,7 @@ def read_version(path):
                 except InvalidOperation:
                     raise ValueError(f'{path.name}: {parent} / {code} netinkamas arba neperskaičiuotas kiekis, eilutė {number}.')
                 details = {h[len(prefix):]: get(h) for h in component_headers
-                           if h.startswith(prefix) and h not in (prefix+'Code', quantities[prefix]) and get(h)}
+                           if h.startswith(prefix) and h not in (prefix+'Code', quantities[prefix]) and h not in ignored and get(h)}
                 part = product['parts'].setdefault(code, {'qty': Decimal(0), 'fields': details})
                 if part['fields'] != details:
                     raise ValueError(f'{path.name}: {parent} / {code} prieštaringi komponento duomenys.')
