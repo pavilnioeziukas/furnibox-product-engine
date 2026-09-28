@@ -3,12 +3,12 @@
 <section class="hero"><div><p class="eyebrow">Reform</p><h1>Versijų pakeitimai</h1><p>Nauji ir pašalinti SKU, BOM sudėtis, kiekiai ir duomenų laukai.</p></div></section>
 <section class="panel">
 <p>Naują failą <a href="{{ url_for('index') }}">įkelkite skiltyje „Reform BOM įvestis“</a>. Ankstesnį pasirinkite iš istorijos. Siūlomi du paskutiniai įkėlimai — patikrinkite jų pavadinimus.</p>
-<p>Skaitomos išsaugotos failų reikšmės. Odoo nekeičiamas. Naudojamas „BOM - Full DB“, jei jo nėra — „BOM - Input“, tada „BOM VERTICAL“. Kiti lapai ir formulių tekstas nelyginami. Prieš įkeldami perskaičiuokite ir išsaugokite failą Excel.</p>
+<p>Lyginama pagrindinio „BOM - Input“ lapo sudėtis ir išsaugotos reikšmės. Jei šio lapo nėra, naudojamas „BOM - Full DB“ arba „BOM VERTICAL“. Odoo duomenys nekeičiami. Prieš įkeldami perskaičiuokite ir išsaugokite failą Excel.</p>
 {% if error %}<div class="notice" role="alert">{{ error }}</div>{% endif %}
 {% if files|length >= 2 %}<form method="post">
 <input type="hidden" name="csrf_token" value="{{ token }}">
-<label for="old">Ankstesnė versija</label><select id="old" name="old" required>{% for file in files %}<option value="{{ file.name }}" {% if request.form.get('old') == file.name or (not request.form and loop.index == 2) %}selected{% endif %}>{{ file.name }}</option>{% endfor %}</select>
-<label for="new">Nauja versija</label><select id="new" name="new" required>{% for file in files %}<option value="{{ file.name }}" {% if request.form.get('new') == file.name or (not request.form and loop.first) %}selected{% endif %}>{{ file.name }}</option>{% endfor %}</select>
+<p><label for="old" style="display:block;margin-bottom:8px">Ankstesnė versija</label><select id="old" name="old" style="width:100%;padding:10px" required>{% for file in files %}<option value="{{ file.name }}" {% if request.form.get('old') == file.name or (not request.form and loop.index == 2) %}selected{% endif %}>{{ file.name }}</option>{% endfor %}</select></p>
+<p><label for="new" style="display:block;margin-bottom:8px">Nauja versija</label><select id="new" name="new" style="width:100%;padding:10px" required>{% for file in files %}<option value="{{ file.name }}" {% if request.form.get('new') == file.name or (not request.form and loop.first) %}selected{% endif %}>{{ file.name }}</option>{% endfor %}</select></p>
 <p><button class="primary" type="submit">Palyginti versijas</button></p></form>
 {% else %}<p>Reikia bent dviejų įkeltų Reform failų. Rasta: {{ files|length }}.</p>{% endif %}
 </section>

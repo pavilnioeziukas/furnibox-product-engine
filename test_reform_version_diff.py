@@ -67,6 +67,26 @@ class VersionTests(unittest.TestCase):
         p = self.write('vertical.xlsx', [['A','X',2,'Hardware'],['A','Y',3,'Hardware']], headers, 'BOM VERTICAL')
         self.assertEqual(len(read_version(p)[1]['A']['parts']), 2)
 
+    def test_real_full_db_headers_and_row_numbers(self):
+        headers = ['Row ID','SKU Code','SKU Name','Part #','Part Column','Part Code','Part Qty.','Part Group']
+        p = self.write('db.xlsx', [[1,'A','Alpha',1,14,'X',2,'Hardware'],[2,'A','Alpha',2,18,'Y',3,'Hardware']], headers, 'BOM - Full DB')
+        sheet, products = read_version(p)
+        self.assertEqual(sheet, 'BOM - Full DB')
+        self.assertEqual(products['A']['fields'], {'SKU Name':'Alpha'})
+        self.assertEqual(products['A']['parts']['X']['fields'], {'Group':'Hardware'})
+        self.assertEqual(len(products['A']['parts']), 2)
+
+    def test_input_preferred_to_stale_derived_database(self):
+        p = self.write('source.xlsx', [['A','Alpha','X',2]])
+        wb = load_workbook(p)
+        stale = wb.create_sheet('BOM - Full DB', 0)
+        stale.append(['SKU Code','Part Code','Part Qty.'])
+        stale.append(['OLD','REMOVED',99])
+        wb.save(p)
+        sheet, products = read_version(p)
+        self.assertEqual(sheet, 'BOM - Input')
+        self.assertEqual(list(products), ['A'])
+
     def test_routes_export_and_input_validation(self):
         a = self.write('old.xlsx', [['A','Old','X',1]])
         b = self.write('new.xlsx', [['A','=unsafe','X',2]])

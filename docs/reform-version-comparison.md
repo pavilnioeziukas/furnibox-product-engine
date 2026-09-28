@@ -9,8 +9,9 @@ Ataskaita rodo naujus, pašalintus, pakeistus ir nepakitusius BOM; unikalius nau
 
 Tai failų versijų palyginimas, ne palyginimas su Odoo. Pašalinimas faile nėra nurodymas archyvuoti Odoo produktą. Palyginimas nekeičia Odoo ar aktyvaus failo. Naujo failo įkėlimas išlaiko esamą Product Engine įkėlimo elgseną.
 
-Skaitomas vienas lapas pagal prioritetą: `BOM - Full DB`, `BOM - Input`, `BOM VERTICAL`. Excel formulės neperskaičiuojamos: prieš įkeliant failą būtina perskaičiuoti ir išsaugoti Excel. Kiti lapai, formulių tekstas, formatavimas ir REF nelaikomi produktų pakeitimais. Skirtingų struktūrų lapai, tušti failai, pasikartojantys BOM, prieštaringi komponentų duomenys ir netinkami kiekiai sustabdo palyginimą. Trūkstamos ar tuščios laukų reikšmės laikomos tuščiomis.
+Skaitomas vienas lapas pagal prioritetą: `BOM - Input`, `BOM - Full DB`, `BOM VERTICAL`. Excel formulės neperskaičiuojamos: prieš įkeliant failą būtina perskaičiuoti ir išsaugoti Excel. Kiti lapai, formulių tekstas, formatavimas ir REF nelaikomi produktų pakeitimais. Skirtingų struktūrų lapai, tušti failai, pasikartojantys BOM, prieštaringi komponentų duomenys ir netinkami kiekiai sustabdo palyginimą. Trūkstamos ar tuščios laukų reikšmės laikomos tuščiomis.
 
 Ekrane rodoma iki 1 000 filtruotų pakeitimų eilučių; Excel pateikiamos visos. JSON ataskaitos laikomos esamame persistent STATE_DIR aplanke `version_reports`, o šaltiniai imami iš esamo `uploads` aplanko. HTTP prieiga naudoja bendrą programos autentifikaciją, palyginimo POST papildomai tikrina CSRF. Failai pasirenkami tik iš serverio įkėlimų sąrašo.
 
 Patikra: `python -m unittest test_reform_version_diff -v`.
+
