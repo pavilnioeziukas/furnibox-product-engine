@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'reform_version_diff.py'
+      - 'reform_change_report.py'
+      - 'webapp/reform_report_export.py'
       - 'webapp/reform_versions.py'
       - 'webapp/templates/reform_version*.html'
       - 'test_reform_version_diff.py'

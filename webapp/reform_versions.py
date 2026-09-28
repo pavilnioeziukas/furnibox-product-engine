@@ -1,5 +1,4 @@
 """Source comparison using existing upload history; never writes to Odoo."""
-import io
 import json
 import secrets
 import uuid
@@ -7,8 +6,8 @@ from pathlib import Path
 from zipfile import BadZipFile
 from datetime import datetime, timezone
 from flask import Blueprint, abort, current_app, render_template, request, session, redirect, url_for, send_file
-from openpyxl import Workbook
-from openpyxl.styles import Font
+from reform_change_report import present
+from webapp.reform_report_export import export_report
 from reform_version_diff import compare_versions
 
 versions = Blueprint('reform_versions', __name__)
@@ -70,39 +69,11 @@ def detail(report_id):
     if not path.is_file():
         abort(404)
     report = json.loads(path.read_text(encoding='utf-8'))
+    view = present(report)
     if request.args.get('format') == 'xlsx':
-        wb = Workbook()
-        summary = wb.active
-        summary.title = 'Santrauka'
-        for key in ('old', 'new', 'sheet', 'created_at'):
-            summary.append([{'old':'Ankstesnė versija','new':'Nauja versija','sheet':'Duomenų lapas','created_at':'Parengta UTC'}[key], report[key]])
-        for key, value in report['counts'].items():
-            summary.append([key, value])
-        ws = wb.create_sheet('Pakeitimai')
-        ws.append(['Pakeitimas', 'BOM SKU', 'Komponentas', 'Laukas', 'Buvo', 'Tapo'])
-        for row in report['changes']:
-            ws.append([row[k] for k in ('status', 'sku', 'part', 'field', 'before', 'after')])
-        for title, key in [('Nauji SKU', 'added_skus'), ('Pašalinti SKU', 'removed_skus')]:
-            tab = wb.create_sheet(title)
-            tab.append(['SKU'])
-            for sku in report[key]:
-                tab.append([sku])
-        for tab in wb:
-            tab.freeze_panes = 'A2'
-            tab.auto_filter.ref = tab.dimensions
-            for column in 'ABCDEF':
-                tab.column_dimensions[column].width = 36
-            for cell in tab[1]:
-                cell.font = Font(bold=True)
-            for row in tab:
-                for cell in row:
-                    if isinstance(cell.value, str):
-                        cell.data_type = 's'
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        return send_file(output, as_attachment=True, download_name='Reform_versiju_pakeitimai.xlsx',
+        return send_file(export_report(report, view), as_attachment=True,
+                         download_name='Reform_versiju_pakeitimai.xlsx',
                          mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     query = request.args.get('q', '').strip().casefold()
     rows = [r for r in report['changes'] if not query or query in ' '.join(r.values()).casefold()]
-    return render_template('reform_version_report.html', report=report, rows=rows[:1000], total=len(rows), report_id=report_id, query=request.args.get('q', ''))
+    return render_template('reform_version_report.html', report=report, view=view, rows=rows[:1000], total=len(rows), report_id=report_id, query=request.args.get('q', ''))

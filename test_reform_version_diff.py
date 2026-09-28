@@ -7,6 +7,7 @@ from flask import Flask
 from openpyxl import Workbook, load_workbook
 from reform_version_diff import compare_versions, read_version
 from webapp.reform_versions import versions
+from reform_change_report import present
 
 HEADERS = ['BOM SKU Code', 'Name', 'Part 1 Code', 'Part 1 Qty', 'Part 2 Code', 'Part 2 Qty']
 
@@ -45,6 +46,33 @@ class VersionTests(unittest.TestCase):
         quantity = next(r for r in result['changes'] if r['status'] == 'Pakeistas kiekis')
         self.assertEqual((quantity['before'], quantity['after']), ('1','3'))
         self.assertTrue(any(r['status'] == 'Pakeistas laukas' for r in result['changes']))
+        view = present(result)
+        self.assertEqual(len(view['added']),3)
+        self.assertEqual(view['with_bom'],1)
+        self.assertEqual(view['without_bom'],2)
+        self.assertEqual(len(view['boms']),1)
+        self.assertEqual(len(view['changed']),1)
+        self.assertIn('Komponento X kiekis pakeistas iš 1 į 3.', view['changed'][0]['descriptions'])
+        self.assertEqual(view['removed_boms'][0]['sku'],'B')
+
+    def test_existing_component_getting_bom_is_not_new_sku(self):
+        a=self.write('a.xlsx',[['A','Alpha','X',1]])
+        b=self.write('b.xlsx',[['A','Alpha','X',1],['X','Now assembled','Y',2]])
+        view=present(compare_versions(a,b))
+        self.assertEqual([p['sku'] for p in view['added']],['Y'])
+        self.assertEqual([p['sku'] for p in view['boms']],['X'])
+        self.assertEqual(view['with_bom'],0)
+        self.assertEqual(view['without_bom'],1)
+
+    def test_component_reused_in_new_boms_is_counted_once(self):
+        headers=['BOM SKU Code','Name','Part 1 Code','Part 1 Qty','Part 1 Group']
+        a=self.write('a.xlsx',[['A','Alpha','X',1,'Hardware']],headers)
+        b=self.write('b.xlsx',[['A','Alpha','X',1,'Hardware'],['B','Beta','Y',2,'SHELF PART'],['C','Gamma','Y',3,'SHELF PART']],headers)
+        view=present(compare_versions(a,b))
+        self.assertEqual(len(view['added']),3)
+        self.assertEqual(view['without_bom'],1)
+        self.assertEqual(next(p for p in view['added'] if p['sku']=='Y')['category'],'Lentynų detalės')
+        self.assertEqual(len(view['boms']),2)
 
     def test_bad_quantities_duplicate_and_empty_are_rejected(self):
         for value in (None, 0, -1, 'NaN', '=1+1'):
@@ -114,11 +142,16 @@ class VersionTests(unittest.TestCase):
         response = client.post('/reform-versions', data=dict(csrf_token=token, old=a.name, new=b.name))
         self.assertEqual(response.status_code, 302)
         location = response.headers['Location']
-        self.assertIn('Kas pasikeitė'.encode(), client.get(location).data)
+        page=client.get(location).data
+        self.assertIn('Kas pasikeitė'.encode(), page)
+        self.assertIn('Kas pakeista esamuose BOM?'.encode(), page)
+        self.assertIn('Komponento X kiekis pakeistas iš 1 į 2.'.encode(),page)
+        self.assertIn('Techninis priedas'.encode(),page)
         self.assertIn('Ankstesnės ataskaitos'.encode(), client.get('/reform-versions').data)
         exported = client.get(location+'?format=xlsx')
         self.assertEqual(exported.status_code, 200)
         wb = load_workbook(io.BytesIO(exported.data), data_only=False)
+        self.assertEqual(wb.sheetnames,['Santrauka','Nauji SKU','Nauji BOM','BOM komponentai','Esamų BOM pakeitimai','Pašalintos pozicijos','Pakeitimai'])
         cells = [c for row in wb['Pakeitimai'] for c in row if c.value == '=unsafe']
         self.assertEqual(len(cells), 1)
         self.assertEqual(cells[0].data_type, 's')
