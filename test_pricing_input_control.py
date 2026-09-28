@@ -32,6 +32,64 @@ def write_pricing_workbook(
 
 
 class PricingInputControlTests(unittest.TestCase):
+    def test_reporting_allows_drift_and_reports_changes_against_previous_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            workbook = base / "pricing.xlsx"
+            write_pricing_workbook(workbook, component_price=1.26,
+                                   component_source="PRODUCTION ODOO LAST PURCHASE PRICE")
+            previous = base / "runs" / "previous" / "files" / "Pricing_Input_Snapshot.json"
+            previous.parent.mkdir(parents=True)
+            records = build_pricing_input_snapshot(workbook)["records"]
+            records[0]["price"] = "1.25"
+            records = [row for row in records if row["sku"] != "PART-B"]
+            records.append({"rule": "R001", "sku": "REMOVED", "price": "5"})
+            previous.write_text(json.dumps({"schema_version": 2, "records": records}))
+            expected = base / "expected.json"
+            expected.write_text(json.dumps({"expected_sha256": "old", "expected_record_count": 3}))
+            output = base / "runs" / "current" / "files" / "Pricing_Input_Snapshot.json"
+            result = validate_pricing_input_snapshot(workbook, output, expected, report_changes=True)
+            self.assertEqual(result["status"], "CHANGED")
+            self.assertEqual(result["comparison_run"], "previous")
+            self.assertEqual(result["change_count"], 3)
+            changes = {row["sku"]: row for row in result["changes"]}
+            self.assertEqual(changes["PART-A"]["old_price"], "1.25")
+            self.assertEqual(changes["PART-A"]["new_price"], "1.26")
+            self.assertEqual(changes["PART-B"]["change"], "ADDED")
+            self.assertEqual(changes["REMOVED"]["change"], "REMOVED")
+            self.assertIn("PRODUCTION ODOO", output.with_name("Pirkimo_kainu_pokyciai.csv").read_text(encoding="utf-8-sig"))
+            again = validate_pricing_input_snapshot(workbook, output, expected, report_changes=True)
+            self.assertEqual(again["comparison_run"], "previous")
+
+    def test_reporting_without_previous_snapshot_does_not_invent_old_prices(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            workbook = base / "pricing.xlsx"
+            write_pricing_workbook(workbook)
+            expected = base / "expected.json"
+            expected.write_text(json.dumps({"expected_sha256": "old", "expected_record_count": 3}))
+            output = base / "runs" / "current" / "files" / "Pricing_Input_Snapshot.json"
+            result = validate_pricing_input_snapshot(workbook, output, expected, report_changes=True)
+            self.assertEqual(result["status"], "CHANGED")
+            self.assertEqual(result["comparison_status"], "NO_PREVIOUS_SNAPSHOT")
+            self.assertIsNone(result["change_count"])
+            self.assertEqual(result["changes"], [])
+
+    def test_reporting_still_rejects_conflicting_component_prices(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            workbook = base / "pricing.xlsx"
+            write_pricing_workbook(workbook)
+            from openpyxl import load_workbook
+            book = load_workbook(workbook)
+            book["BOM COMPONENT COSTS"].append(["PART-A", 9, "OTHER"])
+            book.save(workbook)
+            book.close()
+            expected = base / "expected.json"
+            expected.write_text("{}")
+            with self.assertRaisesRegex(ValueError, "conflicting prices"):
+                validate_pricing_input_snapshot(workbook, base / "snapshot.json", expected, report_changes=True)
+
     def test_snapshot_is_unique_and_stable(self):
         with tempfile.TemporaryDirectory() as directory:
             workbook = Path(directory) / "pricing.xlsx"

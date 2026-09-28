@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import json
 from decimal import Decimal
 from pathlib import Path
@@ -114,6 +115,8 @@ def validate_pricing_input_snapshot(
     workbook_path: Path,
     output_path: Path,
     expectation_path: Path = DEFAULT_EXPECTATION_PATH,
+    *,
+    report_changes: bool = False,
 ) -> dict[str, Any]:
     expectation = json.loads(expectation_path.read_text(encoding="utf-8"))
     snapshot = build_pricing_input_snapshot(workbook_path)
@@ -125,18 +128,75 @@ def validate_pricing_input_snapshot(
     )
     result = {
         **snapshot,
-        "status": "PASS" if matches else "BLOCKED",
+        "status": "PASS" if matches else ("CHANGED" if report_changes else "BLOCKED"),
+        "policy": "REPORT_CHANGES" if report_changes else "STRICT_BASELINE",
         "expected_sha256": expected_hash,
         "expected_record_count": expected_count,
         "reference": expectation.get("reference"),
         "approved_overlays": expectation.get("approved_overlays", []),
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if report_changes:
+        # Run directories are siblings under web_state/runs. Compare effective
+        # inputs with the previous calculation, including an unpublished run.
+        # Never label that calculation as an approved or released price list.
+        previous = None
+        for path in sorted(
+            output_path.parent.parent.parent.glob("*/files/Pricing_Input_Snapshot.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        ):
+            if path.resolve() == output_path.resolve():
+                continue
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+                records = value["records"]
+                if value.get("schema_version") != 2 or not isinstance(records, list):
+                    continue
+                if not all(isinstance(row, dict) and all(k in row for k in ("rule", "sku", "price")) for row in records):
+                    continue
+                previous = (path, records)
+                break
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+        changes = []
+        if previous is not None:
+            before = {(r["rule"], r["sku"].casefold()): r for r in previous[1]}
+            after = {(r["rule"], r["sku"].casefold()): r for r in snapshot["records"]}
+            for key in sorted(before.keys() | after.keys()):
+                old, new = before.get(key), after.get(key)
+                if old is not None and new is not None and old["price"] == new["price"]:
+                    continue
+                row = new if new is not None else old
+                changes.append({
+                    "rule": row["rule"], "sku": row["sku"],
+                    "change": "ADDED" if old is None else ("REMOVED" if new is None else "PRICE_CHANGED"),
+                    "old_price": old["price"] if old else None,
+                    "new_price": new["price"] if new else None,
+                    "source": (new or old).get("source", ""),
+                })
+        result.update(
+            comparison_status="COMPARED" if previous else "NO_PREVIOUS_SNAPSHOT",
+            comparison_run=previous[0].parent.parent.name if previous else None,
+            comparison_basis="Previous calculated inputs, not necessarily released prices",
+            change_count=len(changes) if previous else None,
+            changes=changes,
+        )
+        report = output_path.with_name("Pirkimo_kainu_pokyciai.csv")
+        with report.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.writer(stream, delimiter=";")
+            writer.writerow(["Palyginimas su ankstesniu skaičiavimu (nebūtinai paskelbtu)", result["comparison_run"] or "Ankstesnių duomenų nėra – palyginimo pradžia"])
+            writer.writerow(["Pokyčių skaičius", result["change_count"] if previous else "Nežinomas"])
+            writer.writerow(["Taisyklė", "SKU", "Pokytis", "Ankstesnė kaina", "Nauja kaina", "Kainos šaltinis"])
+            for row in changes:
+                # Prevent spreadsheet formulas in externally supplied identifiers.
+                writer.writerow([("'" + str(v)) if str(v).startswith(("=", "+", "-", "@")) else v for v in row.values()])
+        print(f"Pirkimo kainų pokyčiai: {result['change_count'] if previous else 'pirmasis palyginimas'}. Žr. {report.name}.")
     output_path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    if not matches:
+    if not matches and not report_changes:
         raise ValueError(
             "R001/R007 kainų įvesties snapshotas nesutampa su patvirtintu "
             "2026-09-17 etalonu ir penkiomis patvirtintomis korekcijomis. "

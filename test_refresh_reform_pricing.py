@@ -87,7 +87,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 ]),
                 patch("refresh_reform_pricing.stage_approved_v10_input", side_effect=stage),
                 patch("refresh_reform_pricing.run_step", side_effect=fake_run_step),
-                patch("refresh_reform_pricing.validate_pricing_input_snapshot"),
+                patch("refresh_reform_pricing.validate_pricing_input_snapshot") as input_check,
                 patch("refresh_reform_pricing.audit_generated_boms", return_value={"status": "PASS", "issues": []}),
                 patch("refresh_reform_pricing.read_pricing_status", return_value=({"COMPLETE": 1}, [])),
                 patch("refresh_reform_pricing.write_furnibox_purchase_prices"),
@@ -98,6 +98,7 @@ class RefreshReformPricingTests(unittest.TestCase):
                 patch("refresh_reform_pricing.shutil.copy2") as copy_file,
             ):
                 self.assertEqual(refresh(bom, output), 0)
+                self.assertTrue(input_check.call_args.kwargs["report_changes"])
 
             staged = str(output / "Reform_Approved_BOM_Input.xlsx")
             for _, args in calls:
