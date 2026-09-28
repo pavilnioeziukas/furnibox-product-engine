@@ -283,6 +283,55 @@ def index():
         bom_rows=bom_rows, selected_bom=selected_bom, intent=intent)
 
 
+@reform.post('/initialize')
+def initialize():
+    """Seed an empty review installation from an administrator's snapshot."""
+    if not admin():
+        abort(403)
+    upload = request.files.get('file')
+    if not upload:
+        abort(400, 'Select a catalogue snapshot.')
+    raw = upload.read(25 * 1024 * 1024 + 1)
+    if len(raw) > 25 * 1024 * 1024:
+        abort(413)
+    def require(condition):
+        if not condition:
+            raise ValueError()
+    try:
+        bundle = json.loads(raw)
+        if bundle['schema'] != 'reform-catalogue-seed-v1':
+            raise ValueError()
+        data, reserved = bundle['catalogue'], bundle['reserved_skus']
+        require(isinstance(reserved, list) and all(isinstance(s, str) for s in reserved))
+        require(isinstance(data['source'], str) and isinstance(data['captured_at'], str))
+        require(isinstance(data['external_usage'], dict))
+        products, boms = data['products'], data['boms']
+        require(isinstance(products, dict) and products and isinstance(boms, dict))
+        for sku, product in products.items():
+            require(product['sku'] == sku)
+            require(all(isinstance(product[k], str) for k in ('sku', 'name', 'uom')))
+            require(isinstance(product['active'], bool))
+        for bid, bom in boms.items():
+            require(bom['id'] == bid and bom['sku'] in products)
+            positive(bom['quantity'])
+            require(isinstance(bom['code'], str) and isinstance(bom['uom'], str))
+            require(isinstance(bom['components'], list))
+            for line in bom['components']:
+                require(isinstance(line['id'], str) and line['sku'] in products)
+                require(isinstance(line['uom'], str))
+                positive(line['quantity'])
+    except (ValueError, KeyError, TypeError, AssertionError):
+        abort(400, 'Invalid catalogue snapshot.')
+    with db() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if baseline(conn) is not None:
+            abort(409, 'This workspace already has a catalogue. Initialization cannot replace it.')
+        conn.execute('INSERT INTO state VALUES (1,?)', (pack(data),))
+        conn.execute('INSERT OR REPLACE INTO state VALUES (2,?)', (pack(reserved),))
+    flash('Catalogue initialized. No Odoo connection or changes were made.')
+    return redirect(url_for('reform.index'))
+
+
 @reform.post('/refresh')
 def refresh():
     if not admin():

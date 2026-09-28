@@ -41,6 +41,29 @@ def post(client, path, **data):
     return client.post('/reform/' + path, data={'csrf': token, **data}, follow_redirects=True)
 
 
+def test_initialize_requires_admin_and_empty_catalogue(setup):
+    import io
+    app, client = setup
+    payload = json.dumps({'schema': 'reform-catalogue-seed-v1', 'catalogue': sample(), 'reserved_skus': ['CAB-01']}).encode()
+    def upload(token=True):
+        with client.session_transaction() as sess:
+            csrf = sess['reform_csrf']
+        return client.post('/reform/initialize', data={'csrf': csrf if token else '', 'file': (io.BytesIO(payload), 'catalogue.json')})
+    assert upload().status_code == 403
+    app.config['REFORM_ADMIN_ENABLED'] = True
+    with client.session_transaction() as sess:
+        sess.pop('reform_user')
+        sess['authenticated'] = True
+    assert upload().status_code == 409
+    with app.app_context(), db() as conn:
+        conn.execute('DELETE FROM state')
+    assert upload(False).status_code == 400
+    assert upload().status_code == 302
+    assert upload().status_code == 409
+    with app.app_context(), db() as conn:
+        assert baseline(conn) == sample()
+
+
 def test_access_boundaries_and_csrf(setup):
     app, client = setup
     for path in ['/', '/pricing-control', '/reports', '/login', '/bootstraps', '/jobs/anything']:
