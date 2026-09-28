@@ -1,0 +1,19 @@
+name: Reform version comparison
+on:
+  pull_request:
+    paths:
+      - 'reform_version_diff.py'
+      - 'webapp/reform_versions.py'
+      - 'webapp/templates/reform_version*.html'
+      - 'test_reform_version_diff.py'
+      - '.github/workflows/reform-version-tests.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install Flask openpyxl
+      - run: python -m unittest test_reform_version_diff -v

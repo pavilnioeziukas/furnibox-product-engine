@@ -19,6 +19,7 @@
       <div class="upload-progress" hidden><progress value="0" max="100"></progress><span>0%</span></div>
       <p class="upload-message muted" aria-live="polite"></p>
     </form>
+    <p><a href="{{ url_for('reform_versions.index') }}">Palyginti Reform versijas →</a></p>
   </article>
   <article class="panel">
     <div class="panel-head"><div><p class="eyebrow">Dabartinė būsena</p><h2>Validated Dataset</h2></div><span class="state {{ 'ready' if dataset else 'waiting' }}">{{ 'Rastas' if dataset else 'Nėra' }}</span></div>

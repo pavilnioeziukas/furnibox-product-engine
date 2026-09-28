@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero"><div><p class="eyebrow">Reform versijų palyginimas</p><h1>Kas pasikeitė?</h1><p>{{ report.old }} → {{ report.new }}</p><p>Duomenų lapas: {{ report.sheet }}. Pašalinta reiškia, kad pozicijos nėra naujame faile; tai nėra nurodymas ją ištrinti Odoo.</p></div></section>
+<section class="panel"><h2>Santrauka</h2>{% for status in ['Naujas BOM','Pašalintas BOM','Pakeistas BOM','Nepakitęs BOM'] %}<p><strong>{{ status }}:</strong> {{ report.counts.get(status, 0) }}</p>{% endfor %}
+<p><strong>Nauji unikalūs SKU:</strong> {{ report.added_skus|length }} · <strong>Pašalinti unikalūs SKU:</strong> {{ report.removed_skus|length }}</p>
+<p><a href="{{ url_for('reform_versions.detail', report_id=report_id, format='xlsx') }}">Atsisiųsti visą Excel ataskaitą</a> · <a href="{{ url_for('reform_versions.index') }}">Kitas palyginimas</a></p>
+<details><summary>Nauji SKU</summary><p>{{ report.added_skus|join(', ') or 'Nėra' }}</p></details>
+<details><summary>Pašalinti SKU</summary><p>{{ report.removed_skus|join(', ') or 'Nėra' }}</p></details></section>
+<section class="panel"><form method="get"><label for="q">Ieškoti pagal SKU, lauką arba pakeitimą</label><input id="q" name="q" value="{{ query }}"><button type="submit">Filtruoti</button></form><p>Rasta pakeitimų eilučių: {{ total }}. {% if total > 1000 %}Rodoma pirmų 1 000; visi pakeitimai pateikti Excel.{% endif %}</p></section>
+<div class="table-wrap"><table><thead><tr><th>Pakeitimas</th><th>BOM SKU</th><th>Komponentas</th><th>Laukas</th><th>Buvo</th><th>Tapo</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.status }}</td><td>{{ row.sku }}</td><td>{{ row.part }}</td><td>{{ row.field }}</td><td>{{ row.before }}</td><td>{{ row.after }}</td></tr>{% else %}<tr><td colspan="6">Pakeitimų pagal šį filtrą nėra.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}
