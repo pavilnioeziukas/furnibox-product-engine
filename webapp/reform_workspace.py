@@ -74,7 +74,7 @@ def draft(conn):
         return unpack(row['payload']), row['revision']
     base = baseline(conn)
     if not base:
-        abort(409, 'Pirmiausia Furnibox turi pateikti produktų ir BOM duomenis.')
+        abort(409, 'Furnibox must first provide the product and BOM data.')
     return {'base': base, 'target': copy.deepcopy(base)}, 0
 
 
@@ -92,9 +92,9 @@ def positive(value):
     try:
         number = float(str(value).replace(',', '.'))
     except (ValueError, TypeError):
-        raise ValueError('Kiekis turi būti skaičius.')
+        raise ValueError('Quantity must be a number.')
     if not math.isfinite(number) or number <= 0:
-        raise ValueError('Kiekis turi būti didesnis už nulį.')
+        raise ValueError('Quantity must be greater than zero.')
     return number
 
 
@@ -106,22 +106,22 @@ def validate(target):
             continue
         parent = bom['sku']
         if parent not in products:
-            raise ValueError('BOM produktas nerastas.')
+            raise ValueError('BOM product not found.')
         if not products[parent]['active']:
             continue
         positive(bom['quantity'])
         if not bom['components']:
-            raise ValueError('Aktyviame BOM turi būti bent vienas komponentas.')
+            raise ValueError('An active BOM must contain at least one component.')
         for line in bom['components']:
             child = line['sku']
             if child not in products or not products[child]['active']:
-                raise ValueError(f'Komponentas {child} neegzistuoja arba jo naudojimas nutrauktas.')
+                raise ValueError(f'Component {child} does not exist or has been retired.')
             positive(line['quantity'])
             edges.setdefault(parent, set()).add(child)
     visited, stack = set(), set()
     def visit(sku):
         if sku in stack:
-            raise ValueError('BOM sudaro ciklą: produktas negali būti savo paties komponentas.')
+            raise ValueError('BOM contains a cycle: a product cannot be its own component.')
         if sku in visited:
             return
         stack.add(sku)
@@ -144,7 +144,7 @@ def validate_proposal(target, delta):
         by_product.setdefault(bom['sku'], []).append((bid, bom))
         for line in bom['components']:
             if line['sku'] in retired:
-                raise ValueError(f"Komponento {line['sku']} naudojimas nutrauktas, bet jis dar naudojamas produkto {bom['sku']} BOM.")
+                raise ValueError(f"Component {line['sku']} has been retired but is still used in the BOM for {bom['sku']}.")
     relevant = dict(edited_boms)
     seen = set()
     pending = [line['sku'] for b in edited_boms.values() for line in b['components']]
@@ -170,7 +170,7 @@ def protect():
         session.clear()
     token = session.setdefault('reform_csrf', secrets.token_urlsafe(32))
     if request.method == 'POST' and not secrets.compare_digest(request.form.get('csrf', ''), token):
-        abort(400, 'Sesija pasikeitė. Atnaujinkite puslapį.')
+        abort(400, 'Your session has changed. Refresh the page.')
     if request.endpoint != 'reform.login' and not (session.get('reform_user') or admin()):
         return redirect(url_for('reform.login'))
 
@@ -197,7 +197,7 @@ def login():
                 count = row['count'] + 1 if row and time.time() - row['started'] < 300 else 1
                 started = row['started'] if row and count > 1 else time.time()
                 conn.execute('INSERT OR REPLACE INTO attempts VALUES (?,?,?)', (identity, count, started))
-            error = 'Prisijungti nepavyko. Patikrinkite duomenis arba bandykite po 5 minučių.'
+            error = 'Sign-in failed. Check your details or try again in 5 minutes.'
     return render_template('reform_login.html', error=error)
 
 
@@ -273,10 +273,10 @@ def refresh():
         with db() as conn:
             conn.execute('INSERT OR REPLACE INTO state VALUES (2,?)', (pack(reserved),))
             conn.execute('INSERT OR REPLACE INTO state VALUES (1,?)', (pack(data),))
-        flash('Aktualūs Odoo duomenys pateikti. Ankstesni juodraščiai išsaugoti palyginimui.')
+        flash('Current Odoo data is available. Previous drafts have been kept for comparison.')
     except Exception:
         current_app.logger.exception('Reform snapshot refresh failed')
-        flash('Duomenų atnaujinti nepavyko. Patikrinkite produktų kodus, Odoo prieigą ir BOM variantus.')
+        flash('Unable to refresh data. Check product codes, Odoo access and BOM variants.')
     return redirect(url_for('reform.index'))
 
 
@@ -287,22 +287,22 @@ def save():
             conn.execute('BEGIN IMMEDIATE')
             work, revision = draft(conn)
             if str(revision) != request.form.get('revision'):
-                abort(409, 'Juodraštis jau pakeistas kitame lange. Atnaujinkite puslapį.')
+                abort(409, 'The draft was changed in another window. Refresh the page.')
             target = work['target']
             action = request.form.get('action')
             if action == 'product':
                 sku = request.form.get('sku', '').strip()
                 name = request.form.get('name', '').strip()
                 if not sku or len(sku) > 100 or not name or len(name) > 300:
-                    raise ValueError('Įrašykite produkto kodą ir pavadinimą.')
+                    raise ValueError('Enter a product code and name.')
                 is_new = request.form.get('new') == '1'
                 if is_new and any(k.casefold() == sku.casefold() for k in target['products']):
-                    raise ValueError('Produktas tokiu kodu jau egzistuoja.')
+                    raise ValueError('A product with this code already exists.')
                 registry = conn.execute('SELECT payload FROM state WHERE id=2').fetchone()
                 if is_new and registry and sku.casefold() in {k.casefold() for k in unpack(registry['payload'])}:
-                    raise ValueError('Šis produkto kodas jau naudojamas. Pasirinkite kitą kodą.')
+                    raise ValueError('This product code is already in use. Choose another code.')
                 if not is_new and sku not in target['products']:
-                    raise ValueError('Produktas nerastas.')
+                    raise ValueError('Product not found.')
                 if not is_new and target['products'][sku].get('read_only'):
                     raise ValueError(target['products'][sku]['read_only'])
                 product = copy.deepcopy(target['products'].get(sku, {'sku': sku, 'active': True, 'uom': 'Units', 'uom_id': None}))
@@ -311,13 +311,13 @@ def save():
                     uom = request.form.get('uom', '').strip()
                     available = {p['uom']: p.get('uom_id') for p in target['products'].values()}
                     if uom not in available:
-                        raise ValueError('Pasirinkite matavimo vienetą.')
+                        raise ValueError('Select a unit of measure.')
                     product.update(uom=uom, uom_id=available[uom])
                 target['products'][sku] = product
             elif action == 'retire':
                 sku = request.form.get('sku')
                 if sku not in target['products']:
-                    raise ValueError('Produktas nerastas.')
+                    raise ValueError('Product not found.')
                 if target['products'][sku].get('read_only'):
                     raise ValueError(target['products'][sku]['read_only'])
                 target['products'][sku]['active'] = False
@@ -325,12 +325,12 @@ def save():
                 bid = request.form.get('bom_id', '')
                 old = target['boms'].get(bid)
                 if bid and not old:
-                    raise ValueError('BOM nerastas.')
+                    raise ValueError('BOM not found.')
                 if old and old.get('read_only'):
                     raise ValueError(old['read_only'])
                 sku = old['sku'] if old else request.form.get('sku', '')
                 if sku not in target['products'] or not target['products'][sku]['active']:
-                    raise ValueError('Pasirinkite aktyvų produktą.')
+                    raise ValueError('Select an active product.')
                 if target['products'][sku].get('read_only'):
                     raise ValueError(target['products'][sku]['read_only'])
                 bid = bid or 'new-' + secrets.token_hex(8)
@@ -342,7 +342,7 @@ def save():
                 quantities = request.form.getlist('component_quantity')
                 ids = request.form.getlist('component_id')
                 if not (len(skus) == len(quantities) == len(ids)):
-                    raise ValueError('Nepilnos BOM eilutės.')
+                    raise ValueError('Incomplete BOM rows.')
                 previous = {line['id']: line for line in old['components']} if old else {}
                 lines = []
                 seen = set()
@@ -350,9 +350,9 @@ def save():
                     if not child and not quantity:
                         continue
                     if child not in target['products'] or not target['products'][child]['active']:
-                        raise ValueError('Pasirinkite aktyvų komponentą iš sąrašo.')
+                        raise ValueError('Select an active component from the list.')
                     if lid and (lid not in previous or lid in seen):
-                        raise ValueError('BOM eilutė pasikeitė. Atnaujinkite puslapį.')
+                        raise ValueError('The BOM row has changed. Refresh the page.')
                     seen.add(lid)
                     line = copy.deepcopy(previous[lid]) if lid else {'id': 'new-' + secrets.token_hex(8)}
                     if not lid or line['sku'] != child:
@@ -365,7 +365,7 @@ def save():
                 abort(400)
             # Drafts may temporarily contain unresolved retirements; check at confirmation.
             conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision + 1, pack(work)))
-        flash('Juodraštis išsaugotas. Peržiūrėkite pakeitimus prieš patvirtindami.')
+        flash('Draft saved. Review your changes before confirming.')
     except ValueError as exc:
         flash(str(exc))
     selected = request.form.get('return_product') or request.form.get('sku', '')
@@ -380,7 +380,7 @@ def discard():
         if str(revision) != request.form.get('revision'):
             abort(409)
         conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
-    flash('Juodraštis atšauktas. Rodomi naujausi pateikti duomenys.')
+    flash('Draft discarded. The latest available data is now shown.')
     return redirect(url_for('reform.index'))
 
 
@@ -393,16 +393,16 @@ def submit():
             if str(revision) != request.form.get('revision'):
                 abort(409)
             if digest(work['base']) != digest(baseline(conn)):
-                raise ValueError('Pradiniai duomenys atnaujinti. Išsisaugokite pakeitimus ir pradėkite nuo naujausių duomenų.')
+                raise ValueError('The source data has changed. Download your draft and start from the latest data.')
             delta = changes(work['base'], work['target'])
             if not delta:
-                raise ValueError('Nėra pakeitimų, kuriuos būtų galima pateikti.')
+                raise ValueError('There are no changes to submit.')
             validate_proposal(work['target'], delta)
             for change in delta:
                 if change['kind'] == 'products' and not change['after']['active'] and work['base'].get('external_usage', {}).get(change['key']):
-                    raise ValueError('Produktas naudojamas ir kituose BOM už piloto ribų. Reikalinga Furnibox peržiūra prieš nutraukiant naudojimą.')
+                    raise ValueError('This product is used in other BOMs outside the pilot scope. Furnibox must review it before retirement.')
             if request.form.get('confirm') != 'yes':
-                raise ValueError('Patvirtinkite, kad peržiūrėjote pakeitimus.')
+                raise ValueError('Confirm that you have reviewed the changes.')
             payload = {'schema': 'reform-change-proposal-v1', 'status': 'awaiting_furnibox',
                 'baseline_digest': digest(work['base']), 'baseline_captured_at': work['base']['captured_at'],
                 'changes': delta, 'target': work['target']}
@@ -410,10 +410,10 @@ def submit():
             for pending in conn.execute('SELECT payload FROM submissions'):
                 existing = unpack(pending['payload'])
                 if existing['baseline_digest'] == payload['baseline_digest'] and keys & {(c['kind'], c['key']) for c in existing['changes']}:
-                    raise ValueError('Šio produkto arba BOM pakeitimai jau pateikti Furnibox. Palaukite peržiūros ir aktualių duomenų atnaujinimo.')
+                    raise ValueError('Changes to this product or BOM have already been submitted to Furnibox. Wait for review and a source data refresh.')
             conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (owner(), now(), pack(payload)))
             conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
-        flash('Pakeitimai patvirtinti ir pateikti Furnibox peržiūrai. Odoo duomenys dar nepakeisti.')
+        flash('Changes confirmed and submitted to Furnibox for review. Odoo data has not yet changed.')
         return redirect(url_for('reform.index', view='sent'))
     except ValueError as exc:
         flash(str(exc))

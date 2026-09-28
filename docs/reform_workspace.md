@@ -98,3 +98,5 @@ and confirmed in an isolated local test database, with the baseline unchanged.
 The resulting full-catalogue proposal occupied about 535 KB of compressed storage.
 42 local tests passed; two pre-existing Linux process-group tests were excluded
 on Windows. Live Odoo was only read, never modified.
+
+The Reform workspace interface is in English, including login, forms, validation messages and submission review.

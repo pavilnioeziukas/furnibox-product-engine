@@ -16,7 +16,7 @@
       <span>{{ product_engine.brand_name }} <strong>Product Engine</strong></span>
     </a>
     <nav class="topnav">
-      <a href="{{ url_for('reform.index') }}">Reform · Produktai ir BOM</a>
+      <a href="{{ url_for('reform.index') }}">Reform · Products and BOMs</a>
       <a href="{{ url_for('index') }}">Veiksmai</a>
       <a href="{{ url_for('reports.index') }}" {% if request.blueprint in ['reports', 'sales_quantities'] %}aria-current="page"{% endif %}>Ataskaitos</a>
       {% if product_engine.show_pricing_nav %}

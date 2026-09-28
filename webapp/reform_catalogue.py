@@ -31,7 +31,7 @@ def read_catalogue(client, roots=None):
             boms_by_product[p['id']].append(b)
     if roots:
         if any(len(by_sku.get(sku, [])) != 1 for sku in roots):
-            raise ValueError('Pasirinkti produktų kodai turi egzistuoti Odoo ir būti unikalūs.')
+            raise ValueError('Selected product codes must exist in Odoo and be unique.')
         selected = {by_sku[sku][0]['id'] for sku in roots}
     else:
         selected = {p['id'] for p in raw_products if p['active']}
@@ -47,8 +47,8 @@ def read_catalogue(client, roots=None):
     products, boms, included_bids = {}, {}, set()
     for pid in sorted(selected):
         p, key = by_id[pid], keys[pid]
-        lock = '' if p.get('default_code') and len(by_sku[p['default_code']]) == 1 else 'Produkto kodas tuščias arba kartojasi. Reikalinga Furnibox peržiūra.'
-        products[key] = {'sku': key, 'display_sku': p.get('default_code') or 'Be kodo', 'name': p['name'],
+        lock = '' if p.get('default_code') and len(by_sku[p['default_code']]) == 1 else 'The product code is missing or duplicated. Furnibox review is required.'
+        products[key] = {'sku': key, 'display_sku': p.get('default_code') or 'No code', 'name': p['name'],
             'active': p['active'], 'odoo_id': pid, 'category': label(p.get('categ_id')),
             'uom': label(p['uom_id']), 'uom_id': ident(p['uom_id']), 'read_only': lock}
         for b in boms_by_product[pid]:
@@ -58,14 +58,14 @@ def read_catalogue(client, roots=None):
                 bid += f':{pid}'
             reason = lock
             if shared:
-                reason = 'BOM bendras keliems produkto variantams. Šiame pilote rodoma peržiūrai.'
+                reason = 'This BOM is shared by several product variants. It is read-only in this pilot.'
             components = []
             for line in lines_by_bom[b['id']]:
                 cid = ident(line['product_id'])
                 if cid not in keys:
-                    raise ValueError('Odoo grąžino BOM eilutę be produkto.')
+                    raise ValueError('Odoo returned a BOM row without a product.')
                 if line.get('bom_product_template_attribute_value_ids'):
-                    reason = 'BOM komponentai priklauso nuo produkto varianto. Šiame pilote rodoma peržiūrai.'
+                    reason = 'BOM components depend on the product variant. This BOM is read-only in this pilot.'
                 components.append({'id': str(line['id']), 'sku': keys[cid], 'quantity': line['product_qty'],
                     'uom': label(line['product_uom_id']), 'uom_id': ident(line['product_uom_id'])})
             included_bids.add(b['id'])

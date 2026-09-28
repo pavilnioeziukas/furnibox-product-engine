@@ -59,14 +59,14 @@ def test_access_boundaries_and_csrf(setup):
 
 def test_new_product_and_bom_submit_immutable_and_private(setup):
     app, client = setup
-    response = post(client, 'save', action='product', new='1', sku='NEW', name='Naujas gaminys', uom='vnt.', revision='0')
-    assert 'Naujas gaminys' in response.text
-    post(client, 'save', action='bom', sku='NEW', quantity='1', code='Naujas BOM',
+    response = post(client, 'save', action='product', new='1', sku='NEW', name='New product', uom='vnt.', revision='0')
+    assert 'New product' in response.text
+    post(client, 'save', action='bom', sku='NEW', quantity='1', code='New BOM',
          component_sku=['PANEL-01'], component_quantity=['3'], component_id=[''], revision='1')
     response = post(client, 'submit', confirm='yes', revision='2')
-    assert 'pateikti Furnibox' in response.text
+    assert 'submitted to Furnibox' in response.text
     bundle = client.get('/reform/submissions/1').get_json()
-    assert 'Naujas gaminys' in client.get('/reform/submissions/1/view').text
+    assert 'New product' in client.get('/reform/submissions/1/view').text
     assert len(bundle['changes']) == 2
     assert bundle['submitted_by'] == 'paul'
     with app.app_context(), db() as conn:
@@ -84,7 +84,7 @@ def test_bom_edit_remove_and_retire(setup):
          component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'], revision='0')
     post(client, 'save', action='retire', sku='HINGE-01', revision='1')
     response = post(client, 'submit', confirm='yes', revision='2')
-    assert 'pateikti Furnibox' in response.text
+    assert 'submitted to Furnibox' in response.text
     bundle = client.get('/reform/submissions/1').get_json()
     bom = next(c for c in bundle['changes'] if c['kind'] == 'boms')
     assert len(bom['before']['components']) == 2
@@ -95,26 +95,26 @@ def test_retirement_usage_and_cycles_block_confirmation(setup):
     app, client = setup
     post(client, 'save', action='retire', sku='HINGE-01', revision='0')
     response = post(client, 'submit', confirm='yes', revision='1')
-    assert 'naudojimas nutrauktas' in response.text
+    assert 'has been retired' in response.text
     with app.app_context(), db() as conn:
         assert conn.execute('SELECT count(*) FROM submissions').fetchone()[0] == 0
     cycle = sample()
     cycle['boms']['1']['components'][0]['sku'] = 'CAB-01'
-    with pytest.raises(ValueError, match='ciklą'):
+    with pytest.raises(ValueError, match='cycle'):
         validate(cycle)
 
 
 def test_stale_revision_snapshot_and_duplicate_codes(setup):
     app, client = setup
     response = post(client, 'save', action='product', new='1', sku='cab-01', name='Duplicate', uom='vnt.', revision='0')
-    assert 'jau egzistuoja' in response.text
+    assert 'already exists' in response.text
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
     assert post(client, 'save', action='product', sku='CAB-01', name='Lost update', revision='0').status_code == 409
     with app.app_context(), db() as conn:
         current = sample()
         current['captured_at'] = '2026-09-29T10:00:00+00:00'
         conn.execute('UPDATE state SET payload=?', (json.dumps(current),))
-    assert 'Pradiniai duomenys atnaujinti' in post(client, 'submit', revision='1', confirm='yes').text
+    assert 'The source data has changed' in post(client, 'submit', revision='1', confirm='yes').text
     assert client.get('/reform/draft/download').get_json()['changes'][0]['after']['name'] == 'Updated'
 
 
@@ -123,7 +123,7 @@ def test_existing_private_sku_rejected_without_exposing_catalogue(setup):
     with app.app_context(), db() as conn:
         conn.execute('INSERT INTO state VALUES (2,?)', (json.dumps(['PRIVATE-SKU']),))
     response = post(client, 'save', action='product', new='1', sku='private-sku', name='Duplicate', uom='vnt.', revision='0')
-    assert 'kodas jau naudojamas' in response.text
+    assert 'code is already in use' in response.text
     assert 'PRIVATE-SKU' not in client.get('/reform/draft/download').text
 
 
@@ -133,7 +133,7 @@ def test_login_rate_limit_and_admin_view(setup):
     stranger.get('/reform/login')
     for _ in range(5):
         post(stranger, 'login', username='other', password='wrong')
-    assert 'Prisijungti nepavyko' in post(stranger, 'login', username='other', password='other-password').text
+    assert 'Sign-in failed' in post(stranger, 'login', username='other', password='other-password').text
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
     post(client, 'submit', revision='1', confirm='yes')
     app.config['REFORM_ADMIN_ENABLED'] = True
@@ -149,7 +149,7 @@ def test_duplicate_pending_proposal_is_blocked(setup):
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
     post(client, 'submit', revision='1', confirm='yes')
     post(client, 'save', action='product', sku='CAB-01', name='Updated again', revision='0')
-    assert 'jau pateikti Furnibox' in post(client, 'submit', revision='1', confirm='yes').text
+    assert 'already been submitted to Furnibox' in post(client, 'submit', revision='1', confirm='yes').text
 
 
 def test_catalogue_search_pagination_and_existing_bom(setup):
@@ -160,36 +160,36 @@ def test_catalogue_search_pagination_and_existing_bom(setup):
     with app.app_context(), db() as conn:
         conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
     home = client.get('/reform/?view=catalogue').text
-    assert 'Produktų sąrašas' in home and '108' in home
+    assert 'Products' in home and '108' in home
     assert 'EXISTING-104' not in home
     result = client.get('/reform/?q=EXISTING-104').text
-    assert 'EXISTING-104' in result and 'Rasta: 1' in result
+    assert 'EXISTING-104' in result and 'Found: 1' in result
     assert 'EXISTING-104' in client.get('/reform/?page=4').text
     selected = client.get('/reform/?product=CAB-01').text
-    assert 'ESAMA KOMPLEKTACIJA' in selected
+    assert 'EXISTING BOM' in selected
     assert 'Spintelės komplektacija' in selected
-    assert 'Keisti šį BOM' in selected
-    assert 'Išsaugoti ir peržiūrėti pakeitimus' not in selected
+    assert 'Edit this BOM' in selected
+    assert 'Save and review changes' not in selected
 
 
 def test_home_actions_and_specific_bom_edit_flow(setup):
     app, client = setup
     home = client.get('/reform/').text
-    for text in ['Ką norite atlikti?', 'Peržiūrėti produktus ir BOM', 'Pakeisti konkretų BOM',
-                 'Įvesti naują produktą', 'Sukurti naują BOM']:
+    for text in ['What would you like to do?', 'Browse products and BOMs', 'Edit an existing BOM',
+                 'Create a new product', 'Create a new BOM']:
         assert text in home
     listing = client.get('/reform/?view=bom-list&intent=edit&q=Spintel').text
     assert 'Spintelės komplektacija' in listing
-    assert 'Keisti šį BOM' in listing
+    assert 'Edit this BOM' in listing
     editor = client.get('/reform/?view=edit-bom&bom_id=1').text
-    assert 'Keisti pasirinktą BOM' in editor
-    assert 'Išsaugoti ir peržiūrėti pakeitimus' in editor
+    assert 'Edit selected BOM' in editor
+    assert 'Save and review changes' in editor
     assert 'name="bom_id" value="1"' in editor
     assert client.get('/reform/?view=edit-bom&bom_id=unknown').status_code == 404
     response = post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spintelės komplektacija',
         component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'],
         return_view='review', return_product='CAB-01', revision='0')
-    assert 'Patvirtinti ir pateikti Furnibox' in response.text
+    assert 'Confirm and submit to Furnibox' in response.text
     assert 'PANEL-01 — 3.0' in response.text
 
 
@@ -236,11 +236,11 @@ def test_read_only_bom_cannot_be_modified_via_post(setup):
 def test_read_only_product_cannot_receive_new_bom(setup):
     app, client = setup
     data = sample()
-    data['products']['CAB-01']['read_only'] = 'Produkto kodas kartojasi.'
+    data['products']['CAB-01']['read_only'] = 'Product code kartojasi.'
     with app.app_context(), db() as conn:
         conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
     result = post(client, 'save', action='bom', sku='CAB-01', quantity='1', revision='0')
-    assert 'Produkto kodas kartojasi' in result.text
+    assert 'Product code kartojasi' in result.text
     with app.app_context(), db() as conn:
         assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
 
@@ -260,7 +260,7 @@ def test_external_usage_blocks_retirement(setup):
         current['external_usage'] = {'CAB-01': 1}
         conn.execute('UPDATE state SET payload=?', (json.dumps(current),))
     post(client, 'save', action='retire', sku='CAB-01', revision='0')
-    assert 'už piloto ribų' in post(client, 'submit', revision='1', confirm='yes').text
+    assert 'outside the pilot scope' in post(client, 'submit', revision='1', confirm='yes').text
 
 
 def test_read_only_odoo_scope_units_and_external_usage():
