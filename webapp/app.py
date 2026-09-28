@@ -142,6 +142,12 @@ app.register_blueprint(comparison)
 
 app.secret_key = SETTINGS.web_secret or secrets.token_hex(32)
 
+from webapp.reform_workspace import reform
+app.config['REFORM_STATE_DIR'] = STATE_DIR / 'reform'
+app.config['REFORM_ADMIN_ENABLED'] = bool(SETTINGS.web_password)
+app.config['REFORM_USERS'] = json.loads(os.getenv('PRODUCT_ENGINE_REFORM_USERS', '{}'))
+app.register_blueprint(reform)
+
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
@@ -523,6 +529,11 @@ def product_engine_context() -> dict[str, Any]:
 
 @app.before_request
 def require_login():
+    # Reform sessions cannot reach internal actions, downloads, or pricing APIs.
+    if session.get('reform_user') and request.blueprint != 'reform' and request.endpoint != 'static':
+        abort(403)
+    if request.blueprint == 'reform':
+        return None
     if (
         request.endpoint
         in {
@@ -562,6 +573,7 @@ def login():
             ),
             expected,
         ):
+            session.clear()
             session["authenticated"] = True
 
             return redirect(
