@@ -31,9 +31,10 @@ Odoo before applying changes. There is no Odoo write or automatic email here.
    `werkzeug.security`; do not store plaintext passwords in this variable or Git.
    An empty mapping disables Reform logins. Removing a username revokes its session.
 3. Log in through the existing Furnibox login and open **Reform · Produktai ir BOM**.
-4. Expand **Pateikti aktualius Odoo duomenis**, enter explicitly selected Reform
-   root SKUs and refresh. This reads Odoo products, active BOMs and their component
-   closure. It does not mutate Odoo. All roots/components must have unique SKUs.
+4. Expand **Atnaujinti sąrašą iš Odoo** and refresh with the SKU field empty to read
+   the entire active production product catalogue, its active BOMs and referenced
+   components. Optional root SKUs restrict the catalogue. It does not mutate Odoo.
+   Missing/duplicate SKUs and variant-specific BOMs remain visible but locked.
 5. Give each approved Reform user their individual login through your existing
    secure credential-sharing process. No public signup is exposed.
 
@@ -41,13 +42,17 @@ Persistent data lives in `STATE_DIR/reform/reform.sqlite3`; keep this directory 
 the existing persistent volume and include it in backups. SQLite transactions and
 revision checks prevent overwritten drafts from stale tabs. Every draft records
 its baseline; refreshing source data blocks submission from an older baseline.
-Download the draft before discarding it if the baseline changes.
+Download the draft before discarding it if the baseline changes. New payloads are
+compressed to keep full catalogue drafts and submissions reasonably small; old
+uncompressed records remain readable.
 
 ## Pilot boundaries
 
-- Start with a small, curated set. The current editor renders this set in one page.
-- Shared multi-variant BOMs and component applicability conditions are rejected
-  instead of being flattened. They require a richer editor.
+- The starting screen is the existing production catalogue, with server-side
+  search and 30 products per page. Selecting a product opens its existing BOMs.
+  New product/BOM creation is a secondary action.
+- Shared multi-variant BOMs and component applicability conditions remain visible
+  read-only instead of blocking the full catalogue import. They require a richer editor.
 - Product metadata editing initially covers name only. SKU/unit migration is not
   exposed; new products use units already present in the curated catalogue.
 - Component usage outside the curated set is recorded as a blocking count, without
@@ -57,12 +62,14 @@ Download the draft before discarding it if the baseline changes.
   complete or apply packages. The existing implementation/import workflow remains
   a Furnibox operation. Refresh from Odoo after the changes have been implemented.
 - Freshness means the timestamped imported snapshot, not a continuously live feed.
-- The local demo uses synthetic data and local-only credentials, never production
-  passwords. No demo account or fixture data is enabled in deployment.
+- The local pilot can use a freshly read production snapshot. Its test credentials
+  are local-only; no demo account, production snapshot or credentials are committed.
+- Confirmation checks the edited BOM subtrees and retirement dependencies. Existing
+  invalid BOMs elsewhere in the catalogue do not block an unrelated correction.
 
 ## Three-minute demo
 
-1. Log in as a Reform user and find an existing product.
+1. Log in as a Reform user and search the full production catalogue for an existing product.
 2. Change a BOM component quantity and remove another component; save the draft.
 3. Review both versions, confirm and open the submitted package.
 
@@ -74,3 +81,15 @@ Run the full suite on Linux. Two pre-existing job process-group tests depend on
 `os.killpg`, which is not available on Windows. The Reform tests cover access
 boundaries, CSRF, persistence, immutable submissions, user isolation, stale tabs
 and snapshots, quantities, cycles, retirement usage and read-only Odoo scope.
+
+## Full-catalogue verification on 2026-09-28
+
+Read-only production snapshot: 6,594 products (active products plus referenced
+components), 10,967 active BOMs belonging to 4,319 products. The snapshot also
+revealed pre-existing inactive-component references; these are not silently fixed.
+On the local machine the first catalogue page rendered in about 0.52 seconds and
+returned 13.5 KB of HTML. An existing APACK BOM quantity change was saved, reviewed
+and confirmed in an isolated local test database, with the baseline unchanged.
+The resulting full-catalogue proposal occupied about 535 KB of compressed storage.
+40 local tests passed; two pre-existing Linux process-group tests were excluded
+on Windows. Live Odoo was only read, never modified.

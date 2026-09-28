@@ -3,7 +3,7 @@ import json
 
 import pytest
 from werkzeug.security import generate_password_hash
-from webapp.reform_workspace import db, draft, baseline, read_odoo, validate
+from webapp.reform_workspace import db, draft, baseline, read_odoo, validate, validate_proposal, changes
 from test_webapp import load_webapp
 
 
@@ -140,7 +140,7 @@ def test_login_rate_limit_and_admin_view(setup):
     with stranger.session_transaction() as sess:
         sess.clear()
         sess['authenticated'] = True
-    assert 'paul' in stranger.get('/reform/').text
+    assert 'paul' in stranger.get('/reform/?view=sent').text
     assert 'Updated' in stranger.get('/reform/submissions/1/view').text
 
 
@@ -150,6 +150,62 @@ def test_duplicate_pending_proposal_is_blocked(setup):
     post(client, 'submit', revision='1', confirm='yes')
     post(client, 'save', action='product', sku='CAB-01', name='Updated again', revision='0')
     assert 'jau pateikti Furnibox' in post(client, 'submit', revision='1', confirm='yes').text
+
+
+def test_catalogue_search_pagination_and_existing_bom(setup):
+    app, client = setup
+    data = sample()
+    for i in range(105):
+        data['products'][f'EXISTING-{i:03d}'] = {'sku': f'EXISTING-{i:03d}', 'name': f'Esamas gaminys {i}', 'active': True, 'uom': 'vnt.', 'uom_id': 1}
+    with app.app_context(), db() as conn:
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    home = client.get('/reform/').text
+    assert 'Esamų produktų sąrašas' in home and '108' in home
+    assert 'EXISTING-104' not in home
+    result = client.get('/reform/?q=EXISTING-104').text
+    assert 'EXISTING-104' in result and 'Rasta: 1' in result
+    assert 'EXISTING-104' in client.get('/reform/?page=4').text
+    selected = client.get('/reform/?product=CAB-01').text
+    assert 'ESAMA KOMPLEKTACIJA' in selected
+    assert 'Spintelės komplektacija' in selected
+    assert 'Išsaugoti BOM pakeitimus' in selected
+
+
+def test_preexisting_unrelated_invalid_bom_does_not_block_edit():
+    base = sample()
+    base['boms']['old-invalid'] = copy.deepcopy(base['boms']['1'])
+    base['boms']['old-invalid']['id'] = 'old-invalid'
+    base['boms']['old-invalid']['components'][0]['sku'] = 'MISSING'
+    target = copy.deepcopy(base)
+    target['boms']['1']['components'][0]['quantity'] = 3
+    validate_proposal(target, changes(base, target))
+    target['boms']['1']['components'][0]['sku'] = 'CAB-01'
+    with pytest.raises(ValueError):
+        validate_proposal(target, changes(base, target))
+
+
+def test_read_only_bom_cannot_be_modified_via_post(setup):
+    app, client = setup
+    data = sample()
+    data['boms']['1']['read_only'] = 'Variantų BOM rodomas tik peržiūrai.'
+    with app.app_context(), db() as conn:
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    result = post(client, 'save', action='bom', bom_id='1', quantity='2', revision='0')
+    assert 'Variantų BOM rodomas tik peržiūrai' in result.text
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
+
+
+def test_read_only_product_cannot_receive_new_bom(setup):
+    app, client = setup
+    data = sample()
+    data['products']['CAB-01']['read_only'] = 'Produkto kodas kartojasi.'
+    with app.app_context(), db() as conn:
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    result = post(client, 'save', action='bom', sku='CAB-01', quantity='1', revision='0')
+    assert 'Produkto kodas kartojasi' in result.text
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
 
 
 @pytest.mark.parametrize('quantity', ['NaN', 'inf', '-1', '0', 'oops'])
@@ -184,3 +240,7 @@ def test_read_only_odoo_scope_units_and_external_usage():
     assert set(data['boms']) == {'10'}
     assert data['boms']['10']['quantity'] == 2
     assert data['external_usage'] == {'PART': 1}
+    complete = read_odoo(Client())
+    assert set(complete['products']) == {'ROOT', 'PART', 'OTHER'}
+    assert set(complete['boms']) == {'10', '20'}
+    assert complete['scope'] == 'production_catalogue'

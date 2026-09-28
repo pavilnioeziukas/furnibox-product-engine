@@ -9,6 +9,7 @@ import os
 import secrets
 import sqlite3
 import time
+import zlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,9 +47,17 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def pack(value):
+    return zlib.compress(json.dumps(value, ensure_ascii=False).encode('utf-8'))
+
+
+def unpack(value):
+    return json.loads(zlib.decompress(value) if isinstance(value, bytes) else value)
+
+
 def baseline(conn):
     row = conn.execute('SELECT payload FROM state WHERE id=1').fetchone()
-    return json.loads(row['payload']) if row else None
+    return unpack(row['payload']) if row else None
 
 
 def owner():
@@ -62,7 +71,7 @@ def admin():
 def draft(conn):
     row = conn.execute('SELECT * FROM drafts WHERE owner=?', (owner(),)).fetchone()
     if row:
-        return json.loads(row['payload']), row['revision']
+        return unpack(row['payload']), row['revision']
     base = baseline(conn)
     if not base:
         abort(409, 'Pirmiausia Furnibox turi pateikti produktų ir BOM duomenis.')
@@ -124,79 +133,35 @@ def validate(target):
         visit(sku)
 
 
-def read_odoo(client, roots):
-    """Curated roots + component closure. Prices are never requested."""
-    def ident(value):
-        return value[0] if isinstance(value, (list, tuple)) and value else value or None
-    def label(value):
-        return value[1] if isinstance(value, (list, tuple)) and len(value) > 1 else ''
-    raw_products = client.search_read_all('product.product', [],
-        ['id', 'default_code', 'name', 'active', 'product_tmpl_id', 'uom_id'], context={'active_test': False})
-    by_id = {p['id']: p for p in raw_products}
-    by_sku = {}
-    for p in raw_products:
-        if p.get('default_code'):
-            by_sku.setdefault(p['default_code'], []).append(p)
-    if any(len(by_sku.get(sku, [])) != 1 for sku in roots):
-        raise ValueError('Pasirinkti produktų kodai turi egzistuoti Odoo ir būti unikalūs.')
-    raw_boms = client.search_read_all('mrp.bom', [('active', '=', True)],
-        ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id', 'type', 'code'])
-    raw_lines = client.search_read_all('mrp.bom.line', [('bom_id', 'in', [b['id'] for b in raw_boms])],
-        ['id', 'bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids']) if raw_boms else []
-    lines_by_bom = {}
-    for line in raw_lines:
-        lines_by_bom.setdefault(ident(line['bom_id']), []).append(line)
-    selected = {by_sku[sku][0]['id'] for sku in roots}
-    included_boms = {}
-    pending = list(selected)
+def validate_proposal(target, delta):
+    """Validate edited BOM subtrees; unrelated legacy issues do not block edits."""
+    edited_boms = {c['key']: c['after'] for c in delta if c['kind'] == 'boms'}
+    retired = {c['key'] for c in delta if c['kind'] == 'products' and not c['after']['active']}
+    by_product = {}
+    for bid, bom in target['boms'].items():
+        if not bom.get('active', True) or not target['products'][bom['sku']]['active']:
+            continue
+        by_product.setdefault(bom['sku'], []).append((bid, bom))
+        for line in bom['components']:
+            if line['sku'] in retired:
+                raise ValueError(f"Komponento {line['sku']} naudojimas nutrauktas, bet jis dar naudojamas produkto {bom['sku']} BOM.")
+    relevant = dict(edited_boms)
+    seen = set()
+    pending = [line['sku'] for b in edited_boms.values() for line in b['components']]
     while pending:
-        pid = pending.pop()
-        p = by_id[pid]
-        for b in raw_boms:
-            applies = ident(b['product_id']) == pid if b['product_id'] else ident(b['product_tmpl_id']) == ident(p['product_tmpl_id'])
-            if not applies:
-                continue
-            # A shared variant BOM needs a richer editor; do not flatten it silently.
-            variants = [v for v in raw_products if ident(v['product_tmpl_id']) == ident(p['product_tmpl_id']) and v['active']]
-            if not b['product_id'] and len(variants) > 1:
-                raise ValueError('Pasirinktas BOM bendras keliems variantams. Pilotui pasirinkite atskiro produkto BOM.')
-            included_boms[b['id']] = b
-            for line in lines_by_bom.get(b['id'], []):
-                if line.get('bom_product_template_attribute_value_ids'):
-                    raise ValueError('BOM turi variantų sąlygų. Šiam BOM reikia išplėsto redaktoriaus.')
-                cid = ident(line['product_id'])
-                if cid not in by_id:
-                    raise ValueError('BOM komponentas nerastas.')
-                if cid not in selected:
-                    selected.add(cid)
-                    pending.append(cid)
-    products = {}
-    for pid in selected:
-        p = by_id[pid]
-        sku = p.get('default_code')
-        if not sku or len(by_sku.get(sku, [])) != 1:
-            raise ValueError('Visi piloto komponentai turi turėti unikalius produktų kodus.')
-        products[sku] = {'sku': sku, 'name': p['name'], 'active': p['active'],
-            'odoo_id': pid, 'uom': label(p['uom_id']), 'uom_id': ident(p['uom_id'])}
-    boms = {}
-    for bid, b in included_boms.items():
-        candidates = [p for p in raw_products if p['id'] in selected and
-            (p['id'] == ident(b['product_id']) if b['product_id'] else ident(p['product_tmpl_id']) == ident(b['product_tmpl_id']))]
-        sku = candidates[0]['default_code']
-        boms[str(bid)] = {'id': str(bid), 'sku': sku, 'code': b.get('code') or '', 'active': True,
-            'quantity': b['product_qty'], 'uom': label(b['product_uom_id']), 'uom_id': ident(b['product_uom_id']),
-            'type': b['type'], 'components': [
-                {'id': str(line['id']), 'sku': by_id[ident(line['product_id'])]['default_code'],
-                 'quantity': line['product_qty'], 'uom': label(line['product_uom_id']), 'uom_id': ident(line['product_uom_id'])}
-                for line in lines_by_bom.get(bid, [])]}
-    external_usage = {}
-    for line in raw_lines:
-        if ident(line['bom_id']) not in included_boms and ident(line['product_id']) in selected:
-            sku = by_id[ident(line['product_id'])]['default_code']
-            external_usage[sku] = external_usage.get(sku, 0) + 1
-    return {'products': products, 'boms': boms, 'external_usage': external_usage,
-            '_reserved_skus': list(by_sku),
-            'source': 'Odoo', 'captured_at': now()}
+        sku = pending.pop()
+        if sku in seen:
+            continue
+        seen.add(sku)
+        for bid, bom in by_product.get(sku, []):
+            relevant[bid] = bom
+            pending.extend(line['sku'] for line in bom['components'])
+    validate({**target, 'boms': relevant})
+
+
+def read_odoo(client, roots=None):
+    from webapp.reform_catalogue import read_catalogue
+    return read_catalogue(client, roots)
 
 
 @reform.before_request
@@ -249,8 +214,36 @@ def index():
         work, revision = draft(conn) if base else (None, 0)
         rows = conn.execute('SELECT id,owner,created FROM submissions ' +
             ('' if admin() else 'WHERE owner=? ') + 'ORDER BY id DESC LIMIT 50', () if admin() else (owner(),)).fetchall()
-    return render_template('reform_workspace.html', work=work, revision=revision,
-        delta=changes(work['base'], work['target']) if work else [], submissions=rows, is_admin=admin())
+    query = request.args.get('q', '').strip()[:200]
+    view = request.args.get('view', 'catalogue')
+    selected = request.args.get('product', '')
+    product_rows, product_boms, usage = [], [], []
+    page, pages, total = 1, 1, 0
+    counts = {}
+    if work:
+        target = work['target']
+        for bom in target['boms'].values():
+            counts[bom['sku']] = counts.get(bom['sku'], 0) + 1
+            if bom['sku'] == selected:
+                product_boms.append(bom)
+            if any(line['sku'] == selected for line in bom['components']):
+                usage.append(bom)
+        product_rows = [(sku, p) for sku, p in target['products'].items()
+                        if not query or query.casefold() in (p.get('display_sku', sku) + ' ' + p['name']).casefold()]
+        product_rows.sort(key=lambda row: (not bool(counts.get(row[0])), row[1].get('display_sku', row[0]).casefold()))
+        total = len(product_rows)
+        pages = max(1, math.ceil(total / 30))
+        try:
+            page = max(1, min(pages, int(request.args.get('page', 1))))
+        except ValueError:
+            page = 1
+        product_rows = product_rows[(page-1)*30:page*30]
+        if selected not in target['products']:
+            selected = ''
+    return render_template('reform_catalogue.html', work=work, revision=revision,
+        delta=changes(work['base'], work['target']) if work else [], submissions=rows, is_admin=admin(),
+        query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
+        usage=usage, counts=counts, page=page, pages=pages, total=total)
 
 
 @reform.post('/refresh')
@@ -258,17 +251,14 @@ def refresh():
     if not admin():
         abort(403)
     roots = [s.strip() for s in request.form.get('skus', '').replace(',', '\n').splitlines() if s.strip()]
-    if not roots:
-        flash('Įrašykite bent vieną Reform produkto kodą.')
-        return redirect(url_for('reform.index'))
     try:
         from config import load_settings
         from odoo_client import OdooClient
         data = read_odoo(OdooClient(load_settings()), roots)
         reserved = data.pop('_reserved_skus')
         with db() as conn:
-            conn.execute('INSERT OR REPLACE INTO state VALUES (2,?)', (json.dumps(reserved),))
-            conn.execute('INSERT OR REPLACE INTO state VALUES (1,?)', (json.dumps(data),))
+            conn.execute('INSERT OR REPLACE INTO state VALUES (2,?)', (pack(reserved),))
+            conn.execute('INSERT OR REPLACE INTO state VALUES (1,?)', (pack(data),))
         flash('Aktualūs Odoo duomenys pateikti. Ankstesni juodraščiai išsaugoti palyginimui.')
     except Exception:
         current_app.logger.exception('Reform snapshot refresh failed')
@@ -295,10 +285,12 @@ def save():
                 if is_new and any(k.casefold() == sku.casefold() for k in target['products']):
                     raise ValueError('Produktas tokiu kodu jau egzistuoja.')
                 registry = conn.execute('SELECT payload FROM state WHERE id=2').fetchone()
-                if is_new and registry and sku.casefold() in {k.casefold() for k in json.loads(registry['payload'])}:
+                if is_new and registry and sku.casefold() in {k.casefold() for k in unpack(registry['payload'])}:
                     raise ValueError('Šis produkto kodas jau naudojamas. Pasirinkite kitą kodą.')
                 if not is_new and sku not in target['products']:
                     raise ValueError('Produktas nerastas.')
+                if not is_new and target['products'][sku].get('read_only'):
+                    raise ValueError(target['products'][sku]['read_only'])
                 product = copy.deepcopy(target['products'].get(sku, {'sku': sku, 'active': True, 'uom': 'Units', 'uom_id': None}))
                 product['name'] = name
                 if is_new:
@@ -312,15 +304,21 @@ def save():
                 sku = request.form.get('sku')
                 if sku not in target['products']:
                     raise ValueError('Produktas nerastas.')
+                if target['products'][sku].get('read_only'):
+                    raise ValueError(target['products'][sku]['read_only'])
                 target['products'][sku]['active'] = False
             elif action == 'bom':
                 bid = request.form.get('bom_id', '')
                 old = target['boms'].get(bid)
                 if bid and not old:
                     raise ValueError('BOM nerastas.')
+                if old and old.get('read_only'):
+                    raise ValueError(old['read_only'])
                 sku = old['sku'] if old else request.form.get('sku', '')
                 if sku not in target['products'] or not target['products'][sku]['active']:
                     raise ValueError('Pasirinkite aktyvų produktą.')
+                if target['products'][sku].get('read_only'):
+                    raise ValueError(target['products'][sku]['read_only'])
                 bid = bid or 'new-' + secrets.token_hex(8)
                 bom = copy.deepcopy(old) if old else {'id': bid, 'sku': sku, 'active': True, 'type': 'normal',
                     'uom': target['products'][sku]['uom'], 'uom_id': target['products'][sku].get('uom_id')}
@@ -352,11 +350,12 @@ def save():
             else:
                 abort(400)
             # Drafts may temporarily contain unresolved retirements; check at confirmation.
-            conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision + 1, json.dumps(work)))
+            conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision + 1, pack(work)))
         flash('Juodraštis išsaugotas. Peržiūrėkite pakeitimus prieš patvirtindami.')
     except ValueError as exc:
         flash(str(exc))
-    return redirect(url_for('reform.index'))
+    selected = request.form.get('return_product') or request.form.get('sku', '')
+    return redirect(url_for('reform.index', product=selected, q=request.form.get('q', ''), view=request.form.get('return_view', 'catalogue')))
 
 
 @reform.post('/discard')
@@ -384,7 +383,7 @@ def submit():
             delta = changes(work['base'], work['target'])
             if not delta:
                 raise ValueError('Nėra pakeitimų, kuriuos būtų galima pateikti.')
-            validate(work['target'])
+            validate_proposal(work['target'], delta)
             for change in delta:
                 if change['kind'] == 'products' and not change['after']['active'] and work['base'].get('external_usage', {}).get(change['key']):
                     raise ValueError('Produktas naudojamas ir kituose BOM už piloto ribų. Reikalinga Furnibox peržiūra prieš nutraukiant naudojimą.')
@@ -395,15 +394,16 @@ def submit():
                 'changes': delta, 'target': work['target']}
             keys = {(c['kind'], c['key']) for c in delta}
             for pending in conn.execute('SELECT payload FROM submissions'):
-                existing = json.loads(pending['payload'])
+                existing = unpack(pending['payload'])
                 if existing['baseline_digest'] == payload['baseline_digest'] and keys & {(c['kind'], c['key']) for c in existing['changes']}:
                     raise ValueError('Šio produkto arba BOM pakeitimai jau pateikti Furnibox. Palaukite peržiūros ir aktualių duomenų atnaujinimo.')
-            conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (owner(), now(), json.dumps(payload)))
+            conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (owner(), now(), pack(payload)))
             conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
         flash('Pakeitimai patvirtinti ir pateikti Furnibox peržiūrai. Odoo duomenys dar nepakeisti.')
+        return redirect(url_for('reform.index', view='sent'))
     except ValueError as exc:
         flash(str(exc))
-    return redirect(url_for('reform.index'))
+    return redirect(url_for('reform.index', view='review'))
 
 
 @reform.get('/submissions/<int:sid>')
@@ -412,7 +412,7 @@ def download(sid):
         row = conn.execute('SELECT * FROM submissions WHERE id=?', (sid,)).fetchone()
     if not row or (not admin() and row['owner'] != owner()):
         abort(404)
-    response = jsonify({'submitted_by': row['owner'], 'submitted_at': row['created'], **json.loads(row['payload'])})
+    response = jsonify({'submitted_by': row['owner'], 'submitted_at': row['created'], **unpack(row['payload'])})
     response.headers['Content-Disposition'] = f'attachment; filename="reform-changes-{sid}.json"'
     return response
 
@@ -433,5 +433,5 @@ def view_submission(sid):
         row = conn.execute('SELECT * FROM submissions WHERE id=?', (sid,)).fetchone()
     if not row or (not admin() and row['owner'] != owner()):
         abort(404)
-    payload = json.loads(row['payload'])
+    payload = unpack(row['payload'])
     return render_template('reform_submission.html', submission=row, delta=payload['changes'])
