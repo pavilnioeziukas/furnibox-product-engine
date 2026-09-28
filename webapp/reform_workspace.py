@@ -194,6 +194,13 @@ def protect():
         abort(400, 'Your session has changed. Refresh the page.')
     if request.endpoint != 'reform.login' and not (session.get('reform_user') or admin()):
         return redirect(url_for('reform.login'))
+    if request.method == 'POST' and request.endpoint in ('reform.save', 'reform.excel_upload', 'reform.discard'):
+        from webapp.reform_versions import schema, active
+        with db() as conn:
+            schema(conn)
+            current = active(conn)
+            if current and (current['owner'] != owner() or current['status'] not in ('draft', 'returned')):
+                abort(409, 'The current version is locked for Furnibox review. Open Versions to see its status.')
 
 
 @reform.route('/login', methods=['GET', 'POST'])
@@ -466,9 +473,14 @@ def discard():
 
 @reform.post('/submit')
 def submit():
+    from webapp.reform_versions import schema, active, event
     try:
         with db() as conn:
+            schema(conn)
             conn.execute('BEGIN IMMEDIATE')
+            version = active(conn)
+            if not version or version['owner'] != owner() or version['status'] not in ('draft', 'returned') or request.form.get('version') != version['number']:
+                raise ValueError('Save and review a version draft before submitting the complete version.')
             work, revision = draft(conn)
             if str(revision) != request.form.get('revision'):
                 abort(409)
@@ -484,20 +496,32 @@ def submit():
             if request.form.get('confirm') != 'yes':
                 raise ValueError('Confirm that you have reviewed the changes.')
             payload = {'schema': 'reform-change-proposal-v1', 'status': 'awaiting_furnibox',
+                'version': version['number'], 'description': version['description'], 'base': work['base'], 'draft_revision': revision,
                 'baseline_digest': digest(work['base']), 'baseline_captured_at': work['base']['captured_at'],
                 'changes': delta, 'target': work['target']}
             keys = {(c['kind'], c['key']) for c in delta}
             for pending in conn.execute('SELECT payload FROM submissions'):
                 existing = unpack(pending['payload'])
+                if existing.get('version') == version['number']:
+                    continue
                 if existing['baseline_digest'] == payload['baseline_digest'] and keys & {(c['kind'], c['key']) for c in existing['changes']}:
                     raise ValueError('Changes to this product or BOM have already been submitted to Furnibox. Wait for review and a source data refresh.')
-            conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (owner(), now(), pack(payload)))
+            from webapp.reform_notifications import enqueue, deliver
+            created = now()
+            inserted = conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (owner(), created, pack(payload)))
+            sid = inserted.lastrowid
+            conn.execute("UPDATE reform_versions SET status='submitted',submission_id=?,updated=? WHERE number=?", (sid, now(), version['number']))
+            event(conn, version['number'], 'submitted', f'Submission #{sid}')
+            enqueue(conn, sid, owner(), created, payload)
             conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
+        email_status = deliver(sid)
         flash('Changes confirmed and submitted to Furnibox for review. Odoo data has not yet changed.')
-        return redirect(url_for('reform.index', view='sent'))
+        flash('Email notification sent to Furnibox.' if email_status == 'sent' else
+              'Your submission is saved. The email notification has not been confirmed as sent; Furnibox can view it under Submitted to Furnibox.')
+        return redirect(url_for('reform.versions'))
     except ValueError as exc:
         flash(str(exc))
-    return redirect(url_for('reform.index', view='review'))
+    return redirect(url_for('reform.versions'))
 
 
 @reform.get('/submissions/<int:sid>')
@@ -532,3 +556,4 @@ def view_submission(sid):
 
 # Register file exchange routes on the same protected blueprint.
 from webapp import reform_excel  # noqa: E402,F401
+from webapp import reform_versions  # noqa: E402,F401

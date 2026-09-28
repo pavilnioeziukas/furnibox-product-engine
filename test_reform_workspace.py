@@ -38,6 +38,14 @@ def setup(monkeypatch, tmp_path):
 def post(client, path, **data):
     with client.session_transaction() as sess:
         token = sess['reform_csrf']
+    if path == 'submit' and 'version' not in data:
+        from webapp.reform_versions import schema, active
+        with client.application.app_context(), db() as conn:
+            schema(conn)
+            version = active(conn)
+        if not version:
+            client.post('/reform/versions/save', data={'csrf': token, 'number': 'v1.0', 'description': 'Test release', 'revision': data.get('revision', '0')})
+        data['version'] = version['number'] if version else 'v1.0'
     return client.post('/reform/' + path, data={'csrf': token, **data}, follow_redirects=True)
 
 
@@ -172,7 +180,7 @@ def test_duplicate_pending_proposal_is_blocked(setup):
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
     post(client, 'submit', revision='1', confirm='yes')
     post(client, 'save', action='product', sku='CAB-01', name='Updated again', revision='0')
-    assert 'already been submitted to Furnibox' in post(client, 'submit', revision='1', confirm='yes').text
+    assert 'Save and review a version draft' in post(client, 'submit', revision='1', confirm='yes').text
 
 
 def test_catalogue_search_pagination_and_existing_bom(setup):
@@ -212,7 +220,7 @@ def test_home_actions_and_specific_bom_edit_flow(setup):
     response = post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spintelės komplektacija',
         component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'],
         return_view='review', return_product='CAB-01', revision='0')
-    assert 'Confirm and submit to Furnibox' in response.text
+    assert 'Save to version draft / review complete version' in response.text
     assert 'PANEL-01 — 3.0' in response.text
 
 

@@ -74,7 +74,7 @@ def make_book(token, record):
         ['Nested BOMs', 'All editable sub-BOMs are included. BOM key identifies which assembly each component belongs to.'],
         ['Category and unit', 'Select values from the provided lists. New components may be added in Products and referenced immediately in Components.'],
         ['4. Return the file', 'Save as .xlsx. Open Excel exchange in the engine, upload the file and inspect Current / Proposed.'],
-        ['5. Confirm', 'Upload saves a draft only. Confirm and submit the reviewed changes to Furnibox. No automatic Odoo changes.'],
+        ['5. Submit a version', 'Upload saves a draft only. Open Versions, collect all changes and submit the complete version to Furnibox. No automatic Odoo changes.'],
         ['Version check', 'The engine checks this export against its saved version. If the source or your draft changed, download a fresh file.'],
         ['Values only', 'Use values, not formulas. Keep sheet names and column headers unchanged.'],
         ['Reference catalogue', 'Catalogue lists available component codes and names. Changes to Catalogue and Lists are ignored.'],
@@ -378,7 +378,7 @@ def excel_upload():
             else:
                 work['target'] = target
                 conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision+1, pack(work)))
-                flash('Excel changes saved to your draft. Review Current / Proposed below, then confirm and submit to Furnibox.')
+                flash('Excel changes saved to your draft. Review Current / Proposed below, then open Versions to submit the complete version.')
         return redirect(url_for('reform.index', view='review'))
     except ValueError as exc:
         flash(str(exc))

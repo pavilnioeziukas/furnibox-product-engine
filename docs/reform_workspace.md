@@ -138,3 +138,15 @@ reviewed. Linux CI now includes test_reform_excel.py.
 Excel exchange offers a distinct `Download full catalogue` action (`/reform/excel/download?scope=all`). It exports all products and current BOMs in the Reform-visible snapshot, including component rows and products without BOMs. Existing APACK / -A filters remain in effect. Read-only records are identified in a separate reference sheet. Unchanged historical records and internal dependencies are preserved on return; edits to read-only BOMs are rejected. The source capture timestamp remains visible: downloading is an export of the workspace snapshot, not a new Odoo read.
 
 Validated 2026-09-28: full snapshot roundtrip without changes, editable quantity changes and rejection of read-only BOM changes. 8 Excel exchange tests pass. Fresh Odoo read at 14:10 UTC confirms the displayed product and BOM data match the deployed snapshot.
+
+## Catalogue release batches
+
+Use `/reform/versions` to name the current draft (for example v11.1) and describe the release. The first number is intentionally not preselected. Product edits and Excel returns continue to update that draft. The My changes screen links to the version summary; only the summary submits the complete version.
+
+One open version is allowed across the Reform workspace, with one editing owner. Other accounts cannot modify it. Submission records the version number, description, original baseline and draft revision, retains an immutable submission, and locks further changes until Furnibox review. An administrator can accept or return the version with a correction note. Returning restores the same owner's draft with a higher revision and retains previous submission payloads. The version number stays unchanged on resubmission. Stale review forms are rejected by submission ID. Version history records each transition.
+
+Implemented requires an administrator's verification reference, an explicit confirmation, and a refreshed source whose product/BOM values match every proposed change. No operation here writes to Odoo. A later version must have a higher numeric major/minor number; minor releases remain a human business choice.
+
+Notification records are created only for complete version submissions in the same SQLite transaction. Email is disabled unless REFORM_EMAIL_ENABLED=true. Do not enable until the user approves the version email template and automatic dispatch and the mailbox administrator configures sending access. Recipient is edgaras@furnix.lt; intended sender is info@furnibox.lt. Microsoft Graph configuration uses REFORM_EMAIL_PROVIDER=microsoft, REFORM_EMAIL_FROM, REFORM_MS_TENANT_ID, REFORM_MS_CLIENT_ID, REFORM_MS_CLIENT_SECRET and REFORM_PUBLIC_URL. Scope the mail application to the approved sender mailbox. Secrets belong in Railway variables, never Git. No production sending credentials have been configured.
+
+A provider failure preserves the submission and records failure. Ambiguous failures are not automatically retried to avoid duplicate messages. Pending/failed notifications currently require administrator follow-up; old pending items are not dispatched automatically when enabling email.
