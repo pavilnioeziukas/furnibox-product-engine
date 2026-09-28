@@ -1184,6 +1184,7 @@ def refresh(
             validate_pricing_input_snapshot(
                 candidate,
                 output_dir / "Pricing_Input_Snapshot.json",
+                report_changes=True,
             )
         except ValueError:
             # This workbook requests purchase-price review, not selling-price
