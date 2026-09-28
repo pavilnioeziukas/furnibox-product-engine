@@ -106,3 +106,29 @@ The Reform workspace interface is in English, including login, forms, validation
 The catalogue reader selects one current active BOM per product: lowest sequence, then latest write_date, then highest ID for an exact tie. Archived alternatives are excluded. APACK codes and codes ending in -A (case-insensitive, whitespace trimmed) are hidden from Reform lists and component choices; FPACK remains visible. Server-side saves reject these internal products. Internal dependencies remain intact in stored data. A visible BOM containing hidden assembly components is read-only to avoid submitting a partial replacement. Refresh source data to apply the BOM selection to existing installations.
 
 Verified locally: BAS001 search returns 12 products; EUB-C-CAB02-BAS001 shows only 20260415_Cabinet(F), sequence 0. The visible catalogue contains 4,657 products and 2,480 current BOMs.
+
+## Excel exchange
+
+`/reform/?view=files` supports download/edit/return. A product export includes its
+current BOM and all editable descendant BOMs. An empty product selects a blank
+new-product/BOM template. Existing row IDs are retained; REMOVE is explicit and
+missing exported rows are rejected. New BOM keys use NEW-. Products supports name,
+category and new product creation with category/unit lists from the visible
+catalogue. Catalogue is reference-only. Prices and internal assembly products are
+excluded. Existing SKU/unit changes and product retirement are not Excel actions.
+
+The application uses its existing openpyxl dependency for runtime XLSX generation
+and parsing. Export records store the account, source and draft server-side in
+file_exports. Uploads validate ownership, source freshness and draft revision,
+then validate all rows before saving the draft in one transaction. Formulas,
+duplicate or forged IDs, unknown cards, invalid categories/units, non-positive
+quantities, hidden assembly components and cycles are rejected. Files are capped
+at 5 MB, 50 MB expanded ZIP content and 20,000 data rows per editable sheet.
+No Odoo writes or external notifications occur. Submission uses the existing
+explicit confirmation and immutable proposal workflow.
+
+Validation: 52 local tests passed (two existing Linux process-group tests excluded
+on Windows). Real BAS001 export: 14 cards, 3 BOMs, 13 component rows. An unchanged
+return, quantity edit, comparison and submission were verified in an isolated
+copy of the preview database. All six visible workbook sheets were rendered and
+reviewed. Linux CI now includes test_reform_excel.py.

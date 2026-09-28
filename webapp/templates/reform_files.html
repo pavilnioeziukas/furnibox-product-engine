@@ -1,0 +1,11 @@
+<section class="card">
+<h2>Download, edit and return an Excel file</h2>
+<p>Use the same file to update existing BOMs or add new products and BOMs. Uploading creates a draft for review.</p>
+<div class="task-grid">
+<section><h3>1. Download</h3><form method="get" action="{{ url_for('reform.excel_download') }}"><label>Existing product code<input name="product" list="exchange-products" placeholder="Select a product, e.g. EUB-C-CAB02-BAS001"></label><p>Includes its current BOM and editable sub-BOMs. Leave blank for a new-product template.</p><button>Download Excel file</button></form></section>
+<section><h3>2. Edit in Excel</h3><p><strong>Products:</strong> names, categories and new product cards.</p><p><strong>BOMs:</strong> existing assemblies or new BOMs with keys such as NEW-1.</p><p><strong>Components:</strong> change codes and quantities, add rows, or mark REMOVE.</p><p>Keep existing IDs and rows. Categories and units are available in dropdown lists.</p></section>
+<section><h3>3. Upload and review</h3><form method="post" enctype="multipart/form-data" action="{{ url_for('reform.excel_upload') }}">{{ fields() }}<label>Completed Excel file<input type="file" name="file" accept=".xlsx" required></label><p>The engine checks the file version and shows the changes before you submit them to Furnibox.</p><button>Upload and compare</button></form></section>
+</div>
+<p>The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
+<datalist id="exchange-products">{% for sku,p in work.target.products|dictsort %}{% if p.active and not p.get('read_only') %}<option value="{{ sku }}">{{ p.name }}</option>{% endif %}{% endfor %}</datalist>
+</section>

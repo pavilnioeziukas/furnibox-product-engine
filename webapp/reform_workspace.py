@@ -480,3 +480,6 @@ def view_submission(sid):
         abort(404)
     payload = unpack(row['payload'])
     return render_template('reform_submission.html', submission=row, delta=payload['changes'])
+
+# Register file exchange routes on the same protected blueprint.
+from webapp import reform_excel  # noqa: E402,F401

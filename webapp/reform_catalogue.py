@@ -55,7 +55,7 @@ def read_catalogue(client, roots=None):
         p, key = by_id[pid], keys[pid]
         lock = '' if p.get('default_code') and len(by_sku[p['default_code']]) == 1 else 'The product code is missing or duplicated. Furnibox review is required.'
         products[key] = {'sku': key, 'display_sku': p.get('default_code') or 'No code', 'name': p['name'],
-            'active': p['active'], 'odoo_id': pid, 'category': label(p.get('categ_id')),
+            'active': p['active'], 'odoo_id': pid, 'category': label(p.get('categ_id')), 'category_id': ident(p.get('categ_id')),
             'uom': label(p['uom_id']), 'uom_id': ident(p['uom_id']), 'read_only': lock}
         for b in boms_by_product[pid]:
             bid = str(b['id'])
