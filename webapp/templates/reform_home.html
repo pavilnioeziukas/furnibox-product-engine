@@ -1,0 +1,11 @@
+<section class="task-home">
+<div class="task-intro"><div class="eyebrow">JŪSŲ DARBO VIETA</div><h2>Ką norite atlikti?</h2><p>Pasirinkite užduotį. Įrankis parodys reikalingą sąrašą arba formą.</p></div>
+<div class="task-grid">
+<a class="task-card" href="{{ url_for('reform.index', view='catalogue') }}"><span class="task-number">01 / PERŽIŪRA</span><h3>Peržiūrėti produktus ir BOM</h3><p>Visas esamų produktų sąrašas ir jų dabartinės komplektacijos.</p><strong>Atverti sąrašą →</strong></a>
+<a class="task-card primary-task" href="{{ url_for('reform.index', view='bom-list', intent='edit') }}"><span class="task-number">02 / ESAMO BOM PAKEITIMAS</span><h3>Pakeisti konkretų BOM</h3><p>Pasirinkti esamą komplektaciją, pakeisti komponentus arba jų kiekius.</p><strong>Pasirinkti BOM →</strong></a>
+<a class="task-card" href="{{ url_for('reform.index', view='new-product') }}"><span class="task-number">03 / NAUJAS PRODUKTAS</span><h3>Įvesti naują produktą</h3><p>Sukurti produkto kortelę. Po to, jei reikia, sudaryti jo komplektaciją.</p><strong>Sukurti produktą →</strong></a>
+<a class="task-card" href="{{ url_for('reform.index', view='new-bom') }}"><span class="task-number">04 / NAUJA KOMPLEKTACIJA</span><h3>Sukurti naują BOM</h3><p>Pasirinkti produktą ir sudėti naują jo komponentų bei kiekių sąrašą.</p><strong>Sukurti BOM →</strong></a>
+</div>
+<div class="secondary-tasks"><a href="{{ url_for('reform.index', view='catalogue', intent='edit-product') }}">Keisti produkto duomenis →</a><a href="{{ url_for('reform.index', view='catalogue', intent='retire-product') }}">Nutraukti produkto naudojimą →</a><a href="{{ url_for('reform.index', view='review') }}">Peržiūrėti mano pakeitimus ({{ delta|length }}) →</a></div>
+<p class="source-note">Turimi duomenys: {{ work.target.products|length }} produktai · {{ work.target.boms|length }} BOM. Šaltinis: {{ work.base.source }}.</p>
+</section>

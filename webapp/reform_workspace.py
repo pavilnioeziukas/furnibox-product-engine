@@ -215,35 +215,49 @@ def index():
         rows = conn.execute('SELECT id,owner,created FROM submissions ' +
             ('' if admin() else 'WHERE owner=? ') + 'ORDER BY id DESC LIMIT 50', () if admin() else (owner(),)).fetchall()
     query = request.args.get('q', '').strip()[:200]
-    view = request.args.get('view', 'catalogue')
+    view = request.args.get('view') or ('catalogue' if request.args else 'home')
+    intent = request.args.get('intent', '')
     selected = request.args.get('product', '')
+    selected_bom = request.args.get('bom_id', '')
+    if work and selected_bom:
+        if selected_bom not in work['target']['boms']:
+            abort(404)
+        selected = work['target']['boms'][selected_bom]['sku']
+    if view == 'edit-bom' and not selected_bom:
+        return redirect(url_for('reform.index', view='bom-list', intent='edit'))
     product_rows, product_boms, usage = [], [], []
+    bom_rows = []
     page, pages, total = 1, 1, 0
     counts = {}
     if work:
         target = work['target']
         for bom in target['boms'].values():
             counts[bom['sku']] = counts.get(bom['sku'], 0) + 1
-            if bom['sku'] == selected:
+            if bom['sku'] == selected and (not selected_bom or bom['id'] == selected_bom):
                 product_boms.append(bom)
             if any(line['sku'] == selected for line in bom['components']):
                 usage.append(bom)
         product_rows = [(sku, p) for sku, p in target['products'].items()
                         if not query or query.casefold() in (p.get('display_sku', sku) + ' ' + p['name']).casefold()]
         product_rows.sort(key=lambda row: (not bool(counts.get(row[0])), row[1].get('display_sku', row[0]).casefold()))
-        total = len(product_rows)
+        bom_rows = [b for b in target['boms'].values() if not query or query.casefold() in
+                    (b['sku'] + ' ' + b.get('code', '') + ' ' + target['products'][b['sku']]['name']).casefold()]
+        bom_rows.sort(key=lambda b: (b['sku'].casefold(), b.get('code', '').casefold(), b['id']))
+        total = len(bom_rows) if view == 'bom-list' else len(product_rows)
         pages = max(1, math.ceil(total / 30))
         try:
             page = max(1, min(pages, int(request.args.get('page', 1))))
         except ValueError:
             page = 1
         product_rows = product_rows[(page-1)*30:page*30]
+        bom_rows = bom_rows[(page-1)*30:page*30]
         if selected not in target['products']:
             selected = ''
     return render_template('reform_catalogue.html', work=work, revision=revision,
         delta=changes(work['base'], work['target']) if work else [], submissions=rows, is_admin=admin(),
         query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
-        usage=usage, counts=counts, page=page, pages=pages, total=total)
+        usage=usage, counts=counts, page=page, pages=pages, total=total,
+        bom_rows=bom_rows, selected_bom=selected_bom, intent=intent)
 
 
 @reform.post('/refresh')

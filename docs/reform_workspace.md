@@ -48,9 +48,10 @@ uncompressed records remain readable.
 
 ## Pilot boundaries
 
-- The starting screen is the existing production catalogue, with server-side
-  search and 30 products per page. Selecting a product opens its existing BOMs.
-  New product/BOM creation is a secondary action.
+- The starting screen offers four explicit tasks: browse products and BOMs, edit
+  a specific existing BOM, create a product, or create a BOM. Product and BOM lists
+  have server-side search and 30 records per page. The BOM editor opens exactly
+  the selected BOM; saving takes the user directly to the before/after review.
 - Shared multi-variant BOMs and component applicability conditions remain visible
   read-only instead of blocking the full catalogue import. They require a richer editor.
 - Product metadata editing initially covers name only. SKU/unit migration is not
@@ -69,9 +70,13 @@ uncompressed records remain readable.
 
 ## Three-minute demo
 
-1. Log in as a Reform user and search the full production catalogue for an existing product.
-2. Change a BOM component quantity and remove another component; save the draft.
-3. Review both versions, confirm and open the submitted package.
+1. Log in as a Reform user and choose **Pakeisti konkretų BOM**.
+2. Find a BOM by product or reference, then select **Keisti šį BOM**.
+3. Change a component quantity or remove a component, then save and review.
+4. Compare both versions, confirm and open the submitted package.
+
+The separate browse task presents the production products and their BOMs. The
+new product and new BOM tasks open dedicated creation forms.
 
 ## Validation
 
@@ -91,5 +96,5 @@ On the local machine the first catalogue page rendered in about 0.52 seconds and
 returned 13.5 KB of HTML. An existing APACK BOM quantity change was saved, reviewed
 and confirmed in an isolated local test database, with the baseline unchanged.
 The resulting full-catalogue proposal occupied about 535 KB of compressed storage.
-40 local tests passed; two pre-existing Linux process-group tests were excluded
+42 local tests passed; two pre-existing Linux process-group tests were excluded
 on Windows. Live Odoo was only read, never modified.

@@ -159,8 +159,8 @@ def test_catalogue_search_pagination_and_existing_bom(setup):
         data['products'][f'EXISTING-{i:03d}'] = {'sku': f'EXISTING-{i:03d}', 'name': f'Esamas gaminys {i}', 'active': True, 'uom': 'vnt.', 'uom_id': 1}
     with app.app_context(), db() as conn:
         conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
-    home = client.get('/reform/').text
-    assert 'Esamų produktų sąrašas' in home and '108' in home
+    home = client.get('/reform/?view=catalogue').text
+    assert 'Produktų sąrašas' in home and '108' in home
     assert 'EXISTING-104' not in home
     result = client.get('/reform/?q=EXISTING-104').text
     assert 'EXISTING-104' in result and 'Rasta: 1' in result
@@ -168,7 +168,44 @@ def test_catalogue_search_pagination_and_existing_bom(setup):
     selected = client.get('/reform/?product=CAB-01').text
     assert 'ESAMA KOMPLEKTACIJA' in selected
     assert 'Spintelės komplektacija' in selected
-    assert 'Išsaugoti BOM pakeitimus' in selected
+    assert 'Keisti šį BOM' in selected
+    assert 'Išsaugoti ir peržiūrėti pakeitimus' not in selected
+
+
+def test_home_actions_and_specific_bom_edit_flow(setup):
+    app, client = setup
+    home = client.get('/reform/').text
+    for text in ['Ką norite atlikti?', 'Peržiūrėti produktus ir BOM', 'Pakeisti konkretų BOM',
+                 'Įvesti naują produktą', 'Sukurti naują BOM']:
+        assert text in home
+    listing = client.get('/reform/?view=bom-list&intent=edit&q=Spintel').text
+    assert 'Spintelės komplektacija' in listing
+    assert 'Keisti šį BOM' in listing
+    editor = client.get('/reform/?view=edit-bom&bom_id=1').text
+    assert 'Keisti pasirinktą BOM' in editor
+    assert 'Išsaugoti ir peržiūrėti pakeitimus' in editor
+    assert 'name="bom_id" value="1"' in editor
+    assert client.get('/reform/?view=edit-bom&bom_id=unknown').status_code == 404
+    response = post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spintelės komplektacija',
+        component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'],
+        return_view='review', return_product='CAB-01', revision='0')
+    assert 'Patvirtinti ir pateikti Furnibox' in response.text
+    assert 'PANEL-01 — 3.0' in response.text
+
+
+def test_edit_screen_does_not_mix_two_boms(setup):
+    app, client = setup
+    data = sample()
+    other = copy.deepcopy(data['boms']['1'])
+    other.update(id='2', code='Kita komplektacija')
+    data['boms']['2'] = other
+    with app.app_context(), db() as conn:
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    editor = client.get('/reform/?view=edit-bom&bom_id=1').text
+    assert 'Spintelės komplektacija' in editor
+    assert 'Kita komplektacija' not in editor
+    listing = client.get('/reform/?view=bom-list').text
+    assert 'Spintelės komplektacija' in listing and 'Kita komplektacija' in listing
 
 
 def test_preexisting_unrelated_invalid_bom_does_not_block_edit():
