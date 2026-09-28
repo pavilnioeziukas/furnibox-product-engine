@@ -21,6 +21,7 @@ CATALOGUE = [
         ('Tiekimo grandinių auditas', 'Vidinių perkėlimų būklė, aktyvūs MO su išrašytais SO ir WH/Input-Custom likučiai.', 'index', 'odoo_supply_chain_audit', 'Generuojama ataskaita'),
     ]),
     ('Gamyba ir produktai', [
+        ('Reform versijų pakeitimai', 'Nauji ir pašalinti SKU, komponentai, kiekiai ir laukų reikšmės. Dviejų įkeltų failų palyginimas ir Excel ataskaita.', 'reform_versions.index', None, 'Versijų palyginimas'),
         ('Gamybos komponentų sunaudojimas', 'Užbaigtų MO planuoti, faktiškai sunaudoti ir trūkstami komponentų kiekiai.', 'index', 'mo_component_consumption_audit', 'Generuojama ataskaita'),
         ('Produktų ir BOM aktualumas', 'Likučiai, aktyvūs dokumentai, BOM priklausomybės ir archyvavimo kandidatai.', 'index', 'product_lifecycle_audit', 'Generuojama ataskaita'),
         ('BOM archyvavimo blokatoriai', 'Susijusios SO eilutės ir archyvavimo kliūtys pagal BOM arba produktą.', 'index', 'bom_archive_blockers', 'Generuojama ataskaita'),

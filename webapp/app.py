@@ -124,6 +124,10 @@ MAX_UPLOAD_BYTES = SETTINGS.max_upload_mb * 1024 * 1024
 
 
 app = Flask(__name__)
+from webapp.reform_versions import versions
+app.config['REFORM_VERSION_UPLOADS'] = UPLOAD_DIR
+app.config['REFORM_VERSION_REPORTS'] = STATE_DIR / 'version_reports'
+app.register_blueprint(versions)
 from webapp.reports import reports
 app.register_blueprint(reports)
 from webapp.sales_quantities import sales_quantities
