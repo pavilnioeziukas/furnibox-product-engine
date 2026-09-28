@@ -100,3 +100,9 @@ The resulting full-catalogue proposal occupied about 535 KB of compressed storag
 on Windows. Live Odoo was only read, never modified.
 
 The Reform workspace interface is in English, including login, forms, validation messages and submission review.
+
+## Reform catalogue scope
+
+The catalogue reader selects one current active BOM per product: lowest sequence, then latest write_date, then highest ID for an exact tie. Archived alternatives are excluded. APACK codes and codes ending in -A (case-insensitive, whitespace trimmed) are hidden from Reform lists and component choices; FPACK remains visible. Server-side saves reject these internal products. Internal dependencies remain intact in stored data. A visible BOM containing hidden assembly components is read-only to avoid submitting a partial replacement. Refresh source data to apply the BOM selection to existing installations.
+
+Verified locally: BAS001 search returns 12 products; EUB-C-CAB02-BAS001 shows only 20260415_Cabinet(F), sequence 0. The visible catalogue contains 4,657 products and 2,480 current BOMs.

@@ -19,7 +19,7 @@ def read_catalogue(client, roots=None):
     keys = {p['id']: p['default_code'] if p.get('default_code') and len(by_sku[p['default_code']]) == 1
             else f"odoo-{p['id']}" for p in raw_products}
     raw_boms = client.search_read_all('mrp.bom', [('active', '=', True)],
-        ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id', 'type', 'code'])
+        ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'product_uom_id', 'type', 'code', 'sequence', 'write_date'])
     raw_lines = client.search_read_all('mrp.bom.line', [('bom_id', 'in', [b['id'] for b in raw_boms])],
         ['id', 'bom_id', 'product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids']) if raw_boms else []
     lines_by_bom, boms_by_product = defaultdict(list), defaultdict(list)
@@ -29,6 +29,12 @@ def read_catalogue(client, roots=None):
         candidates = [by_id[ident(b['product_id'])]] if ident(b['product_id']) in by_id else by_template[ident(b['product_tmpl_id'])]
         for p in candidates:
             boms_by_product[p['id']].append(b)
+    # Match the engine priority: lowest sequence, then latest modification.
+    for pid, candidates in boms_by_product.items():
+        minimum = min(int(b.get('sequence') or 0) for b in candidates)
+        preferred = [b for b in candidates if int(b.get('sequence') or 0) == minimum]
+        preferred.sort(key=lambda b: (str(b.get('write_date') or ''), int(b['id'])), reverse=True)
+        boms_by_product[pid] = preferred[:1]
     if roots:
         if any(len(by_sku.get(sku, [])) != 1 for sku in roots):
             raise ValueError('Selected product codes must exist in Odoo and be unique.')
@@ -70,11 +76,13 @@ def read_catalogue(client, roots=None):
                     'uom': label(line['product_uom_id']), 'uom_id': ident(line['product_uom_id'])})
             included_bids.add(b['id'])
             boms[bid] = {'id': bid, 'odoo_id': b['id'], 'sku': key, 'code': b.get('code') or '',
+                'sequence': b.get('sequence', 0), 'write_date': b.get('write_date', ''),
                 'active': True, 'quantity': b['product_qty'], 'uom': label(b['product_uom_id']),
                 'uom_id': ident(b['product_uom_id']), 'type': b['type'], 'components': components, 'read_only': reason}
+    current_ids = {b['id'] for items in boms_by_product.values() for b in items}
     external_usage = defaultdict(int)
     for line in raw_lines:
-        if ident(line['bom_id']) not in included_bids and ident(line['product_id']) in selected:
+        if ident(line['bom_id']) in current_ids - included_bids and ident(line['product_id']) in selected:
             external_usage[keys[ident(line['product_id'])]] += 1
     return {'products': products, 'boms': boms, 'external_usage': dict(external_usage),
         '_reserved_skus': list(by_sku), 'source': 'Odoo Production',

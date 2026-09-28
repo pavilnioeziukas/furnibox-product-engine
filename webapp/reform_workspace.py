@@ -20,6 +20,27 @@ from werkzeug.security import check_password_hash
 reform = Blueprint('reform', __name__, url_prefix='/reform')
 
 
+def reform_visible(sku):
+    code = (sku or '').strip().upper()
+    return not (code.startswith('APACK') or code.endswith('-A'))
+
+
+def visible_work(work):
+    """Keep internal BOM dependencies intact while presenting the Reform scope."""
+    if not work:
+        return work
+    shown = copy.deepcopy(work)
+    target = shown['target']
+    target['products'] = {k: p for k, p in target['products'].items() if reform_visible(p.get('display_sku', k))}
+    target['boms'] = {k: b for k, b in target['boms'].items() if b['sku'] in target['products']}
+    for bom in target['boms'].values():
+        visible_lines = [line for line in bom['components'] if line['sku'] in target['products']]
+        if len(visible_lines) != len(bom['components']):
+            bom['read_only'] = 'This BOM includes internal Furnibox assembly components. Furnibox must review it before editing.'
+        bom['components'] = visible_lines
+    return shown
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -212,8 +233,10 @@ def index():
     with db() as conn:
         base = baseline(conn)
         work, revision = draft(conn) if base else (None, 0)
+        delta = changes(work['base'], work['target']) if work else []
         rows = conn.execute('SELECT id,owner,created FROM submissions ' +
             ('' if admin() else 'WHERE owner=? ') + 'ORDER BY id DESC LIMIT 50', () if admin() else (owner(),)).fetchall()
+    work = visible_work(work)
     query = request.args.get('q', '').strip()[:200]
     view = request.args.get('view') or ('catalogue' if request.args else 'home')
     intent = request.args.get('intent', '')
@@ -254,7 +277,7 @@ def index():
         if selected not in target['products']:
             selected = ''
     return render_template('reform_catalogue.html', work=work, revision=revision,
-        delta=changes(work['base'], work['target']) if work else [], submissions=rows, is_admin=admin(),
+        delta=delta, submissions=rows, is_admin=admin(),
         query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
         usage=usage, counts=counts, page=page, pages=pages, total=total,
         bom_rows=bom_rows, selected_bom=selected_bom, intent=intent)
@@ -292,6 +315,8 @@ def save():
             action = request.form.get('action')
             if action == 'product':
                 sku = request.form.get('sku', '').strip()
+                if not reform_visible(sku):
+                    raise ValueError('Assembly products are managed by Furnibox.')
                 name = request.form.get('name', '').strip()
                 if not sku or len(sku) > 100 or not name or len(name) > 300:
                     raise ValueError('Enter a product code and name.')
@@ -316,6 +341,8 @@ def save():
                 target['products'][sku] = product
             elif action == 'retire':
                 sku = request.form.get('sku')
+                if not reform_visible(sku):
+                    raise ValueError('Assembly products are managed by Furnibox.')
                 if sku not in target['products']:
                     raise ValueError('Product not found.')
                 if target['products'][sku].get('read_only'):
@@ -329,6 +356,8 @@ def save():
                 if old and old.get('read_only'):
                     raise ValueError(old['read_only'])
                 sku = old['sku'] if old else request.form.get('sku', '')
+                if not reform_visible(sku) or (old and any(not reform_visible(line['sku']) for line in old['components'])):
+                    raise ValueError('This BOM includes internal Furnibox assembly products and requires Furnibox review.')
                 if sku not in target['products'] or not target['products'][sku]['active']:
                     raise ValueError('Select an active product.')
                 if target['products'][sku].get('read_only'):
@@ -349,6 +378,8 @@ def save():
                 for child, quantity, lid in zip(skus, quantities, ids):
                     if not child and not quantity:
                         continue
+                    if not reform_visible(child):
+                        raise ValueError('Assembly components are managed by Furnibox.')
                     if child not in target['products'] or not target['products'][child]['active']:
                         raise ValueError('Select an active component from the list.')
                     if lid and (lid not in previous or lid in seen):

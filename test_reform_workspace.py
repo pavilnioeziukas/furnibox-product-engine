@@ -281,3 +281,61 @@ def test_read_only_odoo_scope_units_and_external_usage():
     assert set(complete['products']) == {'ROOT', 'PART', 'OTHER'}
     assert set(complete['boms']) == {'10', '20'}
     assert complete['scope'] == 'production_catalogue'
+
+def test_reform_hides_assembly_products_and_keeps_fpack(setup):
+    app, client = setup
+    with app.app_context(), db() as conn:
+        data = sample()
+        for sku in ('APACK-EU-BOX', 'CAB-01-A', 'FPACK-EU-BOX'):
+            data['products'][sku] = {**data['products']['CAB-01'], 'sku': sku, 'name': sku}
+            data['boms'][sku] = {**copy.deepcopy(data['boms']['1']), 'id': sku, 'sku': sku, 'code': sku}
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    for path in ('?view=catalogue', '?view=bom-list', '?view=new-bom', '?product=CAB-01'):
+        page = client.get('/reform/' + path).text
+        assert 'APACK-EU-BOX' not in page and 'CAB-01-A' not in page
+        assert 'FPACK-EU-BOX' in page
+    assert client.get('/reform/?view=edit-bom&bom_id=APACK-EU-BOX').status_code == 404
+    result = post(client, 'save', action='retire', sku='CAB-01-A', revision='0')
+    assert 'managed by Furnibox' in result.text
+    with app.app_context(), db() as conn:
+        assert baseline(conn)['products']['CAB-01-A']['active']
+
+
+def test_current_bom_uses_lowest_sequence_then_latest_date():
+    class Client:
+        def search_read_all(self, model, domain, fields, **kwargs):
+            if model == 'product.product':
+                return [{'id': i, 'default_code': sku, 'name': sku, 'active': True,
+                         'product_tmpl_id': [i, sku], 'uom_id': [1, 'Units']}
+                        for i, sku in [(1, 'CAB'), (2, 'PART')]]
+            if model == 'mrp.bom':
+                assert 'sequence' in fields and 'write_date' in fields
+                return [{'id': i, 'product_id': [1, ''], 'product_tmpl_id': [1, ''],
+                         'product_qty': 1, 'product_uom_id': [1, 'Units'], 'type': 'normal',
+                         'code': str(i), 'sequence': seq, 'write_date': date}
+                        for i, seq, date in [(10, 5, '2026-09-28'), (11, 0, '2026-01-01'), (12, 0, '2026-02-01')]]
+            return [{'id': i, 'bom_id': [i, ''], 'product_id': [2, ''], 'product_qty': 2,
+                     'product_uom_id': [1, 'Units'], 'bom_product_template_attribute_value_ids': []}
+                    for i in (10, 11, 12)]
+    data = read_odoo(Client())
+    assert set(data['boms']) == {'12'}
+    assert data['boms']['12']['sequence'] == 0
+    assert data['external_usage'] == {}
+
+
+def test_hidden_component_does_not_get_deleted_by_edit(setup):
+    app, client = setup
+    with app.app_context(), db() as conn:
+        data = sample()
+        data['products']['PART-A'] = {**data['products']['PANEL-01'], 'sku': 'PART-A'}
+        data['boms']['1']['components'].append({'id': 'hidden', 'sku': 'PART-A', 'quantity': 1, 'uom': 'vnt.'})
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    page = client.get('/reform/?view=edit-bom&bom_id=1').text
+    assert 'PART-A' not in page
+    assert 'Furnibox must review' in page
+    result = post(client, 'save', action='bom', bom_id='1', quantity='1', revision='0',
+                  component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'])
+    assert 'requires Furnibox review' in result.text
+    with app.app_context(), db() as conn:
+        assert baseline(conn)['boms']['1']['components'][-1]['sku'] == 'PART-A'
+        assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
