@@ -5,6 +5,8 @@ on:
       - 'webapp/**'
       - 'test_reform_workspace.py'
       - 'test_reform_excel.py'
+      - 'test_reform_bom.py'
+      - 'test_reform_map.py'
       - 'test_webapp.py'
       - '.github/workflows/reform-workspace-tests.yml'
 jobs:
@@ -16,4 +18,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install pytest -r requirements.txt
-      - run: python -m pytest -q test_reform_map.py test_reform_excel.py test_reform_workspace.py test_reform_versions.py test_reform_notifications.py test_webapp.py
+      - run: python -m pytest -q test_reform_bom.py test_reform_map.py test_reform_excel.py test_reform_workspace.py test_reform_versions.py test_reform_notifications.py test_webapp.py

@@ -6,9 +6,16 @@ from webapp.reform_workspace import db,baseline,pack,unpack
 
 
 def export(client):
-    r=client.get('/reform/excel/download?scope=all')
+    # Recreate a saved pre-vertical export to verify old files remain importable.
+    from webapp.reform_excel import make_book
+    r=client.get('/reform/excel/download?scope=all&layout=legacy')
     assert r.status_code==200
-    return load_workbook(io.BytesIO(r.data))
+    token=load_workbook(io.BytesIO(r.data))['_Exchange']['B1'].value
+    with client.application.app_context(),db() as conn:
+        record=unpack(conn.execute('SELECT payload FROM file_exports WHERE id=?',(token,)).fetchone()[0])
+        record.update(map_format=2,bom_format=0)
+        conn.execute('UPDATE file_exports SET payload=? WHERE id=?',(pack(record),token))
+    return load_workbook(make_book(token,record))
 
 
 def test_map_edit_add_non_bom_and_supplier_reference(setup):

@@ -149,7 +149,10 @@ def make_book(token, record):
             sheet.column_dimensions[chr(64+i)].width = width
     for row in range(4, guide.max_row + 1):
         guide.row_dimensions[row].height = 45
-    if record.get('map_format') == 2:
+    if record.get('bom_format') == 1:
+        from webapp.reform_bom import add_vertical_bom
+        add_vertical_bom(wb, record)
+    elif record.get('map_format') == 2:
         from webapp.reform_map import add_map
         add_map(wb, record)
     data = io.BytesIO()
@@ -194,6 +197,13 @@ def rows_from(wb, name):
 
 
 def apply_book(wb, record, reserved):
+    if record.get('bom_format') == 1:
+        from webapp.reform_bom import translate
+        translated = translate(wb, record)
+        try:
+            return apply_book(translated, {**record, 'bom_format': 0, 'map_format': 1}, reserved)
+        finally:
+            translated.close()
     if record.get('map_format') == 2:
         from webapp.reform_map import translate
         translated = translate(wb, record)
@@ -345,7 +355,8 @@ def excel_download():
             sku = request.args.get('product', '').strip()
             full = request.args.get('scope') == 'all'
             record = {'work': work, 'revision': revision, 'sku': sku, 'full': full, 'scope': scope_for(work, sku, full), 'options': options_for(work)}
-            record['map_format'] = 1 if request.args.get('layout') == 'legacy' else 2
+            record['map_format'] = 1
+            record['bom_format'] = 0 if request.args.get('layout') == 'legacy' else 1
             supplier_reference = conn.execute('SELECT payload FROM state WHERE id=3').fetchone()
             record['supplier_codes'] = unpack(supplier_reference['payload']) if supplier_reference else {}
             token = secrets.token_urlsafe(32)
