@@ -339,6 +339,32 @@ def initialize():
     return redirect(url_for('reform.index'))
 
 
+@reform.post('/supplier-reference')
+def supplier_reference():
+    if not admin():
+        abort(403)
+    upload = request.files.get('file')
+    if not upload:
+        abort(400)
+    raw = upload.read(5 * 1024 * 1024 + 1)
+    if len(raw) > 5 * 1024 * 1024:
+        abort(413)
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, dict) or any(not isinstance(k, str) or not isinstance(v, list) or
+                any(not isinstance(code, str) or len(code) > 500 for code in v) for k,v in data.items()):
+            raise ValueError()
+    except (ValueError, TypeError):
+        abort(400, 'Invalid supplier reference file.')
+    with db() as conn:
+        source = baseline(conn)
+        if not source or set(data) - set(source['products']):
+            abort(400, 'Supplier reference contains unknown products.')
+        conn.execute('INSERT OR REPLACE INTO state VALUES (3,?)', (pack(data),))
+    flash('Supplier codes updated. Existing drafts and exported files are unchanged.')
+    return redirect(url_for('reform.index'))
+
+
 @reform.post('/refresh')
 def refresh():
     if not admin():

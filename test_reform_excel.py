@@ -9,7 +9,7 @@ from webapp.reform_workspace import db, baseline, unpack
 
 
 def export_book(client, product='CAB-01'):
-    response = client.get('/reform/excel/download', query_string={'product': product})
+    response = client.get('/reform/excel/download', query_string={'product': product, 'layout': 'legacy'})
     assert response.status_code == 200
     return load_workbook(io.BytesIO(response.data))
 
@@ -136,7 +136,7 @@ def test_full_catalogue_roundtrip_and_read_only_bom(setup):
         data['boms']['2'] = copy.deepcopy(data['boms']['1'])
         data['boms']['2'].update(id='2', sku='UNUSED', read_only='Internal assembly')
         conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
-    response = client.get('/reform/excel/download?scope=all')
+    response = client.get('/reform/excel/download?scope=all&layout=legacy')
     book = load_workbook(io.BytesIO(response.data))
     assert book['Products'].max_row == 5
     assert book['BOMs'].max_row == 3

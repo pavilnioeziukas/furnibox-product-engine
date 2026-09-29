@@ -11,6 +11,18 @@ def read_catalogue(client, roots=None):
     raw_products = client.search_read_all('product.product', [],
         ['id', 'default_code', 'name', 'active', 'product_tmpl_id', 'uom_id', 'categ_id'], context={'active_test': False})
     by_id = {p['id']: p for p in raw_products}
+    supplier_rows = client.search_read_all('product.supplierinfo', [],
+        ['product_id', 'product_tmpl_id', 'product_code'])
+    codes_by_product, codes_by_template = defaultdict(set), defaultdict(set)
+    for supplier in supplier_rows:
+        code = supplier.get('product_code')
+        if not code:
+            continue
+        pid = ident(supplier.get('product_id'))
+        if pid:
+            codes_by_product[pid].add(code)
+        else:
+            codes_by_template[ident(supplier.get('product_tmpl_id'))].add(code)
     by_sku, by_template = defaultdict(list), defaultdict(list)
     for p in raw_products:
         if p.get('default_code'):
@@ -56,7 +68,8 @@ def read_catalogue(client, roots=None):
         lock = '' if p.get('default_code') and len(by_sku[p['default_code']]) == 1 else 'The product code is missing or duplicated. Furnibox review is required.'
         products[key] = {'sku': key, 'display_sku': p.get('default_code') or 'No code', 'name': p['name'],
             'active': p['active'], 'odoo_id': pid, 'category': label(p.get('categ_id')), 'category_id': ident(p.get('categ_id')),
-            'uom': label(p['uom_id']), 'uom_id': ident(p['uom_id']), 'read_only': lock}
+            'uom': label(p['uom_id']), 'uom_id': ident(p['uom_id']), 'read_only': lock,
+            'supplier_codes': sorted(codes_by_product[pid] | codes_by_template[ident(p['product_tmpl_id'])])}
         for b in boms_by_product[pid]:
             bid = str(b['id'])
             shared = not b['product_id'] and len(by_template[ident(b['product_tmpl_id'])]) > 1
