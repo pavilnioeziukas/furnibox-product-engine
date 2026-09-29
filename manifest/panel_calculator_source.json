@@ -738,6 +738,24 @@
       "color": "NO",
       "current": 64.35,
       "sourceK": 49.14618550526316
+    },
+    {
+      "sku": "EUB-C-CAB01-PNL013",
+      "detail": "EU-PNL-2000x150-WW",
+      "length": 2000,
+      "width": 150,
+      "color": "WW",
+      "current": null,
+      "sourceK": 12.237631578947369
+    },
+    {
+      "sku": "EUB-C-CAB02-PNL013",
+      "detail": "EU-PNL-2000x150-BB",
+      "length": 2000,
+      "width": 150,
+      "color": "BB",
+      "current": null,
+      "sourceK": 11.807105263157894
     }
   ]
 }

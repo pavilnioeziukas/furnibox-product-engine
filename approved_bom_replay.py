@@ -116,22 +116,26 @@ def replay_approved_v10_rows(source_rows, *, allow_conflicts=False):
             else:
                 conflict(sku, f"CONFLICTING_APPROVED_BOM: {sku}")
 
-    sku = "EUB-C-CAB03-PNL013"
-    panel = [None] * 133
-    panel[1:12] = [next_number, sku, "PREPACK PANEL", 1, 1, 1,
-                   "REFORM BOX - Oak laminate", "Filler - W15 H220 - for plinths",
-                   150, 2200, 18]
-    panel[13:17] = ["EU-PNL-2000x150-NO", 1, "PANEL", 0]
-    existing = by_sku.get(sku)
-    if existing is None:
-        rows.append(panel)
-        changes.append({"sku": sku, "action": "ADDED_APPROVED_BOM"})
-    elif _components(existing) == {"EU-PNL-2000X150-NO": 1} and all(
-        existing[column] == panel[column] for column in (3, 4, 8, 9, 10, 11, 13, 14, 15)
-    ):
-        changes.append({"sku": sku, "action": "ALREADY_MATCHING"})
-    else:
-        conflict(sku, f"CONFLICTING_APPROVED_BOM: {sku}")
+    for cabinet, color, finish in (("CAB01", "WW", "REFORM BOX - White laminate"),
+                                    ("CAB02", "BB", "REFORM BOX - Black laminate"),
+                                    ("CAB03", "NO", "REFORM BOX - Oak laminate")):
+        sku = f"EUB-C-{cabinet}-PNL013"
+        panel = [None] * 133
+        panel[1:12] = [next_number, sku, "PREPACK PANEL", 1, 1, 1,
+                       finish, "Filler - W15 H220 - for plinths",
+                       150, 2200, 18]
+        panel[13:17] = [f"EU-PNL-2000x150-{color}", 1, "PANEL", 0]
+        existing = by_sku.get(sku)
+        if existing is None:
+            rows.append(panel)
+            next_number += 1
+            changes.append({"sku": sku, "action": "ADDED_APPROVED_BOM"})
+        elif _components(existing) == {f"EU-PNL-2000X150-{color}": 1} and all(
+            existing[column] == panel[column] for column in (3, 4, 8, 9, 10, 11, 13, 14, 15)
+        ):
+            changes.append({"sku": sku, "action": "ALREADY_MATCHING"})
+        else:
+            conflict(sku, f"CONFLICTING_APPROVED_BOM: {sku}")
     return rows, changes
 
 
@@ -197,8 +201,10 @@ def stage_approved_v10_input(source: Path, destination: Path):
                 )
                 analog_sku = (
                     sku.rsplit("-", 1)[0] + "-" + analog_code
-                    if not sku.endswith("PNL013") else "EUB-C-CAB03-SLF021"
+                    if not sku.endswith("PNL013") else sku.rsplit("-", 1)[0] + "-SLF021"
                 )
+                if analog_sku not in existing_rows and sku.endswith("PNL013"):
+                    analog_sku = "EUB-C-CAB03-SLF021"
                 template = xml_rows[existing_rows[analog_sku]]
                 element = deepcopy(template)
                 element.set("r", str(next_physical_row))

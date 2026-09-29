@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import unittest
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from reform_input_acceptance import (
@@ -63,9 +64,13 @@ class ReformInputAcceptanceTests(unittest.TestCase):
         )
         if not path.exists():
             self.skipTest("V10 approved workbook is a local acceptance fixture")
-        report = audit_input(path)
+        from approved_bom_replay import stage_approved_v10_input
+        with TemporaryDirectory() as directory:
+            staged = Path(directory) / 'approved.xlsx'
+            stage_approved_v10_input(path, staged)
+            report = audit_input(staged)
         self.assertEqual(report["status"], "PASS")
-        self.assertEqual(report["matched_boms"], 8)
+        self.assertEqual(report["matched_boms"], 10)
         self.assertIn("approved_bom_components", report["validated_at_input"])
         self.assertIn("purchase_price_adjustments", report["requires_downstream_price_validation"])
         self.assertEqual(report["persistent_rule_coverage"], {
