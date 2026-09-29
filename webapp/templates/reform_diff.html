@@ -1,0 +1,30 @@
+{% macro field(value, other, key) -%}
+{% set different = not other or value.get(key, '') != other.get(key, '') -%}
+<span{% if different %} class="diff-field"{% endif %}>{{ value.get(key, '') }}</span>
+{%- endmacro %}
+
+{% macro comparison(c) %}
+<div class="diff diff-details">
+{% for title,value,other in [('Current',c.before,c.after),('Proposed',c.after,c.before)] %}
+<div><h4>{{ title }}</h4>
+{% if not value %}<p>None</p>
+{% elif c.kind == 'products' %}
+<p>{{ field(value,other,'sku') }} · {{ field(value,other,'name') }}</p>
+<p>Category: {{ field(value,other,'category') }}</p>
+<p><span{% if not other or value.active != other.active %} class="diff-field"{% endif %}>{{ 'Active' if value.active else 'Retire' }}</span> · {{ field(value,other,'uom') }}</p>
+{% else %}
+<p>{{ field(value,other,'sku') }} · {{ field(value,other,'code') }} · {{ field(value,other,'quantity') }} {{ field(value,other,'uom') }}</p>
+<ul class="diff-components">
+{% for line in value.components %}
+{% set match = (other.components|selectattr('id','equalto',line.id)|first) if other else none %}
+{% set status = ('removed' if title == 'Current' else 'added') if not match else 'changed' if line.sku != match.sku or line.quantity != match.quantity or line.uom != match.uom else '' %}
+<li{% if status %} class="diff-row diff-{{ status }}" data-change="{{ status }}"{% else %} class="diff-row"{% endif %}>
+<span>{{ field(line,match,'sku') }} — {{ field(line,match,'quantity') }} {{ field(line,match,'uom') }}</span>
+{% if status %}<span class="diff-tag">{{ {'changed':'Changed','added':'Added','removed':'Removed'}[status] }}</span>{% endif %}
+</li>
+{% endfor %}
+</ul>
+{% endif %}</div>
+{% endfor %}
+</div>
+{% endmacro %}

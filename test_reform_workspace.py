@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 
 import pytest
 from werkzeug.security import generate_password_hash
@@ -221,7 +222,7 @@ def test_home_actions_and_specific_bom_edit_flow(setup):
         component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'],
         return_view='review', return_product='CAB-01', revision='0')
     assert 'Save to version draft / review complete version' in response.text
-    assert 'PANEL-01 — 3.0' in response.text
+    assert 'PANEL-01 — 3.0' in re.sub(r'<[^>]+>', '', response.text)
 
 
 def test_edit_screen_does_not_mix_two_boms(setup):
@@ -370,3 +371,36 @@ def test_hidden_component_does_not_get_deleted_by_edit(setup):
     with app.app_context(), db() as conn:
         assert baseline(conn)['boms']['1']['components'][-1]['sku'] == 'PART-A'
         assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
+
+
+def test_review_highlights_changed_added_removed_and_unchanged_rows(setup):
+    app, client = setup
+    original = sample()['boms']['1']
+    before = copy.deepcopy(original)
+    before['components'].append({'id': '12', 'sku': 'UNCHANGED', 'quantity': 1, 'uom': 'vnt.'})
+    after = copy.deepcopy(before)
+    after['components'][0]['quantity'] = 9
+    after['components'].pop(1)
+    after['components'].append({'id': 'new-1', 'sku': '<script>new</script>', 'quantity': 3, 'uom': 'vnt.'})
+    with app.test_request_context():
+        template = app.jinja_env.from_string("{% from 'reform_diff.html' import comparison %}{{ comparison(c) }}")
+        html = template.render(c={'kind': 'boms', 'before': before, 'after': after})
+        assert html.count('data-change="changed"') == 2
+        assert html.count('data-change="added"') == 1
+        assert html.count('data-change="removed"') == 1
+        assert '<span class="diff-field">9</span>' in html
+        assert '<span>UNCHANGED</span>' in html
+        assert '<span class="diff-field">UNCHANGED</span>' not in html
+        assert '&lt;script&gt;new&lt;/script&gt;' in html and '<script>new' not in html
+        unchanged = template.render(c={'kind': 'boms', 'before': before, 'after': before})
+        assert 'data-change=' not in unchanged and 'class="diff-field"' not in unchanged
+        reordered = copy.deepcopy(before)
+        reordered['components'].reverse()
+        assert 'data-change=' not in template.render(c={'kind': 'boms', 'before': before, 'after': reordered})
+        new = template.render(c={'kind': 'boms', 'before': None, 'after': after})
+        assert new.count('data-change="added"') == 3
+        product = sample()['products']['CAB-01']
+        changed = dict(product, name='New name', active=False)
+        html = template.render(c={'kind': 'products', 'before': product, 'after': changed})
+        assert '<span class="diff-field">New name</span>' in html
+        assert '<span class="diff-field">Retire</span>' in html

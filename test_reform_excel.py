@@ -2,6 +2,7 @@
 import io
 import copy
 import json
+import re
 
 from openpyxl import load_workbook
 from test_reform_workspace import setup, post, sample
@@ -30,7 +31,7 @@ def test_unchanged_and_changed_roundtrip(setup):
     book['Components']['E2'] = 7
     response = upload_book(client, book)
     assert 'Excel changes saved' in response.text
-    assert 'PANEL-01 — 7.0' in response.text
+    assert 'PANEL-01 — 7.0' in re.sub(r'<[^>]+>', '', response.text)
     assert 'Current' in response.text and 'Proposed' in response.text
     assert 'Your draft has changed' in upload_book(client, book).text
     with app.app_context(), db() as conn:
