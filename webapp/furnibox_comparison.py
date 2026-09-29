@@ -1,3 +1,5 @@
+from webapp.time_display import cet_time
+
 import csv
 import io
 import math
@@ -33,7 +35,7 @@ def excel_export(rows, rates, filters):
     sheet.title = 'Detalių kainos'
     sheet.append(['Furnibox | Detalių kainų palyginimas'])
     sheet.append(['Perskaičiuotų kainų išrašas, EUR/vnt., be PVM. Koeficientus keiskite svetainėje ir eksportuokite iš naujo.'])
-    sheet.append([f'Sugeneruota: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC. Eilučių: {len(rows)}.'])
+    sheet.append([f'Sugeneruota: {cet_time(datetime.now(timezone.utc))}. Eilučių: {len(rows)}.'])
     sheet.append([f'Filtrai: {filters}'])
     sheet.append([label for _, label in COLUMNS])
     sheet['H5'] = 'Realus Furnibox koef. (pakartota)'

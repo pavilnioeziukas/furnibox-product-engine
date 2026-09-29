@@ -124,6 +124,8 @@ MAX_UPLOAD_BYTES = SETTINGS.max_upload_mb * 1024 * 1024
 
 
 app = Flask(__name__)
+from webapp.time_display import cet_time
+app.jinja_env.filters['cet_time'] = cet_time
 from webapp.reports import reports
 app.register_blueprint(reports)
 from webapp.sales_quantities import sales_quantities

@@ -404,3 +404,10 @@ def test_review_highlights_changed_added_removed_and_unchanged_rows(setup):
         html = template.render(c={'kind': 'products', 'before': product, 'after': changed})
         assert '<span class="diff-field">New name</span>' in html
         assert '<span class="diff-field">Retire</span>' in html
+
+
+def test_reform_source_time_is_cet(setup):
+    _, client = setup
+    response = client.get('/reform/?view=review')
+    assert b'Retrieved 2026-09-28 11:00 CET' in response.data
+    assert b' UTC' not in response.data

@@ -23,7 +23,7 @@
     <div class="panel-head"><div><p class="eyebrow">Paskutinis skaičiavimas</p><h2>Reform kainodara</h2></div>
       {% if pricing_job %}<span class="state {{ pricing_job.status|lower }}">{{ pricing_job.status }}</span>{% else %}<span class="state waiting">Dar nepaleista</span>{% endif %}
     </div>
-    {% if pricing_job %}<p class="muted">{{ pricing_job.created_at }} · Run {{ pricing_job.id }}</p>{% else %}<p class="muted">Nėra išsaugoto paleidimo.</p>{% endif %}
+    {% if pricing_job %}<p class="muted">{{ pricing_job.created_at|cet_time }} · Run {{ pricing_job.id }}</p>{% else %}<p class="muted">Nėra išsaugoto paleidimo.</p>{% endif %}
     <a class="secondary control-button" href="{{ url_for('index') }}">Paleisti naują skaičiavimą</a>
   </article>
   <article class="panel">
@@ -119,7 +119,7 @@
       </div>
     </div>
 
-    <div class="save-bar"><div><strong>Bus naudojama tik kitame paleidime</strong><small>{% if parameter_updated_at %}Paskutinis parametrų pakeitimas: {{ parameter_updated_at }}{% else %}Naudojamos numatytosios reikšmės{% endif %}</small></div><button class="primary" type="submit">Išsaugoti visas reikšmes</button></div>
+    <div class="save-bar"><div><strong>Bus naudojama tik kitame paleidime</strong><small>{% if parameter_updated_at %}Paskutinis parametrų pakeitimas: {{ parameter_updated_at|cet_time }}{% else %}Naudojamos numatytosios reikšmės{% endif %}</small></div><button class="primary" type="submit">Išsaugoti visas reikšmes</button></div>
   </div>
 </form>
 

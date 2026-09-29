@@ -7,7 +7,7 @@
   <div>
     <p class="eyebrow">Paleidimas {{ job.id }}</p>
     <h1>{{ job.title }}</h1>
-    <p class="muted">{{ job.created_at }}</p>
+    <p class="muted">{{ job.created_at|cet_time }}</p>
   </div>
   <span id="status" class="state {{ job.status|lower }}">
     Vykdymas: {{ job.status }}

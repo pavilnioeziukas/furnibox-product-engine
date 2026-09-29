@@ -55,10 +55,10 @@
 <section class="section-head" id="recent-runs"><div><p class="eyebrow">Kontrolė</p><h2>Paskutiniai paleidimai</h2></div></section>
 <div class="table-wrap">
   <table>
-    <thead><tr><th>Veiksmas</th><th>Būsena</th><th>Pradėta (UTC)</th><th>Rezultatai</th><th></th></tr></thead>
+    <thead><tr><th>Veiksmas</th><th>Būsena</th><th>Pradėta (CET)</th><th>Rezultatai</th><th></th></tr></thead>
     <tbody>
     {% for job in jobs %}
-      <tr><td><strong>{{ job.title }}</strong></td><td><span class="state {{ job.status|lower }}">{{ job.status }}</span></td><td>{{ job.created_at[:19].replace('T', ' ') }}</td><td>{{ job.files|length }}</td><td><a href="{{ url_for('job_detail', job_id=job.id) }}">Atidaryti →</a></td></tr>
+      <tr><td><strong>{{ job.title }}</strong></td><td><span class="state {{ job.status|lower }}">{{ job.status }}</span></td><td>{{ job.created_at|cet_time }}</td><td>{{ job.files|length }}</td><td><a href="{{ url_for('job_detail', job_id=job.id) }}">Atidaryti →</a></td></tr>
     {% else %}<tr><td colspan="5" class="empty">Paleidimų dar nėra.</td></tr>{% endfor %}
     </tbody>
   </table>

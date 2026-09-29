@@ -1,4 +1,6 @@
 """Versioned Excel exchange for the Reform application (no Odoo writes)."""
+from webapp.time_display import cet_time
+
 import copy
 import io
 import secrets
@@ -66,7 +68,7 @@ def make_book(token, record):
         ['REFORM BOM EXCHANGE', ''],
         ['Product', 'Full Reform catalogue' if record.get('full') else record['sku'] or 'New products and BOMs'],
         ['Read-only records', 'Records listed in Read-only must remain unchanged. Internal assembly components are excluded from this Reform view.'],
-        ['Source captured (UTC)', record['work']['base']['captured_at']],
+        ['Source captured (CET)', cet_time(record['work']['base']['captured_at'])],
         ['1. Edit', 'Products: edit names/categories; append new products with code, name, category and unit. Existing codes and units stay unchanged.'],
         ['2. Define BOMs', 'BOMs: edit reference or output quantity. For a new BOM, add a unique key starting NEW-, for example NEW-1.'],
         ['3. Edit components', 'Components: change code or quantity. Add rows with a blank Line ID. To remove an existing component, set Action to REMOVE.'],

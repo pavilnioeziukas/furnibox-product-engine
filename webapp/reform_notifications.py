@@ -1,4 +1,6 @@
 """Submission notifications; disabled until the recipient/template are approved."""
+from webapp.time_display import cet_time
+
 import os
 import smtplib
 import ssl
@@ -39,7 +41,7 @@ def enqueue(conn, sid, owner, created, payload):
     lines = [
         'Sveiki,', '', 'Reform įrankyje pateikta visa pakeitimų versija Furnibox peržiūrai.',
         f'Versija: {payload["version"]}', f'Aprašymas: {payload["description"]}',
-        f'Pateikimas: #{sid}', f'Pateikė: {owner}', f'Laikas (UTC): {created}',
+        f'Pateikimas: #{sid}', f'Pateikė: {owner}', f'Laikas: {cet_time(created)}',
         f'Pakeistų įrašų: {len(payload["changes"])}', '', 'Pakeisti produktai ir BOM:',
     ]
     for change in payload['changes']:
