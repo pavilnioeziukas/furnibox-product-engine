@@ -4,7 +4,7 @@
 
 New downloads use **BOM** as the editing sheet, with two levels per block: the parent and its direct components. A cabinet lists its FPACK and HRD assemblies; each assembly has its own block listing its direct children. Shared sub-BOMs appear once. Editing a shared BOM affects every parent that uses it.
 
-Visible columns are Parent BOM SKU, Component SKU, Quantity, Unit, Supplier Code, Action and Note. The hidden BOM key and Line ID retain stable identity. Quantities belong to the immediate parent and its output quantity in **BOMs**; they are not multiplied across a hierarchy. Nine-point text and compact rows reduce horizontal and vertical scrolling. Dark lines separate BOMs; blue and peach rows help follow components.
+Visible columns are Parent BOM SKU, Component SKU, Quantity, Unit, Supplier Code, Action and Note. The hidden BOM key and Line ID retain stable identity. Quantities belong to the immediate parent and its output quantity in **BOMs**; they are not multiplied across a hierarchy. Nine-point text and compact rows reduce horizontal and vertical scrolling. Each complete BOM block has one fill colour; peach and blue alternate between BOMs. Dark lines separate the blocks.
 
 Edit Component SKU or Quantity, or set Action to REMOVE. Keep existing rows, IDs and reference fields unchanged. Unit and Supplier Code refer to the original exported component, even when proposing a replacement SKU; a new download refreshes these references.
 

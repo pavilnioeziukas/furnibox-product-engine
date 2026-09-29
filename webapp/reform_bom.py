@@ -62,6 +62,7 @@ def add_vertical_bom(wb, record):
     bold = Font(name='Calibri', size=9, bold=True, color='24496B')
     header = Font(name='Calibri', size=9, bold=True, color='FFFFFF')
     fills = [PatternFill('solid', fgColor=color) for color in ('E4EDF7', 'FCECDD')]
+    group_fills = [PatternFill('solid', fgColor=color) for color in ('B8CCE4', 'FCE9D9')]
     top = Border(top=Side(style='medium', color='344F6A'))
     empty = Border()
     for ws in wb:
@@ -92,12 +93,12 @@ def add_vertical_bom(wb, record):
             key = row[7].value if ws == sheet else None
             start = ws == sheet and key != previous
             if start:
-                stripe = 0
+                stripe += 1
             for cell in row:
                 if isinstance(cell.value, str):
                     cell.data_type = 's'
                 cell.font = bold if ws == sheet and cell.column == 1 else body
-                cell.fill = fills[stripe % 2]
+                cell.fill = (group_fills if ws == sheet else fills)[stripe % 2]
                 cell.border = top if start else empty
                 cell.alignment = Alignment(vertical='center', horizontal='right' if isinstance(cell.value, (int, float)) else 'left')
                 cell.number_format = 'General'
@@ -110,7 +111,8 @@ def add_vertical_bom(wb, record):
                 line_count = max(line_count, ceil(len(str(cell.value or '')) / widths[col - 1]))
             ws.row_dimensions[row[0].row].height = max(20, line_count * 12)
             previous = key
-            stripe += 1
+            if ws != sheet:
+                stripe += 1
     sheet.sheet_properties.tabColor = '24496B'
     guide = wb['Instructions']
     guide['B5'] = 'Products / Non-BOM: edit names and categories, or add product cards. Supplier Code is an Odoo reference.'
@@ -122,7 +124,7 @@ def add_vertical_bom(wb, record):
     guide.append(['Quantity', 'Quantity is per parent BOM output, as defined in BOMs. It is not a multiplied total across hierarchy levels.'])
     guide.append(['References', 'Unit and Supplier Code describe the exported component. Keep them unchanged when replacing its SKU; the next download refreshes them.'])
     guide.append(['Shared assemblies', 'Changing an HRD or FPACK BOM affects every parent that uses it. Do not copy its component rows under the cabinet.'])
-    guide.append(['Reading', 'Dark lines separate BOMs. Alternating blue and peach rows help follow direct components. Font size: 9 pt.'])
+    guide.append(['Reading', 'Each BOM block has one fill colour. Peach and blue alternate between BOMs, with dark lines separating the blocks. Font size: 9 pt.'])
     for row in guide.iter_rows(min_row=16):
         for cell in row:
             cell.font = body
