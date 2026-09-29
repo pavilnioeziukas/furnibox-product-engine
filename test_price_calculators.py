@@ -4,7 +4,7 @@ from price_calculators import calculate, defaults, source
 
 def test_all_panel_source_bases():
     rows = source('panel')['rows']
-    assert len(rows) == 82
+    assert len(rows) == 84
     assert sum(row['sku'] == 'EUB-C-CAB03-PNL013' for row in rows) == 1
     for row in rows:
         result = calculate('panel', row, defaults('panel'))
@@ -54,7 +54,7 @@ def test_pages_post_export_and_auth(monkeypatch,tmp_path):
     from test_webapp import load_webapp
     webapp=load_webapp(monkeypatch,tmp_path)
     c=webapp.app.test_client()
-    for kind,count in [('panel',82),('shelf',297)]:
+    for kind,count in [('panel',84),('shelf',297)]:
         assert c.get('/calculators/'+kind).status_code == 200
         rates={'rate_'+k:v for k,v in defaults(kind).items()}
         post=dict(rates,row=0,length=2000,width=600,color='WW',kind='SREW-SHELF-PAPR',packaging=1,cardboard=.9)

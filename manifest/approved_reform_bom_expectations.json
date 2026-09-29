@@ -1,6 +1,6 @@
 {
-  "version": "2026-09-17-v10-approved-corrections",
-  "source": "User-approved Tamara HRD207D correction and seven missing V10 BOM positions",
+  "version": "2026-09-29-pnl013-all-colors",
+  "source": "User-approved HRD207D correction, missing V10 BOMs and CAB01/CAB02 PNL013 additions",
   "boms": {
     "UNI-P-ACC01-HRD207D": {
       "CON7X50": 10,
@@ -38,6 +38,12 @@
     "EUB-C-CAB03-SLF022": {
       "EU-SREW-SHELF-1163x340-NO": 1,
       "SLF-PINS-HRD-4": 1
+    },
+    "EUB-C-CAB01-PNL013": {
+      "EU-PNL-2000x150-WW": 1
+    },
+    "EUB-C-CAB02-PNL013": {
+      "EU-PNL-2000x150-BB": 1
     }
   },
   "post_generation_boms": {

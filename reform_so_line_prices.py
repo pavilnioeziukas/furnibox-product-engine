@@ -709,12 +709,13 @@ def apply_approved_base_tariffs(rules):
 
 
 def apply_missing_pnl013_rule(rules):
-    """Use the approved equal-length NO panel tariff for the new PNL013."""
+    """Use each color family's approved equal-length panel tariff for PNL013."""
     result = dict(rules)
-    target = "EUB-C-CAB03-PNL013"
-    source = result.get(key("EUB-C-CAB03-PNL011"))
-    if key(target) not in result and source is not None:
-        result[key(target)] = replace(source, sku=target)
+    for cabinet in ('CAB01', 'CAB02', 'CAB03'):
+        target = f"EUB-C-{cabinet}-PNL013"
+        source = result.get(key(f"EUB-C-{cabinet}-PNL011"))
+        if key(target) not in result and source is not None:
+            result[key(target)] = replace(source, sku=target)
     return result
 
 

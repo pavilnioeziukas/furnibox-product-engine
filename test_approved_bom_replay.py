@@ -43,9 +43,9 @@ class ApprovedBomReplayTests(unittest.TestCase):
     def test_replay_is_additive_traceable_and_idempotent(self):
         source = base_rows()
         result, changes = replay_approved_v10_rows(source)
-        self.assertEqual(len(result), len(source) + 7)
+        self.assertEqual(len(result), len(source) + 9)
         self.assertEqual(source[0][4], 6)
-        self.assertEqual([item["action"] for item in changes].count("ADDED_APPROVED_BOM"), 7)
+        self.assertEqual([item["action"] for item in changes].count("ADDED_APPROVED_BOM"), 9)
         self.assertEqual(changes[0]["action"], "APPLIED_APPROVED_HRD207D")
         repeated, repeat_changes = replay_approved_v10_rows(result)
         self.assertEqual(repeated, result)
@@ -62,16 +62,16 @@ class ApprovedBomReplayTests(unittest.TestCase):
         source[0][14] = 9
         repaired, changes = replay_approved_v10_rows(source, allow_conflicts=True)
         self.assertEqual(repaired[0][14], 9)
-        self.assertEqual(len(repaired), len(source) + 7)
+        self.assertEqual(len(repaired), len(source) + 9)
         self.assertEqual([item["action"] for item in changes].count("CONFLICT_REVIEW"), 1)
-        self.assertEqual([item["action"] for item in changes].count("ADDED_APPROVED_BOM"), 7)
+        self.assertEqual([item["action"] for item in changes].count("ADDED_APPROVED_BOM"), 9)
 
     def test_missing_one_analog_does_not_discard_other_approved_repairs(self):
         source = [item for item in base_rows() if item[2] != "EUB-C-CAB02-SLF021"]
         repaired, changes = replay_approved_v10_rows(source, allow_conflicts=True)
         self.assertNotIn("EUB-C-CAB02-SLF020", {item[2] for item in repaired})
         self.assertEqual([item["action"] for item in changes].count("CONFLICT_REVIEW"), 1)
-        self.assertEqual([item["action"] for item in changes].count("ADDED_APPROVED_BOM"), 6)
+        self.assertEqual([item["action"] for item in changes].count("ADDED_APPROVED_BOM"), 8)
 
 
 if __name__ == "__main__":
