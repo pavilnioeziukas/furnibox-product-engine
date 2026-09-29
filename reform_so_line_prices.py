@@ -1703,6 +1703,9 @@ def calculate_boms(
             graph
         )
 
+    from hrd_hb_corrections import apply as apply_hb_corrections, is_hb
+    boms, graph, _ = apply_hb_corrections(boms, graph)
+
     component_cost_only_tops = {
         key(value)
         for value in (
@@ -1711,6 +1714,8 @@ def calculate_boms(
         )
     }
     bom_cost_skus = set(component_cost_only_tops)
+    # HB costs must reflect the corrected composition, including nested uses.
+    bom_cost_skus.update(key(sku) for sku in graph if is_hb(sku))
     authoritative_rule_tops = {
         key(value)
         for value in (
@@ -3788,6 +3793,9 @@ def build_from_application_config(
         [item.sku for _, items in boms.values() for item in items], calculator_snapshot)
     prices = unified.prepare(prices, registry)
 
+    from hrd_hb_corrections import apply as apply_hb_corrections
+    boms, graph, hb_audit = apply_hb_corrections(boms, graph)
+
     bom_rows, details = (
         calculate_boms(
             boms,
@@ -3832,6 +3840,8 @@ def build_from_application_config(
     if document.get('review_corrections_applied'):
         save_config(config_path, document)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    (output_path.parent / "HRD_HB_Corrections_Applied.json").write_text(
+        json.dumps(hb_audit, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_path.parent / "Reviewed_Pricing_Corrections_Applied.json").write_text(
         json.dumps(
             {"applied_sku_versions": document.get("review_corrections_applied", {})},

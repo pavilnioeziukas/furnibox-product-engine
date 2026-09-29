@@ -7,7 +7,7 @@ Ambiguous recipes deliberately have no price and cannot fall back to old costs.
 from collections import defaultdict
 import re
 import copy
-from price_calculators import calculate, source
+from price_calculators import calculate, source, validate_rates
 import shelf_workbook
 
 
@@ -24,6 +24,7 @@ def led_results(settings):
 
 def recipes(settings):
     candidates = defaultdict(list)
+    panel_rates = validate_rates('panel', settings['panel'])
 
     def add(sku, total, parts, origin, issue='', audit=None):
         if sku:
@@ -38,15 +39,16 @@ def recipes(settings):
                                    ('Bazinis darbas', 'work', 'LABOUR'),
                                    ('Fiksuota dalis', 'fixed', 'FIXED COST'),
                                    ('Pakuotė W', 'packaging', 'PACKAGING'),
-                                   ('Papildomas darbas X', 'extra_work', 'LABOUR')]:
-            qty = 1 if field == 'fixed' else area
-            rate = settings['panel'][field]
-            unit = 'vnt.' if field == 'fixed' else 'm²'
+                                   ('Papildomas darbas X', 'extra_work', 'LABOUR'),
+                                   ('Kainos korekcija', 'price_correction', 'PRICE CORRECTION')]:
+            qty = 1 if field in ('fixed', 'price_correction') else area
+            rate = panel_rates[field]
+            unit = 'vnt.' if field in ('fixed', 'price_correction') else 'm²'
             audit[label] = dict(detail_sku=row['detail'], step_type=kind, qty=qty, rate=rate,
                 explanation=f"{row['detail']} · {label} · {row['color']} · {row['length']:g} × {row['width']:g} mm; "
                             f"{qty:g} {unit} × {rate:.8g} €/{unit} = {qty*rate:.4f} €."
                             + (' Žaliavinės plokštės SKU šaltinyje nenurodytas.' if field == row['color'] else ''))
-        add(row['sku'], result['total'], parts[:3]+parts[4:], 'Panelių skaičiuoklė: K + W + X', audit=audit)
+        add(row['sku'], result['total'], parts[:3]+parts[4:], 'Panelių skaičiuoklė: K + W + X + kainos korekcija', audit=audit)
         add(row['detail'], parts[3][1], parts[:3], 'Panelių skaičiuoklė: bazė K', audit=audit)
 
     shelf_rows = source('shelf')['rows']

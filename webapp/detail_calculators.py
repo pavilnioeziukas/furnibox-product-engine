@@ -16,6 +16,7 @@ LABELS = {
     'WW': 'WW medžiaga, €/m²', 'BB': 'BB medžiaga, €/m²', 'NO': 'NO medžiaga, €/m²',
     'work': 'Bazinis darbas, €/m²', 'fixed': 'Fiksuota dalis, €/vnt.',
     'packaging': 'Pakuotė, €/m²', 'extra_work': 'Papildomas darbas, €/m²',
+    'price_correction': 'Kainos korekcija, €/vnt.',
     'small_limit': 'Mažo ploto riba, m²', 'medium_limit': 'Vidutinio ploto riba, m²',
     'small': 'Mažo ploto koeficientas', 'medium': 'Vidutinio ploto koeficientas',
     'large': 'Didelio ploto koeficientas', 'back_rate_per_m2': 'BACK tarifas, €/m²',

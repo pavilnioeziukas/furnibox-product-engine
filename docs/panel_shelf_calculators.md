@@ -2,7 +2,7 @@
 
 Authenticated routes `/calculators/panel` and `/calculators/shelf` provide independent, request-scoped calculations and CSV export. They do not modify Odoo, Target, purchase adjustments or the SO pricing pipeline. Changing a selected row affects its detail result; the catalogue export uses source rows and the submitted common rates. Parameters are not persisted.
 
-Panel source: `Copy of Detaliu kainos perskaiciavimas.xlsx`, `PNL kainso` and `Sheet5`, supplied 2026-09-08. All 81 PNL/PCL rows are retained. Base K is `(material rate + 18.95) * area + 4.17`; W is `area * 2`; X is `area * 1`. Total K+W+X is an explicitly labelled derived total, without a 7% discount. Sheet5 comparison values are historical source values, not a current sales-price feed.
+Panel source: `Copy of Detaliu kainos perskaiciavimas.xlsx`, `PNL kainso` and `Sheet5`, supplied 2026-09-08. All 82 PNL/PCL rows are retained. Base K is `(material rate + 18.95) * area + 4.17`; W is `area * 2`; X is `area * 1`. Total K+W+X plus the editable price correction is an explicitly labelled derived total, without a 7% discount. The correction defaults to EUR 1.50 per panel and is added once to every catalogue row and CSV total. The original source K stays unchanged. Sheet5 comparison values are historical source values, not a current sales-price feed.
 
 Shelf source: `Copy of LENTYNU KAINU SKAICIAVIMAI_2026 04 20+ankstesnis skaiciavimai.xlsx`, `Lentynu med dal loginis persk`. All 297 source rows are retained with row identifiers. U is `(area * type rate - packaging - cardboard) * coefficient`; coefficient is 3 below 0.1 m², 1.5 below 0.2 m², otherwise 1. Source rows 7, 49 and 91 additionally multiply by 3; that exception is preserved and displayed. Total U+R+S is labelled separately from U.
 

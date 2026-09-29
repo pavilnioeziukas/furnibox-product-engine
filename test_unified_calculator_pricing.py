@@ -8,7 +8,7 @@ def test_panel_and_pack_no_double_packaging():
     config = settings.validate({'markup_percent': 20})
     registry = unified.recipes(config)
     recipe = registry['eub-c-cab01-pnl002']
-    assert recipe['total'] == pytest.approx(40.04052631578948)
+    assert recipe['total'] == pytest.approx(41.54052631578948)
     assert sum(v for _,v in recipe['parts']) == pytest.approx(recipe['total'])
     prices = unified.prepare({}, registry)
     resolved = resolve_component_cost('EUB-C-CAB01-PNL002', prices, {}, bom_cost_skus={'eub-c-cab01-pnl002'})
@@ -27,7 +27,7 @@ def test_panel_audit_identifies_detail_and_reconciles_area_rates():
     rows = [dict(sku='EUB-C-CAB01-PNL001', final=0)]
     unified.finish(rows, [], registry, config)
     details = rows[0]['component_details']
-    assert [d['step_type'] for d in details] == ['MATERIAL', 'LABOUR', 'FIXED COST', 'PACKAGING', 'LABOUR']
+    assert [d['step_type'] for d in details] == ['MATERIAL', 'LABOUR', 'FIXED COST', 'PACKAGING', 'LABOUR', 'PRICE CORRECTION']
     assert all(' · ' in d['component'] and 'PNL' in d['component'] for d in details)
     for d in details:
         assert d['total_qty'] * d['unit_price'] == pytest.approx(d['line_cost'])
@@ -84,7 +84,7 @@ def test_saved_rates_are_reused_without_compounding(tmp_path, monkeypatch):
         rows = [dict(sku='other', final=100.)]
         unified.finish(rows, [], {}, loaded)
         assert rows[0]['final'] == 120
-    assert unified.recipes(loaded)['eub-c-cab01-pnl002']['total'] == pytest.approx(42.04052631578948)
+    assert unified.recipes(loaded)['eub-c-cab01-pnl002']['total'] == pytest.approx(43.54052631578948)
 
 
 @pytest.mark.parametrize('value', [-1, float('nan'), float('inf')])

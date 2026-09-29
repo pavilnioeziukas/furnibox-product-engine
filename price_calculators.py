@@ -15,7 +15,7 @@ def source(kind):
 def defaults(kind):
     if kind == 'panel':
         return dict(WW=45.27 / 5.7, BB=37.09 / 5.7, NO=45.27 / 5.7,
-                    work=18.95, fixed=4.17, packaging=2, extra_work=1)
+                    work=18.95, fixed=4.17, packaging=2, extra_work=1, price_correction=1.5)
     return source(kind)['rates']
 
 
@@ -29,8 +29,15 @@ def number(value, name, positive=False):
     return result
 
 
+def validate_rates(kind, rates):
+    # Existing saved settings predate this field; preserve every other rate.
+    if kind == 'panel':
+        rates = {'price_correction': defaults(kind)['price_correction'], **rates}
+    return {key: number(rates[key], key) for key in defaults(kind)}
+
+
 def calculate(kind, row, rates, *, area_coefficients=None):
-    rates = {key: number(rates[key], key) for key in defaults(kind)}
+    rates = validate_rates(kind, rates)
     area = number(row['length'], 'Ilgis', True) * number(row['width'], 'Plotis', True) / 1_000_000
     if kind == 'panel':
         color = row['color']
@@ -43,8 +50,9 @@ def calculate(kind, row, rates, *, area_coefficients=None):
         extra = area * rates['extra_work']
         parts = [('Medžiaga', material), ('Bazinis darbas', work),
                  ('Fiksuota dalis', rates['fixed']), ('Bazė K', base),
-                 ('Pakuotė W', packaging), ('Papildomas darbas X', extra)]
-        total = base + packaging + extra
+                 ('Pakuotė W', packaging), ('Papildomas darbas X', extra),
+                 ('Kainos korekcija', rates['price_correction'])]
+        total = base + packaging + extra + rates['price_correction']
     else:
         if row['packaging'] is None or row['cardboard'] is None:
             return dict(area=area, parts=[], total=None, message='Trūksta pakuotės arba kartono kainos. Įveskite reikšmes skaičiavimui.')
