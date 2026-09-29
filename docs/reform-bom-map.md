@@ -2,6 +2,8 @@
 
 New downloads use **BOM Map** as the main editing sheet. Each row shows a path from a top product through its BOM levels to a component. Intermediate quantities belong to their parent BOM; the total is per one top product unit. Totals requiring unit conversion are left blank and marked for review.
 
+Dark horizontal rules separate Top BOM groups; thinner rules mark changes of parent BOM within a group. Alternating blue and peach rows help track components. Coloured headers and vertical dividers distinguish hierarchy levels, component fields and references. The header and Top BOM column remain frozen while scrolling. These visual cues do not add rows or change the exchange data.
+
 Edit a component code or quantity in one occurrence. The importer applies the edit to the underlying BOM line wherever it is used. Conflicting edits to the same line are rejected. Use `REMOVE` to remove the final component from its parent; keep original rows and hidden Row IDs.
 
 To add a component, append a row with an empty Row ID, `Parent BOM SKU`, `Purchased Component SKU`, component quantity, and `KEEP`. For a new BOM, first add its product card and its definition in **BOMs**.

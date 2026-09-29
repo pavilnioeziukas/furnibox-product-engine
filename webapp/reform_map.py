@@ -2,7 +2,7 @@
 import copy
 import math
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 MAX_ROWS = 100000
@@ -63,6 +63,61 @@ def projection(record):
     return headers, rendered, levels
 
 
+def style_map(sheet, levels):
+    """Separate exported BOM groups without adding rows or changing exchange data."""
+    leaf = 2 + 2 * levels
+    group_starts = {1, leaf, leaf + 2, leaf + 3, leaf + 6}
+    group_starts.update(range(2, leaf, 2))
+    divider = Side(style='thin', color='B8C8D8')
+    top_rule = Side(style='medium', color='344F6A')
+    sub_rule = Side(style='thin', color='A7B9CA')
+    no_rule = Side()
+    bands = [PatternFill('solid', fgColor=c) for c in ('E4EDF7', 'FCECDD')]
+    top_fills = [PatternFill('solid', fgColor=c) for c in ('CFDFEF', 'F3DCC6')]
+    header_colors = ['315B86', '456D98', '596C91']
+    sheet.sheet_properties.tabColor = '24496B'
+    sheet.row_dimensions[1].height = 54
+    sheet.print_title_rows = '1:1'
+    for cell in sheet[1]:
+        col = cell.column
+        color = ('24496B' if col == 1 else header_colors[((col - 2) // 2) % 3]
+                 if col < leaf else '276B66' if col < leaf + 2 else
+                 '3D586E' if col == leaf + 2 else '80613E' if col == leaf + 6 else '586779')
+        cell.fill = PatternFill('solid', fgColor=color)
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = Border(right=Side(style='thin', color='FFFFFF'))
+        title = str(cell.value)
+        width = (40 if col == 1 or 'SKU' in title else 18 if 'Qty' in title else
+                 12 if title in ('Unit', 'Action') else 55 if title == 'Note' else 30)
+        sheet.column_dimensions[cell.column_letter].width = width
+    previous_top = previous_parent = None
+    stripe = 0
+    borders = {}
+    body_font = Font(name='Calibri', size=11, color='243746')
+    key_font = Font(name='Calibri', size=11, bold=True, color='24496B')
+    for row in sheet.iter_rows(min_row=2):
+        top, parent = row[0].value, row[leaf + 4].value
+        new_top = top != previous_top
+        boundary = 2 if new_top else 1 if parent != previous_parent else 0
+        if new_top:
+            stripe = 0
+        sheet.row_dimensions[row[0].row].height = 24
+        for cell in row:
+            start = cell.column in group_starts
+            key = (boundary, start)
+            if key not in borders:
+                borders[key] = Border(top=top_rule if boundary == 2 else sub_rule if boundary else no_rule,
+                                      left=divider if start else no_rule)
+            cell.border = borders[key]
+            cell.fill = top_fills[stripe % 2] if cell.column == 1 else bands[stripe % 2]
+            cell.font = key_font if cell.column == 1 else body_font
+            cell.alignment = Alignment(vertical='center', horizontal='right' if isinstance(cell.value, (int, float)) else 'left')
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = 'General'
+        previous_top, previous_parent = top, parent
+        stripe += 1
+
+
 def add_map(wb, record):
     headers, rows, levels = projection(record)
     sheet = wb.create_sheet('BOM Map', 0)
@@ -103,6 +158,7 @@ def add_map(wb, record):
                 cell.font = Font(name='Calibri', size=11)
                 cell.alignment = Alignment(vertical='top')
                 cell.fill = PatternFill('solid', fgColor='EAF0F7' if cell.row % 2 == 0 else 'FFFFFF')
+    style_map(sheet, levels)
     guide = wb['Instructions']
     guide['B4'] = 'Products: BOM product cards. Non-BOM: cards without a BOM. Edit names/categories or add new cards.'
     guide['B6'] = 'BOM Map: edit quantities or component codes. Use Action=REMOVE for the final component. Do not delete rows.'
@@ -122,6 +178,7 @@ def add_map(wb, record):
     guide.append(['Remove / add', 'Set Action=REMOVE to remove the final component from its parent BOM. Add a row with blank Row ID, Parent BOM SKU, Purchased Component SKU and Component Qty to add a component.'])
     guide.append(['Cards and suppliers', 'Products contains BOM product cards; Non-BOM contains cards without a BOM. Both can be edited. Supplier Code is an Odoo reference field; multiple supplier codes are separated by semicolons.'])
     guide.append(['New BOM', 'Add the product card, define its new BOM in BOMs, then add component rows in BOM Map using Parent BOM SKU.'])
+    guide.append(['Reading the map', 'Dark horizontal lines start a Top BOM. Thin lines separate parent BOMs. Blue and peach rows help follow components. Header colours separate hierarchy levels, components and reference fields.'])
 
 
 def translate(wb, record):
