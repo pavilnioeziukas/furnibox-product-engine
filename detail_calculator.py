@@ -9,7 +9,7 @@ from pathlib import Path
 import calculator_settings
 from cabinet_parts_price_parameters import load_parameters, validate_parameters
 from cabinet_parts_price_v1 import calculate_unit_price, furnix_transfer_price
-from price_calculators import calculate, defaults, number
+from price_calculators import calculate, defaults, number, validate_rates
 from detail_edging import quantity as edging_quantity
 
 AREA_DEFAULTS = dict(small_limit=.1, medium_limit=.2, small=3, medium=1.5, large=1)
@@ -18,7 +18,7 @@ AREA_DEFAULTS = dict(small_limit=.1, medium_limit=.2, small=3, medium=1.5, large
 def validate(document):
     result = dict(document)
     for kind in ('shelf', 'panel'):
-        result[kind] = {key: number(document[kind][key], key) for key in defaults(kind)}
+        result[kind] = validate_rates(kind, document[kind])
     result['area'] = {key: number(document['area'][key], key) for key in AREA_DEFAULTS}
     if not 0 < result['area']['small_limit'] < result['area']['medium_limit']:
         raise ValueError('Ploto ribos turi būti teigiamos ir didėti.')

@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from price_calculators import defaults, number
+from price_calculators import defaults, number, validate_rates
 from webapp.product_engine import ProductEngineSettings
 
 
@@ -18,7 +18,7 @@ def validate(data):
     result = {'version': 1, 'markup_percent': number(data.get('markup_percent', 0), 'Antkainis')}
     for kind in ('panel', 'shelf'):
         rates = data.get(kind, defaults(kind))
-        result[kind] = {k: number(rates[k], k) for k in defaults(kind)}
+        result[kind] = validate_rates(kind, rates)
     result['led_costs'] = {}
     for sku, costs in data.get('led_costs', {}).items():
         if len(costs) != 9:

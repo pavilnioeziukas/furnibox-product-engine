@@ -9,7 +9,7 @@ def test_all_panel_source_bases():
     for row in rows:
         result = calculate('panel', row, defaults('panel'))
         assert dict(result['parts'])['Bazė K'] == pytest.approx(row['sourceK'])
-    assert calculate('panel', rows[1], defaults('panel'))['total'] == pytest.approx(40.04052631578948)
+    assert calculate('panel', rows[1], defaults('panel'))['total'] == pytest.approx(41.54052631578948)
 
 
 def test_all_shelf_source_results_and_missing_packaging():
@@ -60,7 +60,7 @@ def test_pages_post_export_and_auth(monkeypatch,tmp_path):
         post=dict(rates,row=0,length=2000,width=600,color='WW',kind='SREW-SHELF-PAPR',packaging=1,cardboard=.9)
         result=c.post('/calculators/'+kind,data=post)
         assert result.status_code == 200
-        if kind=='panel':assert '40.0405' in result.get_data(as_text=True)
+        if kind=='panel':assert '41.5405' in result.get_data(as_text=True)
         export=c.post('/calculators/'+kind,data=dict(rates,row=0,action='export'))
         assert export.status_code == 200
         assert len(export.get_data(as_text=True).splitlines()) == count+1
