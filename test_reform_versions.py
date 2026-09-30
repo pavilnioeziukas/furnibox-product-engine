@@ -53,3 +53,33 @@ def test_submit_requires_explicit_version_and_stale_draft_rejected(setup):
     assert post(client,'versions/save',number='v11.1',description='Update',revision='0').status_code==409
     assert post(client,'versions/save',number='v11.1',description='Update',revision='1').status_code==200
     assert post(client,'submit',version='v11.1',revision='0',confirm='yes').status_code==409
+
+
+def test_two_distinct_reform_users_must_approve_same_revision(setup):
+    app, owner_client = setup
+    app.config['REFORM_APPROVALS_REQUIRED'] = 2
+    post(owner_client, 'save', action='product', new='1', sku='NEW-ONE', name='One', uom='vnt.', revision='0')
+    post(owner_client, 'versions/save', number='v11.1', description='Two-person review', revision='1')
+
+    first = post(owner_client, 'submit', version='v11.1', revision='1', confirm='yes')
+    assert '1 more Reform representative' in first.text
+    assert '1 of 2 Reform approvals recorded' in first.text
+    duplicate = post(owner_client, 'submit', version='v11.1', revision='1', confirm='yes')
+    assert '1 more Reform representative' in duplicate.text
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM submissions').fetchone()[0] == 0
+
+    second_client = app.test_client()
+    second_client.get('/reform/login')
+    with second_client.session_transaction() as sess:
+        token = sess['reform_csrf']
+    assert second_client.post('/reform/login', data={
+        'csrf': token, 'username': 'other', 'password': 'other-password'}).status_code == 302
+    page = second_client.get('/reform/versions')
+    assert '1 of 2 Reform approvals recorded' in page.text
+    assert 'NEW-ONE' in page.text
+    final = post(second_client, 'submit', version='v11.1', revision='1', confirm='yes')
+    assert 'submitted to Furnibox' in final.text
+    with app.app_context(), db() as conn:
+        payload = unpack(conn.execute('SELECT payload FROM submissions').fetchone()['payload'])
+        assert payload['approved_by'] == ['paul', 'other']

@@ -148,6 +148,7 @@ from webapp.reform_workspace import reform
 app.config['REFORM_STATE_DIR'] = STATE_DIR / 'reform'
 app.config['REFORM_ADMIN_ENABLED'] = bool(SETTINGS.web_password)
 app.config['REFORM_USERS'] = json.loads(os.getenv('PRODUCT_ENGINE_REFORM_USERS', '{}'))
+app.config['REFORM_APPROVALS_REQUIRED'] = max(2, int(os.getenv('REFORM_APPROVALS_REQUIRED', '2')))
 app.register_blueprint(reform)
 
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES

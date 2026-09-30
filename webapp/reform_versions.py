@@ -1,6 +1,6 @@
 """Version batches over existing revision-checked drafts and immutable submissions."""
 import re
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from webapp.reform_workspace import reform, db, owner, admin, draft, baseline, digest, pack, unpack, now, changes
 
 
@@ -11,7 +11,10 @@ def schema(conn):
         updated TEXT NOT NULL, note TEXT NOT NULL DEFAULT '');
         CREATE TABLE IF NOT EXISTS reform_version_events (
         id INTEGER PRIMARY KEY, number TEXT NOT NULL, actor TEXT NOT NULL,
-        status TEXT NOT NULL, note TEXT NOT NULL, created TEXT NOT NULL);''')
+        status TEXT NOT NULL, note TEXT NOT NULL, created TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS reform_version_approvals (
+        number TEXT NOT NULL, actor TEXT NOT NULL, revision INTEGER NOT NULL,
+        created TEXT NOT NULL, PRIMARY KEY(number, actor));''')
 
 
 def active(conn):
@@ -45,15 +48,27 @@ def versions():
     with db() as conn:
         schema(conn)
         current = active(conn)
-        work, revision = draft(conn) if baseline(conn) else (None, 0)
+        work, revision = (None, 0)
+        if current and current['status'] in ('draft', 'returned'):
+            row = conn.execute('SELECT revision,payload FROM drafts WHERE owner=?', (current['owner'],)).fetchone()
+            work, revision = (unpack(row['payload']), row['revision']) if row else (None, 0)
+        elif not current and baseline(conn):
+            work, revision = draft(conn)
         rows = conn.execute('SELECT * FROM reform_versions ORDER BY created DESC').fetchall()
         history = conn.execute('SELECT * FROM reform_version_events ORDER BY id DESC LIMIT 100').fetchall()
         delta = changes(work['base'], work['target']) if work else []
+        approvals = []
+        if current and current['status'] in ('draft', 'returned'):
+            approvals = conn.execute(
+                'SELECT actor,created FROM reform_version_approvals WHERE number=? AND revision=? ORDER BY created',
+                (current['number'], revision)).fetchall()
         if current and current['status'] in ('submitted', 'accepted'):
             item = conn.execute('SELECT payload FROM submissions WHERE id=?', (current['submission_id'],)).fetchone()
             delta = unpack(item['payload'])['changes']
     return render_template('reform_versions.html', current=current, versions=rows, history=history,
-                           delta=delta, revision=revision, is_admin=admin(), username=owner())
+                           delta=delta, revision=revision, approvals=approvals,
+                           approvals_required=current_app.config.get('REFORM_APPROVALS_REQUIRED', 2),
+                           is_admin=admin(), username=owner())
 
 
 @reform.post('/versions/save')

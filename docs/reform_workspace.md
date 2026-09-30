@@ -27,7 +27,8 @@ Odoo before applying changes. There is no Odoo write or automatic email here.
 1. Keep the existing internal web password enabled. Set a stable
    `PRODUCT_ENGINE_WEB_SECRET` (or its existing legacy equivalent).
 2. Set `PRODUCT_ENGINE_REFORM_USERS` to a JSON mapping of lowercase usernames to
-   Werkzeug password hashes. Generate hashes with `generate_password_hash` from
+   Werkzeug password hashes, or to objects containing `password_hash`, `name`, and
+   `email`. Generate hashes with `generate_password_hash` from
    `werkzeug.security`; do not store plaintext passwords in this variable or Git.
    An empty mapping disables Reform logins. Removing a username revokes its session.
 3. Log in through the existing Furnibox login and open **Reform · Produktai ir BOM**.

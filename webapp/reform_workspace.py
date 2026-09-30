@@ -215,7 +215,8 @@ def login():
         with db() as conn:
             row = conn.execute('SELECT * FROM attempts WHERE identity=?', (identity,)).fetchone()
             locked = row and row['count'] >= 5 and time.time() - row['started'] < 300
-            password_hash = users.get(username)
+            configured_user = users.get(username)
+            password_hash = configured_user.get('password_hash') if isinstance(configured_user, dict) else configured_user
             if not locked and isinstance(password_hash, str) and check_password_hash(password_hash, request.form.get('password', '')):
                 conn.execute('DELETE FROM attempts WHERE identity=?', (identity,))
                 session.clear()
@@ -505,9 +506,15 @@ def submit():
             schema(conn)
             conn.execute('BEGIN IMMEDIATE')
             version = active(conn)
-            if not version or version['owner'] != owner() or version['status'] not in ('draft', 'returned') or request.form.get('version') != version['number']:
+            actor = session.get('reform_user')
+            if not actor:
+                abort(403)
+            if not version or version['status'] not in ('draft', 'returned') or request.form.get('version') != version['number']:
                 raise ValueError('Save and review a version draft before submitting the complete version.')
-            work, revision = draft(conn)
+            draft_row = conn.execute('SELECT revision,payload FROM drafts WHERE owner=?', (version['owner'],)).fetchone()
+            if not draft_row:
+                raise ValueError('The version owner no longer has a draft to review.')
+            work, revision = unpack(draft_row['payload']), draft_row['revision']
             if str(revision) != request.form.get('revision'):
                 abort(409)
             if digest(work['base']) != digest(baseline(conn)):
@@ -521,10 +528,25 @@ def submit():
                     raise ValueError('This product is used in other BOMs outside the pilot scope. Furnibox must review it before retirement.')
             if request.form.get('confirm') != 'yes':
                 raise ValueError('Confirm that you have reviewed the changes.')
+            conn.execute('''INSERT INTO reform_version_approvals(number,actor,revision,created) VALUES (?,?,?,?)
+                            ON CONFLICT(number,actor) DO UPDATE SET revision=excluded.revision,created=excluded.created''',
+                         (version['number'], actor, revision, now()))
+            approval_count = conn.execute(
+                'SELECT count(*) FROM reform_version_approvals WHERE number=? AND revision=?',
+                (version['number'], revision)).fetchone()[0]
+            approvals_required = current_app.config.get('REFORM_APPROVALS_REQUIRED', 2)
+            event(conn, version['number'], 'approved', f'Approval {approval_count} of {approvals_required} for revision {revision}')
+            if approval_count < approvals_required:
+                remaining = approvals_required - approval_count
+                flash(f'Your approval is recorded. {remaining} more Reform representative(s) must approve this version before it is submitted to Furnibox.')
+                return redirect(url_for('reform.versions'))
             payload = {'schema': 'reform-change-proposal-v1', 'status': 'awaiting_furnibox',
                 'version': version['number'], 'description': version['description'], 'base': work['base'], 'draft_revision': revision,
                 'baseline_digest': digest(work['base']), 'baseline_captured_at': work['base']['captured_at'],
-                'changes': delta, 'target': work['target']}
+                'changes': delta, 'target': work['target'],
+                'approved_by': [row['actor'] for row in conn.execute(
+                    'SELECT actor FROM reform_version_approvals WHERE number=? AND revision=? ORDER BY created',
+                    (version['number'], revision)).fetchall()]}
             keys = {(c['kind'], c['key']) for c in delta}
             for pending in conn.execute('SELECT payload FROM submissions'):
                 existing = unpack(pending['payload'])
@@ -534,12 +556,12 @@ def submit():
                     raise ValueError('Changes to this product or BOM have already been submitted to Furnibox. Wait for review and a source data refresh.')
             from webapp.reform_notifications import enqueue, deliver
             created = now()
-            inserted = conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (owner(), created, pack(payload)))
+            inserted = conn.execute('INSERT INTO submissions(owner,created,payload) VALUES (?,?,?)', (version['owner'], created, pack(payload)))
             sid = inserted.lastrowid
             conn.execute("UPDATE reform_versions SET status='submitted',submission_id=?,updated=? WHERE number=?", (sid, now(), version['number']))
             event(conn, version['number'], 'submitted', f'Submission #{sid}')
-            enqueue(conn, sid, owner(), created, payload)
-            conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
+            enqueue(conn, sid, version['owner'], created, payload)
+            conn.execute('DELETE FROM drafts WHERE owner=?', (version['owner'],))
         email_status = deliver(sid)
         flash('Changes confirmed and submitted to Furnibox for review. Odoo data has not yet changed.')
         flash('Email notification sent to Furnibox.' if email_status == 'sent' else

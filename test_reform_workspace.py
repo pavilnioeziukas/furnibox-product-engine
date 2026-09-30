@@ -24,7 +24,8 @@ def sample():
 def setup(monkeypatch, tmp_path):
     web = load_webapp(monkeypatch, tmp_path)
     app = web.app
-    app.config.update(TESTING=True, REFORM_USERS={'paul': generate_password_hash('test-password'), 'other': generate_password_hash('other-password')})
+    app.config.update(TESTING=True, REFORM_APPROVALS_REQUIRED=1,
+                      REFORM_USERS={'paul': generate_password_hash('test-password'), 'other': generate_password_hash('other-password')})
     with app.app_context(), db() as conn:
         conn.execute('INSERT INTO state VALUES (1,?)', (json.dumps(sample()),))
     client = app.test_client()
