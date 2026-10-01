@@ -3605,7 +3605,7 @@ def write_price_workbook(
         ),
         (
             "Shelf Prepack standalone coverage",
-            "DEFERRED (-PP not promoted to final pricing rows)",
+            "ENABLED (-PP BOM nodes with approved pricing rules)",
         ),
         (
             "Non-BOM products",

@@ -660,12 +660,7 @@ def parent_row(sku, product, category_map, route_profile):
         return None
     return {
         "Internal reference": product["sku"],
-        "name": (
-            APPROVED_PRODUCT_NAMES.get(sku)
-            or product.get("name_1")
-            or product.get("name_2")
-            or product["sku"]
-        ),
+        "name": product_name(sku, product),
         "route_ids/id": route_profile["manufacture"],
         "type": "Storable Product",
         "categ_id": mapping["external_id"],
@@ -676,6 +671,29 @@ def parent_row(sku, product, category_map, route_profile):
         "Reform Category / Part Group": category,
         "Review reason": "",
     }
+
+
+def product_name(sku, product):
+    """Return the approved Odoo/import name for a Reform product."""
+    code = canon(sku)
+    category = canon(product.get("category"))
+    name_1 = str(product.get("name_1") or "").strip()
+    name_2 = str(product.get("name_2") or "").strip()
+
+    if code in APPROVED_PRODUCT_NAMES:
+        return APPROVED_PRODUCT_NAMES[code]
+
+    if category in {"CABINETS", "CABINET SHELF"} and name_2:
+        parts = [part for part in code.split("-") if part]
+        suffix = parts[-1] if parts else code
+        if suffix == "A" and len(parts) > 1:
+            suffix = parts[-2]
+        return f"{name_2} - {suffix}"
+
+    if category == "INTERIOR STORAGE" and name_2:
+        return name_2
+
+    return name_1 or name_2 or product.get("sku") or code
 
 
 def component_row(sku, product, component_rules):
