@@ -76,6 +76,10 @@ ADDONS = (
     "Markup",
 )
 
+APPROVED_PRICING_PRODUCT_NAMES = {
+    "EUB-P-ACC02-MIS012": "Rename",
+}
+
 
 def text(value):
     return str(value or "").strip()
@@ -83,6 +87,50 @@ def text(value):
 
 def key(value):
     return text(value).casefold()
+
+
+def approved_pricing_product_name(sku, product, current_name=""):
+    """Return the user-approved catalogue name used in pricing outputs."""
+    code = text(sku).upper()
+    category = text(
+        product.get("product_type") or product.get("category")
+    ).upper()
+    name_1 = text(product.get("name_1") or product.get("name"))
+    name_2 = text(product.get("name_2"))
+
+    if code in APPROVED_PRICING_PRODUCT_NAMES:
+        return APPROVED_PRICING_PRODUCT_NAMES[code]
+
+    if category in {"CABINETS", "CABINET SHELF"} and name_2:
+        parts = [part for part in code.split("-") if part]
+        suffix = parts[-1] if parts else code
+        if suffix == "A" and len(parts) > 1:
+            suffix = parts[-2]
+        return f"{name_2} - {suffix}"
+
+    if category == "INTERIOR STORAGE" and name_2:
+        return name_2
+
+    return text(current_name) or name_1 or name_2 or text(sku)
+
+
+def apply_approved_pricing_names(rows, dataset):
+    """Apply approved Reform catalogue names without changing calculations."""
+    catalog = {}
+    for product in [
+        *(dataset or {}).get("product_catalog", []),
+        *(dataset or {}).get("products", []),
+    ]:
+        sku = key(product.get("sku"))
+        if sku:
+            catalog[sku] = product
+
+    for row in rows:
+        product = catalog.get(key(row.get("sku")))
+        if product is not None:
+            row["name"] = approved_pricing_product_name(
+                row.get("sku"), product, row.get("name")
+            )
 
 
 def is_pricing_excluded(product):
@@ -3831,6 +3879,8 @@ def build_from_application_config(
             row for row in non_rows
             if key(row["sku"]) not in CONFIRMED_PURCHASED_NON_BOM_KEYS
         ]
+
+        apply_approved_pricing_names(bom_rows + non_rows, target_dataset)
 
     unified.finish(bom_rows + non_rows, details, registry, calculator_snapshot)
     from final_price_exceptions import apply as apply_final_price_exceptions
