@@ -55,12 +55,14 @@ class ReformSoLinePriceTests(unittest.TestCase):
             {"sku": "EUB-C-CAB01-SLF801", "name": "Old", "final": 20.5},
             {"sku": "USB-P-ACC02-SLF201", "name": "Old", "final": 30.5},
             {"sku": "OTHER", "name": "Keep", "final": 40.5},
+            {"sku": "OTHER-BLANK", "name": "", "final": 50.5},
         ]
         dataset = {"products": [
             {"sku": "EUB-C-CAB01-BAS001", "product_type": "CABINETS", "name_2": "BASE Cabinet - W20 H80 D60"},
             {"sku": "EUB-C-CAB01-SLF801", "product_type": "CABINET SHELF", "name_2": "Shelf - W20 D60 - standard"},
             {"sku": "USB-P-ACC02-SLF201", "product_type": "INTERIOR STORAGE", "name_2": "Storage - Pull-out shelf - W30 - Natural Oak"},
             {"sku": "OTHER", "product_type": "OTHER", "name_2": "Ignored"},
+            {"sku": "OTHER-BLANK", "product_type": "OTHER", "name_2": "Ignored too"},
         ]}
 
         apply_approved_pricing_names(rows, dataset)
@@ -69,7 +71,8 @@ class ReformSoLinePriceTests(unittest.TestCase):
         self.assertEqual(rows[1]["name"], "Shelf - W20 D60 - standard - SLF801")
         self.assertEqual(rows[2]["name"], "Storage - Pull-out shelf - W30 - Natural Oak")
         self.assertEqual(rows[3]["name"], "Keep")
-        self.assertEqual([row["final"] for row in rows], [10.5, 20.5, 30.5, 40.5])
+        self.assertEqual(rows[4]["name"], "")
+        self.assertEqual([row["final"] for row in rows], [10.5, 20.5, 30.5, 40.5, 50.5])
 
     def test_assembled_suffix_uses_base_sku_suffix(self):
         self.assertEqual(

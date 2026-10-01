@@ -95,7 +95,6 @@ def approved_pricing_product_name(sku, product, current_name=""):
     category = text(
         product.get("product_type") or product.get("category")
     ).upper()
-    name_1 = text(product.get("name_1") or product.get("name"))
     name_2 = text(product.get("name_2"))
 
     if code in APPROVED_PRICING_PRODUCT_NAMES:
@@ -111,7 +110,7 @@ def approved_pricing_product_name(sku, product, current_name=""):
     if category == "INTERIOR STORAGE" and name_2:
         return name_2
 
-    return text(current_name) or name_1 or name_2 or text(sku)
+    return text(current_name)
 
 
 def apply_approved_pricing_names(rows, dataset):
