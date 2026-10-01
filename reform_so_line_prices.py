@@ -93,7 +93,9 @@ def approved_pricing_product_name(sku, product, current_name=""):
     """Return the user-approved catalogue name used in pricing outputs."""
     code = text(sku).upper()
     category = text(
-        product.get("product_type") or product.get("category")
+        product.get("product_category")
+        or product.get("product_type")
+        or product.get("category")
     ).upper()
     name_2 = text(product.get("name_2"))
 
