@@ -119,8 +119,8 @@ def apply_approved_pricing_names(rows, dataset):
     """Apply approved Reform catalogue names without changing calculations."""
     catalog = {}
     for product in [
-        *(dataset or {}).get("product_catalog", []),
         *(dataset or {}).get("products", []),
+        *(dataset or {}).get("product_catalog", []),
     ]:
         sku = key(product.get("sku"))
         if sku:

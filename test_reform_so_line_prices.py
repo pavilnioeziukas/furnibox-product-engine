@@ -57,13 +57,18 @@ class ReformSoLinePriceTests(unittest.TestCase):
             {"sku": "OTHER", "name": "Keep", "final": 40.5},
             {"sku": "OTHER-BLANK", "name": "", "final": 50.5},
         ]
-        dataset = {"products": [
+        dataset = {
+            "products": [
+                {"sku": "EUB-C-CAB01-BAS001", "product_type": "CABINETS"},
+            ],
+            "product_catalog": [
             {"sku": "EUB-C-CAB01-BAS001", "product_category": "CABINETS", "name_2": "BASE Cabinet - W20 H80 D60"},
             {"sku": "EUB-C-CAB01-SLF801", "product_type": "CABINET SHELF", "name_2": "Shelf - W20 D60 - standard"},
             {"sku": "USB-P-ACC02-SLF201", "product_type": "INTERIOR STORAGE", "name_2": "Storage - Pull-out shelf - W30 - Natural Oak"},
             {"sku": "OTHER", "product_type": "OTHER", "name_2": "Ignored"},
             {"sku": "OTHER-BLANK", "product_type": "OTHER", "name_2": "Ignored too"},
-        ]}
+            ],
+        }
 
         apply_approved_pricing_names(rows, dataset)
 
