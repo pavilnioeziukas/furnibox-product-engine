@@ -27,9 +27,12 @@ def recipes(settings):
     candidates = defaultdict(list)
     panel_rates = validate_rates('panel', settings['panel'])
 
-    def add(sku, total, parts, origin, issue='', audit=None):
+    def add(sku, total, parts, origin, issue='', audit=None, parent_parts=None):
         if sku:
-            candidates[key(sku)].append(dict(sku=sku, total=total, parts=parts, origin=origin, issue=issue, audit=audit or {}))
+            candidates[key(sku)].append(dict(
+                sku=sku, total=total, parts=parts, origin=origin, issue=issue,
+                audit=audit or {}, parent_parts=parent_parts or [],
+            ))
 
     for row in source('panel')['rows']:
         result = calculate('panel', row, settings['panel'])
@@ -77,7 +80,10 @@ def recipes(settings):
         add(row['sku'], wood, parts[:1], 'Lentynų skaičiuoklė: U', issue)
         # v10: the -PP BOM contains only the dimensioned detail.  R/S and the
         # remaining former prepack components are priced on the parent BOM.
-        add(row['pack'], wood, parts[:1], 'Lentynų skaičiuoklė: U', issue)
+        add(
+            row['pack'], wood, parts[:1], 'Lentynų skaičiuoklė: U', issue,
+            parent_parts=parts[1:],
+        )
 
     result = {}
     for sku, rows in candidates.items():
@@ -133,9 +139,19 @@ def dimensional_shelf_recipe(sku, settings):
     total = sum(v for _,v in parts)
     if total <= 0:
         return None
-    return dict(sku=sku, total=total, parts=parts, issue='',
+    parent_parts = calculated['parts'][4:] if sku.upper().endswith('-PP') else []
+    return dict(sku=sku, total=total, parts=parts, parent_parts=parent_parts, issue='',
                 origin=f'Lentynų skaičiuoklė: {family}, {row["length"]:g}×{row["width"]:g} mm; '
                        'v10 -PP yra tik matmenų detalė U')
+
+
+def parent_surcharges(registry):
+    """Return R/S charges that move from Shelf -PP into its parent BOM."""
+    return {
+        sku: list(recipe.get('parent_parts') or [])
+        for sku, recipe in registry.items()
+        if recipe.get('parent_parts')
+    }
 
 
 def cover_missing(registry, skus, settings=None):

@@ -37,6 +37,16 @@ from reform_so_line_prices import (
     load_prices,
     write_component_cost_breakdown,
 )
+
+
+def test_tamara_product_name_override_is_used():
+    assert approved_pricing_product_name(
+        "UNI-P-ACC01-HRD001",
+        {"product_type": "ACCESSORIES", "name_2": "Old generic name"},
+        "ACCESSORIES - Cabinet",
+    ) == "Hardware - Hinge standard 110deg - Steel (2 pcs.)"
+
+
 from manifest.manifest_writer import calculate_file_hash
 from so_pricing_rules import (
     PricingRule,

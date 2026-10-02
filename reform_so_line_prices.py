@@ -66,6 +66,11 @@ TAMARA_PRICING_REFERENCE_PATH = (
     / "manifest"
     / "tamara_pricing_reference.json"
 )
+TAMARA_PRODUCT_NAMES_PATH = (
+    Path(__file__).resolve().parent
+    / "manifest"
+    / "tamara_product_names.json"
+)
 
 ADDONS = (
     "Assembly",
@@ -76,9 +81,18 @@ ADDONS = (
     "Markup",
 )
 
-APPROVED_PRICING_PRODUCT_NAMES = {
-    "EUB-P-ACC02-MIS012": "Rename",
-}
+def load_approved_pricing_product_names():
+    names = {"EUB-P-ACC02-MIS012": "Rename"}
+    if TAMARA_PRODUCT_NAMES_PATH.exists():
+        document = json.loads(TAMARA_PRODUCT_NAMES_PATH.read_text(encoding="utf-8"))
+        names.update({
+            str(sku or "").strip().upper(): str(name or "").strip()
+            for sku, name in document.items()
+        })
+    return names
+
+
+APPROVED_PRICING_PRODUCT_NAMES = load_approved_pricing_product_names()
 
 
 def text(value):
@@ -1730,6 +1744,7 @@ def calculate_boms(
     graph=None,
     component_cost_only_tops=None,
     authoritative_rule_tops=None,
+    parent_component_surcharges=None,
 ):
     """
     Calculate BOM sale prices.
@@ -1772,6 +1787,10 @@ def calculate_boms(
             authoritative_rule_tops
             or set()
         )
+    }
+    parent_component_surcharges = {
+        key(sku): list(parts)
+        for sku, parts in (parent_component_surcharges or {}).items()
     }
 
     results = []
@@ -1849,6 +1868,32 @@ def calculate_boms(
                     )
                     * item_qty
                 )
+
+                # Shelf -PP is detail-only in v10.  Its former R/S charges
+                # belong to the first BOM level, so keep the standalone -PP
+                # price at U while preserving the parent shelf's total price.
+                for label, value in parent_component_surcharges.get(
+                    key(item.sku), []
+                ):
+                    line_cost = float(value) * item_qty
+                    cost += line_cost
+                    component_details.append({
+                        "top": top,
+                        "level_ii": item.sku,
+                        "level_ii_qty": item_qty,
+                        "component": f"{item.sku} · {label}",
+                        "component_qty": 1.0,
+                        "total_qty": item_qty,
+                        "unit_price": float(value),
+                        "line_cost": line_cost,
+                        "status": "OK",
+                        "cost_source": "CALCULATOR: Shelf -PP parent-level charge",
+                        "step_type": "PACKAGING",
+                        "explanation": (
+                            f"{label} moved from Shelf -PP to parent BOM; "
+                            f"{item_qty:g} × {float(value):.4f} € = {line_cost:.4f} €."
+                        ),
+                    })
 
             # Flatten recursive BOM into priced leaf components
             # for an auditable cost breakdown.
@@ -3859,6 +3904,7 @@ def build_from_application_config(
             authoritative_rule_tops=(
                 authoritative_rule_tops
             ),
+            parent_component_surcharges=unified.parent_surcharges(registry),
         )
     )
 

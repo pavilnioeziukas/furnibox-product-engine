@@ -1,7 +1,7 @@
 import pytest
 import calculator_settings as settings
 import unified_calculator_pricing as unified
-from reform_so_line_prices import resolve_component_cost
+from reform_so_line_prices import Item, calculate_boms, resolve_component_cost
 
 
 def test_panel_and_pack_no_double_packaging():
@@ -30,6 +30,30 @@ def test_shelf_pp_is_dimensioned_detail_only_in_v10():
     assert pp['total'] == pytest.approx(detail['total'])
     assert pp['parts'] == detail['parts']
     assert pp['origin'] == 'Lentynų skaičiuoklė: U'
+    assert pp['parent_parts'] == [('Pakuotė R', 1.0), ('Kartonas S', 0.9)]
+
+
+def test_shelf_pp_parent_keeps_old_total_after_rs_move():
+    config = settings.validate({'markup_percent': 0})
+    registry = unified.recipes(config)
+    pp_sku = 'EU-SREW-SHELF-163X564-WW-PP'
+    pp = registry[pp_sku.casefold()]
+    prices = unified.prepare({}, registry)
+    rows, _ = calculate_boms(
+        {'PARENT-SHELF': ('CABINET SHELF', [
+            Item(pp_sku, 1),
+        ])},
+        prices,
+        {},
+        parent_component_surcharges=unified.parent_surcharges(registry),
+    )
+    assert rows[0]['cost'] == pytest.approx(pp['total'] + 1.9)
+    moved = [
+        d for d in rows[0]['component_details']
+        if d.get('cost_source') == 'CALCULATOR: Shelf -PP parent-level charge'
+    ]
+    assert [d['component'].rsplit(' · ', 1)[-1] for d in moved] == ['Pakuotė R', 'Kartonas S']
+    assert sum(d['line_cost'] for d in moved) == pytest.approx(1.9)
 
 
 def test_panel_audit_identifies_detail_and_reconciles_area_rates():
