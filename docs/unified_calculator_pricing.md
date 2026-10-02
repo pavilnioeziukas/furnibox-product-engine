@@ -14,7 +14,10 @@ once, independent of area. It appears separately in the cost audit. Like the
 other calculator cost terms, it precedes the existing final SO markup. Older
 saved settings receive this default while retaining all saved rates; an explicit
 zero remains zero. The detail-calculator copy keeps its separate settings. Shelf wooden
-parts use U and their source pack SKUs use U + R + S. LED, ROD and LEDROD use the shelf family-rate calculator: U for the detail and U + R + S for the pack. Historical C:K sums do not override this calculation. These complete
+parts use U. In the approved v10 structure the source `-PP` SKU is also detail-only U;
+R, S and the other former prepack components are explicit first-level components of
+the parent shelf BOM. LED, ROD and LEDROD follow the same rule. Historical C:K sums
+do not override this calculation. These complete
 calculator recipes replace the old pack calculation, rather than adding old
 category packaging fees or the -7% fee adjustment again. An enclosing product
 can still have its own category-level service fees.

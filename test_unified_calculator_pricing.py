@@ -21,6 +21,17 @@ def test_panel_and_pack_no_double_packaging():
     assert not traces
 
 
+def test_shelf_pp_is_dimensioned_detail_only_in_v10():
+    config = settings.validate({'markup_percent': 0})
+    registry = unified.recipes(config)
+    pp = registry['eu-srew-shelf-1163x340-bb-pp']
+    detail = registry['eu-srew-shelf-1163x340-bb']
+
+    assert pp['total'] == pytest.approx(detail['total'])
+    assert pp['parts'] == detail['parts']
+    assert pp['origin'] == 'Lentynų skaičiuoklė: U'
+
+
 def test_panel_audit_identifies_detail_and_reconciles_area_rates():
     config = settings.validate({})
     registry = unified.recipes(config)
@@ -39,9 +50,9 @@ def test_panel_audit_identifies_detail_and_reconciles_area_rates():
 def test_shelf_pack_and_led_match_calculators():
     registry = unified.recipes(settings.validate({}))
     assert registry['eu-srew-shelf-163x564-ww']['total'] == pytest.approx(6.4212342)
-    assert registry['eu-srew-shelf-163x564-ww-pp']['total'] == pytest.approx(8.3212342)
+    assert registry['eu-srew-shelf-163x564-ww-pp']['total'] == pytest.approx(6.4212342)
     led = registry['eu-srew-shelf-led-1163x340-bb-pp']
-    assert led['total'] == pytest.approx(.39542 * 93)
+    assert led['total'] == pytest.approx(.39542 * 93 - 1.9)
     assert sum(v for _,v in led['parts']) == pytest.approx(led['total'])
 
 
@@ -51,7 +62,7 @@ def test_led_component_and_pack_use_family_rate_not_historical_scenario():
     config['led_costs'] = {'EU-SREW-SHELF-LED-363x564-NO': [100.] * 9}
     registry = unified.recipes(config)
     assert registry[sku]['total'] == pytest.approx(.363 * .564 * 93 - 1.9)
-    assert registry[sku+'-pp']['total'] == pytest.approx(.363 * .564 * 93)
+    assert registry[sku+'-pp']['total'] == pytest.approx(.363 * .564 * 93 - 1.9)
     assert registry[sku]['total'] == pytest.approx(17.140076)
     prices = unified.prepare({}, registry)
     assert resolve_component_cost(sku, prices, {})['cost'] == pytest.approx(17.140076)
@@ -122,7 +133,7 @@ def test_settings_and_led_saved_for_next_so_run(tmp_path, monkeypatch):
 def test_new_dimensions_use_existing_family_formula(sku, area, rate, coefficient):
     config = settings.validate({})
     recipe = unified.dimensional_shelf_recipe(sku, config)
-    assert recipe['total'] == pytest.approx((area*rate-1.9)*coefficient+1.9)
+    assert recipe['total'] == pytest.approx((area*rate-1.9)*coefficient)
     config['shelf']['SREW-SHELF-'+('CORNER' if 'CORNER' in sku else 'FIX' if '-FIX-' in sku else 'PAPR')] += 2
     assert unified.dimensional_shelf_recipe(sku, config)['total'] == pytest.approx(recipe['total']+area*2*coefficient)
 

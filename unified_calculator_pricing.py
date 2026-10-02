@@ -1,7 +1,8 @@
 """Exact-SKU calculator recipes shared with SO pricing, before final markup.
 
-Calculator pack prices replace the complete pack calculation, including its
-packaging. They are never added on top of historical pack add-ons.
+Shelf ``-PP`` products represent only the dimensioned shelf detail in the
+approved v10 BOM structure. Packaging and the other former ``-PP`` components
+live on the first BOM level and must not be priced inside ``-PP`` again.
 Ambiguous recipes deliberately have no price and cannot fall back to old costs.
 """
 from collections import defaultdict
@@ -74,7 +75,9 @@ def recipes(settings):
         parts = result['parts'][3:] if total is not None else []
         wood = parts[0][1] if parts else None
         add(row['sku'], wood, parts[:1], 'Lentynų skaičiuoklė: U', issue)
-        add(row['pack'], total, parts, 'Lentynų skaičiuoklė: U + R + S', issue)
+        # v10: the -PP BOM contains only the dimensioned detail.  R/S and the
+        # remaining former prepack components are priced on the parent BOM.
+        add(row['pack'], wood, parts[:1], 'Lentynų skaičiuoklė: U', issue)
 
     result = {}
     for sku, rows in candidates.items():
@@ -110,7 +113,7 @@ def dimensional_shelf_recipe(sku, settings):
                          r'(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)-(WW|BB|NO)(-PP)?', sku.upper())
     if not match:
         return None
-    market, family, length, width, color, packed = match.groups()
+    market, family, length, width, color, _packed = match.groups()
     family = 'SREW-SHELF-' + (family or 'PAPR')
     reference = [r for r in source('shelf')['rows']
                  if r['sku'].upper().startswith(market+'-') and r['kind'] == family
@@ -124,14 +127,15 @@ def dimensional_shelf_recipe(sku, settings):
                kind=family, packaging=packaging, cardboard=cardboard, source_multiplier=1)
     calculated = calculate('shelf', row, settings['shelf'])
     parts = calculated['parts'][3:]
-    if not packed:
-        parts = parts[:1]
+    # Both the plain detail and its -PP wrapper are detail-only in v10.
+    # Packaging is represented by explicit first-level BOM components.
+    parts = parts[:1]
     total = sum(v for _,v in parts)
     if total <= 0:
         return None
     return dict(sku=sku, total=total, parts=parts, issue='',
                 origin=f'Lentynų skaičiuoklė: {family}, {row["length"]:g}×{row["width"]:g} mm; '
-                       f'R={packaging:g}, S={cardboard:g}; pagal tipo formulę')
+                       'v10 -PP yra tik matmenų detalė U')
 
 
 def cover_missing(registry, skus, settings=None):
