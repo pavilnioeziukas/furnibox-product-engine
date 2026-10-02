@@ -141,10 +141,15 @@ def apply_approved_pricing_names(rows, dataset):
             catalog[sku] = product
 
     for row in rows:
-        product = catalog.get(key(row.get("sku")))
+        row_sku = text(row.get("sku"))
+        approved_name = APPROVED_PRICING_PRODUCT_NAMES.get(row_sku.upper())
+        if approved_name:
+            row["name"] = approved_name
+            continue
+        product = catalog.get(key(row_sku))
         if product is not None:
             row["name"] = approved_pricing_product_name(
-                row.get("sku"), product, row.get("name")
+                row_sku, product, row.get("name")
             )
 
 

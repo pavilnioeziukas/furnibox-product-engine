@@ -47,6 +47,12 @@ def test_tamara_product_name_override_is_used():
     ) == "Hardware - Hinge standard 110deg - Steel (2 pcs.)"
 
 
+def test_tamara_name_override_does_not_require_catalog_product():
+    rows = [{"sku": "UNI-P-ACC01-HRD022-A", "name": ""}]
+    apply_approved_pricing_names(rows, {"products": [], "product_catalog": []})
+    assert rows[0]["name"] == "4 x LEG EU SET - F08/139"
+
+
 from manifest.manifest_writer import calculate_file_hash
 from so_pricing_rules import (
     PricingRule,
