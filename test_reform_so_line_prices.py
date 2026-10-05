@@ -27,6 +27,7 @@ from reform_so_line_prices import (
     classify_missing_pricing_bom,
     component_cost_only_manufacture_products,
     exclude_bom_products_from_non_bom,
+    exclude_archived_pricing_results,
     inherit_generated_apack_rules,
     inherit_unambiguous_analog_rules,
     is_pricing_excluded,
@@ -51,6 +52,19 @@ def test_tamara_name_override_does_not_require_catalog_product():
     rows = [{"sku": "UNI-P-ACC01-HRD022-A", "name": ""}]
     apply_approved_pricing_names(rows, {"products": [], "product_catalog": []})
     assert rows[0]["name"] == "4 x LEG EU SET - F08/139"
+
+
+def test_tamara_archived_skus_are_removed_from_all_pricing_outputs():
+    archived = "EUB-P-ACC01-HRD107-A"
+    kept = "EUB-P-ACC01-HRD107"
+    bom_rows, non_rows, details = exclude_archived_pricing_results(
+        [{"sku": archived}, {"sku": kept}],
+        [{"sku": archived}, {"sku": kept}],
+        [{"top": archived}, {"top": kept}],
+    )
+    assert [row["sku"] for row in bom_rows] == [kept]
+    assert [row["sku"] for row in non_rows] == [kept]
+    assert [row["top"] for row in details] == [kept]
 
 
 from manifest.manifest_writer import calculate_file_hash

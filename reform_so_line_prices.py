@@ -71,6 +71,11 @@ TAMARA_PRODUCT_NAMES_PATH = (
     / "manifest"
     / "tamara_product_names.json"
 )
+TAMARA_ARCHIVED_PRICING_SKUS_PATH = (
+    Path(__file__).resolve().parent
+    / "manifest"
+    / "tamara_archived_pricing_skus.json"
+)
 
 ADDONS = (
     "Assembly",
@@ -92,7 +97,21 @@ def load_approved_pricing_product_names():
     return names
 
 
+def load_tamara_archived_pricing_skus():
+    if not TAMARA_ARCHIVED_PRICING_SKUS_PATH.exists():
+        return frozenset()
+    document = json.loads(
+        TAMARA_ARCHIVED_PRICING_SKUS_PATH.read_text(encoding="utf-8")
+    )
+    return frozenset(
+        str(sku or "").strip().casefold()
+        for sku in document
+        if str(sku or "").strip()
+    )
+
+
 APPROVED_PRICING_PRODUCT_NAMES = load_approved_pricing_product_names()
+TAMARA_ARCHIVED_PRICING_SKUS = load_tamara_archived_pricing_skus()
 
 
 def text(value):
@@ -156,9 +175,22 @@ def apply_approved_pricing_names(rows, dataset):
 def is_pricing_excluded(product):
     return (
         key(product.get("sku")) in PRICING_EXCLUDED_SKUS
+        or key(product.get("sku")) in TAMARA_ARCHIVED_PRICING_SKUS
         or text(product.get("product_category")).upper()
         in PRICING_EXCLUDED_CATEGORIES
     )
+
+
+def exclude_archived_pricing_results(bom_rows, non_rows, details):
+    """Remove Tamara-approved archived SKUs from every pricing output."""
+    keep = lambda row: key(row.get("sku")) not in TAMARA_ARCHIVED_PRICING_SKUS
+    kept_bom_rows = [row for row in bom_rows if keep(row)]
+    kept_non_rows = [row for row in non_rows if keep(row)]
+    kept_details = [
+        row for row in details
+        if key(row.get("top")) not in TAMARA_ARCHIVED_PRICING_SKUS
+    ]
+    return kept_bom_rows, kept_non_rows, kept_details
 
 
 def number(value, default=0.0):
@@ -3933,6 +3965,10 @@ def build_from_application_config(
         ]
 
         apply_approved_pricing_names(bom_rows + non_rows, target_dataset)
+
+    bom_rows, non_rows, details = exclude_archived_pricing_results(
+        bom_rows, non_rows, details
+    )
 
     unified.finish(bom_rows + non_rows, details, registry, calculator_snapshot)
     from final_price_exceptions import apply as apply_final_price_exceptions
