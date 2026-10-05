@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 from collections import Counter
@@ -76,6 +77,11 @@ TAMARA_ARCHIVED_PRICING_SKUS_PATH = (
     / "manifest"
     / "tamara_archived_pricing_skus.json"
 )
+TAMARA_CREATED_A_PRICING_SKUS_PATH = (
+    Path(__file__).resolve().parent
+    / "manifest"
+    / "tamara_created_a_pricing_skus.json"
+)
 
 ADDONS = (
     "Assembly",
@@ -110,8 +116,20 @@ def load_tamara_archived_pricing_skus():
     )
 
 
+def load_tamara_created_a_pricing_skus():
+    if not TAMARA_CREATED_A_PRICING_SKUS_PATH.exists():
+        return {}
+    document = json.loads(
+        TAMARA_CREATED_A_PRICING_SKUS_PATH.read_text(encoding="utf-8")
+    )
+    return {
+        str(sku or "").strip().upper(): str(base or "").strip().upper()
+        for sku, base in document.items()
+        if str(sku or "").strip() and str(base or "").strip()
+    }
 APPROVED_PRICING_PRODUCT_NAMES = load_approved_pricing_product_names()
 TAMARA_ARCHIVED_PRICING_SKUS = load_tamara_archived_pricing_skus()
+TAMARA_CREATED_A_PRICING_SKUS = load_tamara_created_a_pricing_skus()
 
 
 def text(value):
@@ -191,6 +209,54 @@ def exclude_archived_pricing_results(bom_rows, non_rows, details):
         if key(row.get("top")) not in TAMARA_ARCHIVED_PRICING_SKUS
     ]
     return kept_bom_rows, kept_non_rows, kept_details
+
+
+def add_tamara_created_a_pricing_results(
+    bom_rows, non_rows, details, created_skus=None
+):
+    """Price reviewed 1:1 KIT variants exactly like their base SKU."""
+    rows_by_sku = {
+        text(row.get("sku")).upper(): row
+        for row in bom_rows + non_rows
+    }
+    detail_rows_by_top = {}
+    for row in details:
+        detail_rows_by_top.setdefault(text(row.get("top")).upper(), []).append(row)
+
+    created_skus = (
+        TAMARA_CREATED_A_PRICING_SKUS
+        if created_skus is None else created_skus
+    )
+    present_bases = {
+        base_sku for base_sku in created_skus.values()
+        if base_sku in rows_by_sku
+    }
+    if not present_bases:
+        return bom_rows, non_rows, details
+    missing_bases = sorted(set(created_skus.values()) - present_bases)
+    if missing_bases:
+        raise ValueError(
+            "Tamara-created pricing SKUs have missing base SKUs: "
+            + ", ".join(missing_bases)
+        )
+    for sku, base_sku in created_skus.items():
+        if sku in rows_by_sku:
+            continue
+        base_row = rows_by_sku.get(base_sku)
+        new_row = copy.deepcopy(base_row)
+        new_row["sku"] = sku
+        new_row["name"] = APPROVED_PRICING_PRODUCT_NAMES.get(
+            sku, new_row.get("name", "")
+        )
+        destination = bom_rows if base_row in bom_rows else non_rows
+        destination.append(new_row)
+        rows_by_sku[sku] = new_row
+        for base_detail in detail_rows_by_top.get(base_sku, []):
+            new_detail = copy.deepcopy(base_detail)
+            new_detail["top"] = sku
+            details.append(new_detail)
+
+    return bom_rows, non_rows, details
 
 
 def number(value, default=0.0):
@@ -3967,6 +4033,9 @@ def build_from_application_config(
         apply_approved_pricing_names(bom_rows + non_rows, target_dataset)
 
     bom_rows, non_rows, details = exclude_archived_pricing_results(
+        bom_rows, non_rows, details
+    )
+    bom_rows, non_rows, details = add_tamara_created_a_pricing_results(
         bom_rows, non_rows, details
     )
 

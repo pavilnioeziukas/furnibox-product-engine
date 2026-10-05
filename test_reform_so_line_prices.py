@@ -28,6 +28,7 @@ from reform_so_line_prices import (
     component_cost_only_manufacture_products,
     exclude_bom_products_from_non_bom,
     exclude_archived_pricing_results,
+    add_tamara_created_a_pricing_results,
     inherit_generated_apack_rules,
     inherit_unambiguous_analog_rules,
     is_pricing_excluded,
@@ -65,6 +66,32 @@ def test_tamara_archived_skus_are_removed_from_all_pricing_outputs():
     assert [row["sku"] for row in bom_rows] == [kept]
     assert [row["sku"] for row in non_rows] == [kept]
     assert [row["top"] for row in details] == [kept]
+
+
+def test_tamara_created_a_skus_inherit_base_price_and_audit_details():
+    base = "UNI-P-ACC01-HRD007"
+    created = "UNI-P-ACC01-HRD007-A"
+    bom_rows = [{
+        "sku": base, "name": "Base", "final": 6.673,
+        "status": "COMPLETE", "component_details": [{"sku": "PART"}],
+    }]
+    details = [{"top": base, "level": 1}]
+    bom_rows, non_rows, details = add_tamara_created_a_pricing_results(
+        bom_rows, [], details, {created: base}
+    )
+    result = next(row for row in bom_rows if row["sku"] == created)
+    assert result["final"] == 6.673
+    assert result["status"] == "COMPLETE"
+    assert result["name"] == "CORNERSET HINGE - steel"
+    assert any(row["top"] == created for row in details)
+
+
+def test_tamara_created_a_sku_fails_if_base_is_missing():
+    with unittest.TestCase().assertRaisesRegex(ValueError, "missing base SKUs"):
+        add_tamara_created_a_pricing_results(
+            [{"sku": "BASE-1"}], [], [],
+            {"NEW-1-A": "BASE-1", "NEW-2-A": "MISSING"}
+        )
 
 
 from manifest.manifest_writer import calculate_file_hash
