@@ -90,25 +90,21 @@ def test_access_boundaries_and_csrf(setup):
     assert client.get('/reform/').status_code == 302
 
 
-def test_new_product_and_bom_submit_immutable_and_private(setup):
+def test_new_product_and_bom_ui_paths_redirect_to_excel(setup):
     app, client = setup
+    for view in ('new-product', 'new-bom'):
+        response = client.get('/reform/?view=' + view, follow_redirects=True)
+        assert response.request.path == '/reform/'
+        assert response.request.args['view'] == 'files'
+        assert 'Create new products and BOMs' in response.text
     response = post(client, 'save', action='product', new='1', sku='NEW', name='New product', uom='vnt.', revision='0')
-    assert 'New product' in response.text
-    post(client, 'save', action='bom', sku='NEW', quantity='1', code='New BOM',
-         component_sku=['PANEL-01'], component_quantity=['3'], component_id=[''], revision='1')
-    response = post(client, 'submit', confirm='yes', revision='2')
-    assert 'submitted to Furnibox' in response.text
-    bundle = client.get('/reform/submissions/1').get_json()
-    assert 'New product' in client.get('/reform/submissions/1/view').text
-    assert len(bundle['changes']) == 2
-    assert bundle['submitted_by'] == 'paul'
+    assert 'Create new products and BOMs through Excel exchange.' in response.text
+    response = post(client, 'save', action='bom', sku='CAB-01', quantity='1', code='New BOM',
+                    component_sku=['PANEL-01'], component_quantity=['3'], component_id=[''], revision='0')
+    assert 'Create new products and BOMs through Excel exchange.' in response.text
     with app.app_context(), db() as conn:
         assert baseline(conn) == sample()
         assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
-    with client.session_transaction() as sess:
-        sess['reform_user'] = 'other'
-    assert client.get('/reform/submissions/1').status_code == 404
-    assert client.get('/reform/submissions/1/view').status_code == 404
 
 
 def test_bom_edit_remove_and_retire(setup):
@@ -137,10 +133,8 @@ def test_retirement_usage_and_cycles_block_confirmation(setup):
         validate(cycle)
 
 
-def test_stale_revision_snapshot_and_duplicate_codes(setup):
+def test_stale_revision_snapshot(setup):
     app, client = setup
-    response = post(client, 'save', action='product', new='1', sku='cab-01', name='Duplicate', uom='vnt.', revision='0')
-    assert 'already exists' in response.text
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
     assert post(client, 'save', action='product', sku='CAB-01', name='Lost update', revision='0').status_code == 409
     with app.app_context(), db() as conn:
@@ -151,12 +145,12 @@ def test_stale_revision_snapshot_and_duplicate_codes(setup):
     assert client.get('/reform/draft/download').get_json()['changes'][0]['after']['name'] == 'Updated'
 
 
-def test_existing_private_sku_rejected_without_exposing_catalogue(setup):
+def test_new_product_ui_is_blocked_without_exposing_private_catalogue(setup):
     app, client = setup
     with app.app_context(), db() as conn:
         conn.execute('INSERT INTO state VALUES (2,?)', (json.dumps(['PRIVATE-SKU']),))
     response = post(client, 'save', action='product', new='1', sku='private-sku', name='Duplicate', uom='vnt.', revision='0')
-    assert 'code is already in use' in response.text
+    assert 'Create new products and BOMs through Excel exchange.' in response.text
     assert 'PRIVATE-SKU' not in client.get('/reform/draft/download').text
 
 
@@ -209,8 +203,9 @@ def test_home_actions_and_specific_bom_edit_flow(setup):
     app, client = setup
     home = client.get('/reform/').text
     for text in ['What would you like to do?', 'Browse products and BOMs', 'Edit an existing BOM',
-                 'Create a new product', 'Create a new BOM']:
+                 'Create new products and BOMs in Excel']:
         assert text in home
+    assert '03 / NEW PRODUCT' not in home and '04 / NEW BILL OF MATERIALS' not in home
     listing = client.get('/reform/?view=bom-list&intent=edit&q=Spintel').text
     assert 'Spintelės komplektacija' in listing
     assert 'Edit this BOM' in listing
@@ -323,7 +318,7 @@ def test_reform_hides_assembly_products_and_keeps_fpack(setup):
             data['products'][sku] = {**data['products']['CAB-01'], 'sku': sku, 'name': sku}
             data['boms'][sku] = {**copy.deepcopy(data['boms']['1']), 'id': sku, 'sku': sku, 'code': sku}
         conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
-    for path in ('?view=catalogue', '?view=bom-list', '?view=new-bom', '?product=CAB-01'):
+    for path in ('?view=catalogue', '?view=bom-list', '?product=CAB-01'):
         page = client.get('/reform/' + path).text
         assert 'APACK-EU-BOX' not in page and 'CAB-01-A' not in page
         assert 'FPACK-EU-BOX' in page

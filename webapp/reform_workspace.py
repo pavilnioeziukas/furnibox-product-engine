@@ -247,6 +247,8 @@ def index():
     work = visible_work(work)
     query = request.args.get('q', '').strip()[:200]
     view = request.args.get('view') or ('catalogue' if request.args else 'home')
+    if view in ('new-product', 'new-bom'):
+        return redirect(url_for('reform.index', view='files'))
     intent = request.args.get('intent', '')
     selected = request.args.get('product', '')
     selected_bom = request.args.get('bom_id', '')
@@ -404,6 +406,8 @@ def save():
                 if not sku or len(sku) > 100 or not name or len(name) > 300:
                     raise ValueError('Enter a product code and name.')
                 is_new = request.form.get('new') == '1'
+                if is_new:
+                    raise ValueError('Create new products and BOMs through Excel exchange.')
                 if is_new and any(k.casefold() == sku.casefold() for k in target['products']):
                     raise ValueError('A product with this code already exists.')
                 registry = conn.execute('SELECT payload FROM state WHERE id=2').fetchone()
@@ -433,6 +437,8 @@ def save():
                 target['products'][sku]['active'] = False
             elif action == 'bom':
                 bid = request.form.get('bom_id', '')
+                if not bid:
+                    raise ValueError('Create new products and BOMs through Excel exchange.')
                 old = target['boms'].get(bid)
                 if bid and not old:
                     raise ValueError('BOM not found.')
