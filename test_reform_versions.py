@@ -71,7 +71,9 @@ def test_batch_submit_return_resubmit_and_admin_review(setup):
         second = conn.execute('SELECT max(id) FROM submissions').fetchone()[0]
         assert second != first['id']
     assert post(admin,'versions/review',number='v11.1',submission_id=first['id'],action='accepted').status_code == 409
-    assert post(admin,'versions/review',number='v11.1',submission_id=second,action='accepted').status_code == 200
+    assert post(admin,'versions/review',number='v11.1',submission_id=second,action='accepted').status_code == 400
+    assert post(admin,'versions/review',number='v11.1',submission_id=second,action='accepted',
+                approve_odoo_sync='yes',note='Furnibox approved production synchronization').status_code == 200
     assert post(admin,'versions/review',number='v11.1',submission_id=second,action='implemented',note='Checked',verified='yes').status_code == 409
     with app.app_context(), db() as conn:
         applied=unpack(conn.execute('SELECT payload FROM submissions WHERE id=?',(second,)).fetchone()[0])['target']
