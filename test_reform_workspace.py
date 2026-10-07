@@ -202,9 +202,10 @@ def test_catalogue_search_pagination_and_existing_bom(setup):
 def test_home_actions_and_specific_bom_edit_flow(setup):
     app, client = setup
     home = client.get('/reform/').text
-    for text in ['What would you like to do?', 'Browse products and BOMs', 'Edit an existing BOM',
+    for text in ['What would you like to do?', 'Browse products and BOMs', 'Edit an existing BOM in the interface',
                  'Create new products and BOMs in Excel']:
         assert text in home
+    assert '02 / EDIT AN EXISTING BOM' not in home
     assert '03 / NEW PRODUCT' not in home and '04 / NEW BILL OF MATERIALS' not in home
     listing = client.get('/reform/?view=bom-list&intent=edit&q=Spintel').text
     assert 'Spintelės komplektacija' in listing
