@@ -80,6 +80,8 @@ BOOTSTRAP_MANAGER_ENABLED = bool(SETTINGS.web_password)
 UPLOAD_DIR = STATE_DIR / "uploads"
 CHUNK_UPLOAD_DIR = UPLOAD_DIR / ".chunks"
 RUN_DIR = STATE_DIR / "runs"
+PRICE_LIST_DIR = STATE_DIR / "price_lists"
+PRICE_LIST_INDEX_PATH = PRICE_LIST_DIR / "index.json"
 
 PRODUCTION_DATASET_DIR = (
     SHARED_DATA_DIR
@@ -153,6 +155,7 @@ for directory in (
     UPLOAD_DIR,
     CHUNK_UPLOAD_DIR,
     RUN_DIR,
+    PRICE_LIST_DIR,
     PRODUCTION_DATASET_DIR,
     PURCHASE_PRICE_IMPORT_DIR,
 ):
@@ -774,6 +777,54 @@ def prune_completed_jobs(keep_per_action: int = 2) -> list[str]:
     return removed
 
 
+def _read_price_lists() -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(PRICE_LIST_INDEX_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except (OSError, json.JSONDecodeError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def _write_price_lists(items: list[dict[str, Any]]) -> None:
+    temporary = PRICE_LIST_INDEX_PATH.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    temporary.replace(PRICE_LIST_INDEX_PATH)
+
+
+def _price_list_view(item: dict[str, Any]) -> dict[str, Any]:
+    labels = {
+        "active": "Galioja",
+        "awaiting_confirmation": "Laukia patvirtinimo",
+        "expired": "Nebegalioja",
+    }
+    return {**item, "status_label": labels.get(item.get("status"), "Nežinoma")}
+
+
+def list_price_lists() -> list[dict[str, Any]]:
+    return [
+        _price_list_view(item)
+        for item in sorted(
+            _read_price_lists(),
+            key=lambda item: item.get("uploaded_at", ""),
+            reverse=True,
+        )
+    ]
+
+
+def price_list_summary() -> dict[str, Any]:
+    items = list_price_lists()
+    return {
+        "active": next((item for item in items if item["status"] == "active"), None),
+        "awaiting": [
+            item for item in items if item["status"] == "awaiting_confirmation"
+        ],
+    }
+
+
 def latest_dataset() -> Path | None:
     shared_roots = {SETTINGS.shared_data_dir}
     legacy_shared_data = os.getenv("FURNIBOX_SHARED_DATA", "").strip()
@@ -1171,7 +1222,95 @@ def index():
         dataset=latest_dataset(),
         auth_enabled=auth_enabled(),
         show_bom_workspace=SETTINGS.show_bom_workspace,
+        price_lists=price_list_summary(),
     )
+
+
+@app.get("/price-lists")
+def price_lists():
+    return render_template("price_lists.html", price_lists=list_price_lists())
+
+
+@app.post("/price-lists")
+def upload_price_list():
+    file = request.files.get("file")
+    name = request.form.get("name", "").strip()
+    status = request.form.get("status", "awaiting_confirmation")
+    effective_date = request.form.get("effective_date", "").strip()
+    sent_date = request.form.get("sent_date", "").strip()
+
+    if file is None or not file.filename:
+        abort(400, "Nepasirinktas kainoraščio failas.")
+    if status not in {"active", "awaiting_confirmation"}:
+        abort(400, "Neteisinga kainoraščio būsena.")
+    if status == "active" and not effective_date:
+        abort(400, "Galiojančiam kainoraščiui būtina įsigaliojimo data.")
+
+    original_name = secure_filename(file.filename)
+    if not original_name:
+        abort(400, "Neteisingas failo pavadinimas.")
+    item_id = uuid.uuid4().hex
+    stored_name = f"{item_id}_{original_name}"
+    file.save(PRICE_LIST_DIR / stored_name)
+
+    items = _read_price_lists()
+    if status == "active":
+        for item in items:
+            if item.get("status") == "active":
+                item["status"] = "expired"
+                item["expired_at"] = effective_date
+
+    items.append(
+        {
+            "id": item_id,
+            "name": name or Path(original_name).stem,
+            "original_name": original_name,
+            "stored_name": stored_name,
+            "status": status,
+            "effective_date": effective_date or None,
+            "sent_date": sent_date or None,
+            "confirmed_at": utc_now() if status == "active" else None,
+            "uploaded_at": utc_now(),
+        }
+    )
+    _write_price_lists(items)
+    flash("Kainoraštis išsaugotas.")
+    return redirect(url_for("price_lists"))
+
+
+@app.post("/price-lists/<item_id>/activate")
+def activate_price_list(item_id: str):
+    effective_date = request.form.get("effective_date", "").strip()
+    if not effective_date:
+        abort(400, "Nurodykite įsigaliojimo datą.")
+
+    items = _read_price_lists()
+    selected = next((item for item in items if item.get("id") == item_id), None)
+    if selected is None:
+        abort(404)
+    for item in items:
+        if item.get("status") == "active":
+            item["status"] = "expired"
+            item["expired_at"] = effective_date
+    selected["status"] = "active"
+    selected["effective_date"] = effective_date
+    selected["confirmed_at"] = utc_now()
+    _write_price_lists(items)
+    flash("Kainoraštis pažymėtas kaip galiojantis.")
+    return redirect(url_for("price_lists"))
+
+
+@app.get("/price-lists/<item_id>/download")
+def download_price_list(item_id: str):
+    item = next(
+        (item for item in _read_price_lists() if item.get("id") == item_id), None
+    )
+    if item is None:
+        abort(404)
+    path = PRICE_LIST_DIR / secure_filename(item["stored_name"])
+    if not path.is_file():
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=item["original_name"])
 
 
 @app.get("/purchase-pricing")

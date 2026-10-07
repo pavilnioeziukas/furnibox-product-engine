@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='pricing.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='chunked-upload.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='pricing-navigation.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='price-lists.css') }}">
 </head>
 <body>
   <header class="topbar">
@@ -22,6 +23,7 @@
         <a href="{{ url_for('calculators.reform_home') }}" {% if request.blueprint == 'calculators' or request.endpoint in ['pricing_control', 'pricing_rules', 'purchase_pricing'] %}aria-current="page"{% endif %}>Kainos Reform</a>
         <a href="{{ url_for('furnibox_comparison.index') }}" {% if request.blueprint in ['detail_calculators','furnibox_comparison'] %}aria-current="page"{% endif %}>Kainos Furnibox</a>
       {% endif %}
+      <a href="{{ url_for('price_lists') }}">Kainoraščiai</a>
       {% if bootstrap_manager_enabled %}
         <a href="{{ url_for('bootstraps') }}">Bootstraps</a>
       {% endif %}

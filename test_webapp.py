@@ -46,6 +46,64 @@ def test_health_and_index(monkeypatch, tmp_path):
     assert "Audituoti nebeaktualius Odoo produktus ir BOM" in client.get("/").get_data(as_text=True)
     assert "upload-progress" in client.get("/").get_data(as_text=True)
     assert "chunked-upload.js" in client.get("/").get_data(as_text=True)
+    assert "Aktualūs kainoraščiai" in client.get("/").get_data(as_text=True)
+
+
+def test_price_list_workflow_keeps_original_files_and_one_active(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    client = webapp.app.test_client()
+
+    first = client.post(
+        "/price-lists",
+        data={
+            "name": "2026-04-15 kainoraštis",
+            "status": "active",
+            "effective_date": "2026-04-15",
+            "file": (io.BytesIO(b"old structure"), "kainorastis-2026-04-15.xlsx"),
+        },
+        content_type="multipart/form-data",
+    )
+    second = client.post(
+        "/price-lists",
+        data={
+            "name": "Naujas kainoraštis",
+            "status": "awaiting_confirmation",
+            "sent_date": "2026-10-01",
+            "file": (io.BytesIO(b"new and different structure"), "naujas-kainorastis.xlsx"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert first.status_code == 302
+    assert second.status_code == 302
+    items = webapp.list_price_lists()
+    active = next(item for item in items if item["status"] == "active")
+    pending = next(item for item in items if item["status"] == "awaiting_confirmation")
+    assert active["effective_date"] == "2026-04-15"
+    assert (webapp.PRICE_LIST_DIR / active["stored_name"]).read_bytes() == b"old structure"
+    assert (webapp.PRICE_LIST_DIR / pending["stored_name"]).read_bytes() == b"new and different structure"
+
+    activated = client.post(
+        f"/price-lists/{pending['id']}/activate",
+        data={"effective_date": "2026-11-01"},
+    )
+    assert activated.status_code == 302
+    items = webapp.list_price_lists()
+    assert len([item for item in items if item["status"] == "active"]) == 1
+    assert next(item for item in items if item["id"] == active["id"])["status"] == "expired"
+
+
+def test_active_price_list_requires_effective_date(monkeypatch, tmp_path):
+    webapp = load_webapp(monkeypatch, tmp_path)
+    response = webapp.app.test_client().post(
+        "/price-lists",
+        data={
+            "status": "active",
+            "file": (io.BytesIO(b"content"), "kainorastis.xlsx"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
 
 
 def test_pricing_control_explains_inputs_and_source_priority(monkeypatch, tmp_path):
