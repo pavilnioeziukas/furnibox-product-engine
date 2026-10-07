@@ -1,6 +1,45 @@
 import json
-from test_reform_workspace import setup, post
+from test_reform_workspace import setup, post, sample
 from webapp.reform_workspace import db, baseline, unpack
+from webapp.reform_versions import next_revision, schema, bom_revision_plan, record_bom_revisions
+
+
+def test_alphabetic_bom_revision_sequence_and_immutable_history(setup):
+    app, client = setup
+    assert next_revision(None) == 'A'
+    assert next_revision('A') == 'B'
+    assert next_revision('Z') == 'AA'
+    existing = sample()['boms']['1']
+    changed = json.loads(json.dumps(existing))
+    changed['components'][0]['quantity'] = 3
+    new_bom = {**json.loads(json.dumps(existing)), 'id': 'new-1', 'sku': 'NEW-PRODUCT'}
+    delta = [
+        {'kind': 'boms', 'key': '1', 'before': existing, 'after': changed},
+        {'kind': 'boms', 'key': 'new-1', 'before': None, 'after': new_bom},
+    ]
+    with app.app_context(), db() as conn:
+        schema(conn)
+        plan = bom_revision_plan(conn, delta)
+        assert plan['1'] == {'product_code': 'CAB-01', 'current': 'A', 'proposed': 'B'}
+        assert plan['new-1'] == {'product_code': 'NEW-PRODUCT', 'current': None, 'proposed': 'A'}
+        record_bom_revisions(conn, 'v11.1', delta, plan)
+        rows = conn.execute('''SELECT product_code,revision,status,snapshot FROM reform_bom_revisions
+            ORDER BY product_code,revision''').fetchall()
+        assert [(r['product_code'], r['revision'], r['status']) for r in rows] == [
+            ('CAB-01', 'A', 'superseded'), ('CAB-01', 'B', 'current'),
+            ('NEW-PRODUCT', 'A', 'current')]
+        assert unpack(rows[0]['snapshot'])['components'][0]['quantity'] == 2
+        assert unpack(rows[1]['snapshot'])['components'][0]['quantity'] == 3
+
+
+def test_existing_bom_change_displays_next_plm_revision(setup):
+    app, client = setup
+    post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spintelės komplektacija',
+         component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'], revision='0')
+    post(client, 'versions/save', number='v11.1', description='BOM revision', revision='1')
+    page = client.get('/reform/versions').text
+    assert 'PLM changes and BOM revisions' in page
+    assert 'A → B' in page
 
 
 def test_batch_submit_return_resubmit_and_admin_review(setup):
@@ -83,3 +122,4 @@ def test_two_distinct_reform_users_must_approve_same_revision(setup):
     with app.app_context(), db() as conn:
         payload = unpack(conn.execute('SELECT payload FROM submissions').fetchone()['payload'])
         assert payload['approved_by'] == ['paul', 'other']
+
