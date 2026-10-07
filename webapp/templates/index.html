@@ -9,6 +9,38 @@
   <div class="safety"><span>0</span><div><strong>Odoo pakeitimų</strong><small>Pilotas pats nieko neimportuoja</small></div></div>
 </section>
 
+<section class="price-list-overview panel">
+  <div class="panel-head">
+    <div><p class="eyebrow">Kainoraščiai</p><h2>Aktualūs kainoraščiai</h2></div>
+    <a class="secondary button-link" href="{{ url_for('price_lists') }}">Valdyti kainoraščius</a>
+  </div>
+  <p class="muted">Aiškiai matykite, kuris kainoraštis galioja, o kuris laukia kliento patvirtinimo.</p>
+  <div class="price-list-summary">
+    <div class="price-list-summary-item current">
+      <span class="state ready">Galioja</span>
+      {% if price_lists.active %}
+        <strong>{{ price_lists.active.name }}</strong>
+        <span>Įsigaliojo {{ price_lists.active.effective_date }}</span>
+        <a href="{{ url_for('download_price_list', item_id=price_lists.active.id) }}">Atsisiųsti</a>
+      {% else %}
+        <strong>Galiojantis kainoraštis neįkeltas</strong>
+        <span>Įkelkite turimą 2026-04-15 kainoraštį.</span>
+      {% endif %}
+    </div>
+    <div class="price-list-summary-item pending">
+      <span class="state waiting">Laukia patvirtinimo</span>
+      {% if price_lists.awaiting %}
+        <strong>{{ price_lists.awaiting[0].name }}</strong>
+        <span>Išsiųsta klientui: {{ price_lists.awaiting[0].sent_date or 'data nenurodyta' }}</span>
+        <a href="{{ url_for('download_price_list', item_id=price_lists.awaiting[0].id) }}">Atsisiųsti</a>
+      {% else %}
+        <strong>Nėra patvirtinimo laukiančio kainoraščio</strong>
+        <span>Naują failą galėsite įkelti atskiroje skiltyje.</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
 {% if show_bom_workspace %}<section class="grid status-grid">
   <article class="panel">
     <div class="panel-head"><div><p class="eyebrow">1 žingsnis</p><h2>Reform BOM įvestis</h2></div><span class="state {{ 'ready' if upload else 'waiting' }}">{{ 'Paruošta' if upload else 'Laukiama' }}</span></div>

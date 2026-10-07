@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Kainoraščiai · {{ product_engine.app_name }}{% endblock %}
+{% block content %}
+<section class="section-head price-list-heading">
+  <div><p class="eyebrow">Failų registras</p><h1>Aktualūs kainoraščiai</h1></div>
+  <p>Originalūs failai saugomi nekeičiant jų struktūros.</p>
+</section>
+
+<section class="panel price-list-upload-panel">
+  <div><p class="eyebrow">Naujas įrašas</p><h2>Įkelti kainoraštį</h2></div>
+  <form class="price-list-form" method="post" enctype="multipart/form-data">
+    <label>Pavadinimas<input name="name" type="text" placeholder="Pvz., Furnibox klientų kainoraštis"></label>
+    <label>Būsena<select name="status"><option value="awaiting_confirmation">Išsiųstas – laukia patvirtinimo</option><option value="active">Galioja</option></select></label>
+    <label>Įsigaliojimo data<input name="effective_date" type="date"></label>
+    <label>Išsiuntimo klientui data<input name="sent_date" type="date"></label>
+    <label class="price-list-file">Failas<input name="file" type="file" required></label>
+    <button class="primary" type="submit">Įkelti kainoraštį</button>
+  </form>
+</section>
+
+<section class="section-head"><div><p class="eyebrow">Istorija</p><h2>Visi kainoraščiai</h2></div></section>
+<div class="table-wrap"><table>
+  <thead><tr><th>Kainoraštis</th><th>Įsigaliojimo data</th><th>Išsiųsta klientui</th><th>Būsena</th><th>Veiksmai</th></tr></thead>
+  <tbody>
+  {% for item in price_lists %}
+    <tr class="{{ 'active-price-list' if item.status == 'active' else '' }}">
+      <td><strong>{{ item.name }}</strong><br><small class="muted">{{ item.original_name }}</small></td>
+      <td>{{ item.effective_date or 'Nenustatyta' }}</td><td>{{ item.sent_date or 'Data nenurodyta' }}</td>
+      <td><span class="state {{ 'ready' if item.status == 'active' else 'waiting' if item.status == 'awaiting_confirmation' else '' }}">{{ item.status_label }}</span></td>
+      <td class="price-list-actions"><a href="{{ url_for('download_price_list', item_id=item.id) }}">Atsisiųsti</a>
+        {% if item.status == 'awaiting_confirmation' %}<form method="post" action="{{ url_for('activate_price_list', item_id=item.id) }}"><input name="effective_date" type="date" aria-label="Įsigaliojimo data" required><button class="secondary" type="submit">Pažymėti galiojančiu</button></form>{% endif %}
+      </td>
+    </tr>
+  {% else %}<tr><td colspan="5" class="empty">Kainoraščių dar nėra.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

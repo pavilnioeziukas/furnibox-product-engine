@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='pricing.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='chunked-upload.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='price-lists.css') }}">
 </head>
 <body>
   <header class="topbar">
@@ -20,6 +21,7 @@
         <a href="{{ url_for('pricing_rules') }}">SO kainodaros taisyklės</a>
         <a href="{{ url_for('purchase_pricing') }}">Pirkimo kainodara</a>
       {% endif %}
+      <a href="{{ url_for('price_lists') }}">Kainoraščiai</a>
       {% if bootstrap_manager_enabled %}
         <a href="{{ url_for('bootstraps') }}">Bootstraps</a>
       {% endif %}
