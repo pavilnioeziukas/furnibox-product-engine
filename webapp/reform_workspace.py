@@ -109,6 +109,65 @@ def changes(base, target):
     return result
 
 
+def tabular_changes(proposal_groups):
+    """Flatten proposals into responsibility rows keyed by Odoo Internal Reference."""
+    rows = []
+
+    def quantity(line):
+        value = line.get('quantity', '')
+        return f'{value:g}' if isinstance(value, (int, float)) else str(value)
+
+    def component_value(line):
+        return f"{line.get('sku', '')} · {quantity(line)} {line.get('uom', '')}".strip()
+
+    def product_value(product):
+        if not product:
+            return '—'
+        state = 'Active' if product.get('active', True) else 'Retired'
+        details = [product.get('name', ''), product.get('category', ''), product.get('uom', ''), state]
+        return ' · '.join(value for value in details if value)
+
+    for group in proposal_groups:
+        for change in group['changes']:
+            before, after = change['before'], change['after']
+            if change['kind'] == 'products':
+                item = after or before
+                rows.append({'internal_reference': item['sku'], 'record': 'Product',
+                             'change': 'Added' if not before else 'Removed' if not after else 'Changed',
+                             'current': product_value(before), 'proposed': product_value(after),
+                             'owner': group['owner']})
+                continue
+
+            bom = after or before
+            parent = bom['sku']
+            definition_keys = ('code', 'quantity', 'uom', 'active')
+            if not before or not after or any(before.get(key) != after.get(key) for key in definition_keys):
+                def bom_value(value):
+                    if not value:
+                        return '—'
+                    state = 'Active' if value.get('active', True) else 'Retired'
+                    return f"{value.get('code', '')} · {value.get('quantity', '')} {value.get('uom', '')} · {state}"
+                rows.append({'internal_reference': parent, 'record': 'BOM definition',
+                             'change': 'Added' if not before else 'Removed' if not after else 'Changed',
+                             'current': bom_value(before), 'proposed': bom_value(after),
+                             'owner': group['owner']})
+
+            old_lines = {str(line.get('id', '')): line for line in (before or {}).get('components', [])}
+            new_lines = {str(line.get('id', '')): line for line in (after or {}).get('components', [])}
+            line_ids = list(old_lines) + [line_id for line_id in new_lines if line_id not in old_lines]
+            for line_id in line_ids:
+                old, new = old_lines.get(line_id), new_lines.get(line_id)
+                if old == new:
+                    continue
+                line = new or old
+                rows.append({'internal_reference': line['sku'], 'record': f'Component in BOM {parent}',
+                             'change': 'Added' if not old else 'Removed' if not new else 'Changed',
+                             'current': component_value(old) if old else '—',
+                             'proposed': component_value(new) if new else '—',
+                             'owner': group['owner']})
+    return sorted(rows, key=lambda row: (row['internal_reference'].casefold(), row['record'].casefold(), row['owner'].casefold()))
+
+
 def positive(value):
     try:
         number = float(str(value).replace(',', '.'))
@@ -258,6 +317,7 @@ def index():
                                         'changes': draft_changes})
         proposal_groups.sort(key=lambda group: (group['owner'] != owner(), group['owner']))
         total_proposed_changes = sum(len(group['changes']) for group in proposal_groups)
+        proposal_rows = tabular_changes(proposal_groups)
     work = visible_work(work)
     if work:
         for bom in work['target']['boms'].values():
@@ -306,6 +366,7 @@ def index():
     return render_template('reform_catalogue.html', work=work, revision=revision,
         delta=delta, submissions=rows, is_admin=admin(), current_version=current_version,
         proposal_groups=proposal_groups, total_proposed_changes=total_proposed_changes,
+        proposal_rows=proposal_rows,
         current_user=owner(),
         query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
         usage=usage, counts=counts, page=page, pages=pages, total=total,

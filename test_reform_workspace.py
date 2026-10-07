@@ -4,7 +4,7 @@ import re
 
 import pytest
 from werkzeug.security import generate_password_hash
-from webapp.reform_workspace import db, draft, baseline, read_odoo, validate, validate_proposal, changes
+from webapp.reform_workspace import db, draft, baseline, read_odoo, validate, validate_proposal, changes, tabular_changes
 from test_webapp import load_webapp
 
 
@@ -183,7 +183,10 @@ def test_login_rate_limit_and_admin_view(setup):
 def test_proposer_is_explicit_in_draft_and_submission_views(setup):
     app, client = setup
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
-    assert 'Proposed by:</strong> paul' in client.get('/reform/?view=review').text
+    page = client.get('/reform/?view=review').text
+    assert '<th>Internal Reference</th>' in page
+    assert '<th>Proposed by</th>' in page
+    assert 'CAB-01' in page and 'paul' in page
     post(client, 'submit', revision='1', confirm='yes')
     assert 'Submitted by paul' in client.get('/reform/?view=sent').text
     assert 'Submitted by:</strong> paul' in client.get('/reform/submissions/1/view').text
@@ -198,8 +201,8 @@ def test_all_reform_users_can_see_every_draft_and_submission(setup):
         conn.execute('INSERT INTO drafts VALUES (?,?,?)', ('other', 1, json.dumps(other_work)))
     page = client.get('/reform/?view=review').text
     assert 'All proposed changes' in page
-    assert 'Proposed by paul' in page and 'Paul update' in page
-    assert 'Proposed by other' in page and 'Other update' in page
+    assert 'CAB-01' in page and 'Paul update' in page and 'paul' in page
+    assert 'HINGE-01' in page and 'Other update' in page and 'other' in page
     assert 'Changes <span>2</span>' in page
 
     post(client, 'submit', revision='1', confirm='yes')
@@ -210,6 +213,23 @@ def test_all_reform_users_can_see_every_draft_and_submission(setup):
     reviewer.post('/reform/login', data={'csrf': token, 'username': 'other', 'password': 'other-password'})
     assert 'Submitted by paul' in reviewer.get('/reform/?view=sent').text
     assert 'Paul update' in reviewer.get('/reform/submissions/1/view').text
+
+
+def test_tabular_changes_use_component_internal_reference_and_owner():
+    before = copy.deepcopy(sample()['boms']['1'])
+    after = copy.deepcopy(before)
+    after['components'][0]['quantity'] = 3
+    after['components'].pop(1)
+    after['components'].append({'id': 'new-1', 'sku': 'NEW-PART', 'quantity': 2, 'uom': 'vnt.'})
+    groups = [{'owner': 'kazimieras', 'changes': [
+        {'kind': 'boms', 'key': '1', 'before': before, 'after': after}]}]
+    rows = tabular_changes(groups)
+    by_reference = {row['internal_reference']: row for row in rows}
+    assert by_reference['PANEL-01']['current'] == 'PANEL-01 · 2 vnt.'
+    assert by_reference['PANEL-01']['proposed'] == 'PANEL-01 · 3 vnt.'
+    assert by_reference['HINGE-01']['change'] == 'Removed'
+    assert by_reference['NEW-PART']['change'] == 'Added'
+    assert all(row['owner'] == 'kazimieras' for row in rows)
 
 
 def test_duplicate_pending_proposal_is_blocked(setup):
