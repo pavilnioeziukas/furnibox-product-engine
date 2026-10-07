@@ -132,7 +132,7 @@ def tabular_changes(proposal_groups):
             before, after = change['before'], change['after']
             if change['kind'] == 'products':
                 item = after or before
-                rows.append({'internal_reference': item['sku'], 'record': 'Product',
+                rows.append({'bom_reference': item['sku'], 'record': 'Product details',
                              'change': 'Added' if not before else 'Removed' if not after else 'Changed',
                              'current_reference': before['sku'] if before else '—', 'current_qty': '—',
                              'current_detail': product_detail(before),
@@ -145,14 +145,14 @@ def tabular_changes(proposal_groups):
             parent = bom['sku']
             definition_keys = ('code', 'quantity', 'uom', 'active')
             if not before or not after or any(before.get(key) != after.get(key) for key in definition_keys):
-                rows.append({'internal_reference': parent, 'record': 'BOM definition',
+                rows.append({'bom_reference': parent, 'record': 'BOM settings',
                              'change': 'Added' if not before else 'Removed' if not after else 'Changed',
-                             'current_reference': before.get('code', '') if before else '—',
+                             'current_reference': 'BOM output' if before else '—',
                              'current_qty': quantity_value(before),
-                             'current_detail': ('Active' if before.get('active', True) else 'Retired') if before else '',
-                             'proposed_reference': after.get('code', '') if after else '—',
+                             'current_detail': (before.get('code', '') + ' · ' + ('Active' if before.get('active', True) else 'Retired')) if before else '',
+                             'proposed_reference': 'BOM output' if after else '—',
                              'proposed_qty': quantity_value(after),
-                             'proposed_detail': ('Active' if after.get('active', True) else 'Retired') if after else '',
+                             'proposed_detail': (after.get('code', '') + ' · ' + ('Active' if after.get('active', True) else 'Retired')) if after else '',
                              'owner': group['owner']})
 
             old_lines = {str(line.get('id', '')): line for line in (before or {}).get('components', [])}
@@ -163,14 +163,15 @@ def tabular_changes(proposal_groups):
                 if old == new:
                     continue
                 line = new or old
-                rows.append({'internal_reference': line['sku'], 'record': f'Component in BOM {parent}',
+                rows.append({'bom_reference': parent, 'record': 'BOM component',
                              'change': 'Added' if not old else 'Removed' if not new else 'Changed',
                              'current_reference': old['sku'] if old else '—',
                              'current_qty': quantity_value(old), 'current_detail': '',
                              'proposed_reference': new['sku'] if new else '—',
                              'proposed_qty': quantity_value(new), 'proposed_detail': '',
                              'owner': group['owner']})
-    return sorted(rows, key=lambda row: (row['internal_reference'].casefold(), row['record'].casefold(), row['owner'].casefold()))
+    return sorted(rows, key=lambda row: (row['bom_reference'].casefold(), row['record'].casefold(),
+                                         row['current_reference'].casefold(), row['owner'].casefold()))
 
 
 def positive(value):

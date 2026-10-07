@@ -184,7 +184,7 @@ def test_proposer_is_explicit_in_draft_and_submission_views(setup):
     app, client = setup
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
     page = client.get('/reform/?view=review').text
-    assert '<th>Internal Reference</th>' in page
+    assert '<th>BOM Internal Reference</th>' in page
     assert '<th>Proposed by</th>' in page
     assert 'CAB-01' in page and 'paul' in page
     post(client, 'submit', revision='1', confirm='yes')
@@ -224,7 +224,8 @@ def test_tabular_changes_use_component_internal_reference_and_owner():
     groups = [{'owner': 'kazimieras', 'changes': [
         {'kind': 'boms', 'key': '1', 'before': before, 'after': after}]}]
     rows = tabular_changes(groups)
-    by_reference = {row['internal_reference']: row for row in rows}
+    by_reference = {row['current_reference'] if row['current_reference'] != '—' else row['proposed_reference']: row for row in rows}
+    assert by_reference['PANEL-01']['bom_reference'] == 'CAB-01'
     assert by_reference['PANEL-01']['current_reference'] == 'PANEL-01'
     assert by_reference['PANEL-01']['current_qty'] == '2 vnt.'
     assert by_reference['PANEL-01']['proposed_reference'] == 'PANEL-01'
