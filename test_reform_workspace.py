@@ -228,13 +228,15 @@ def test_excel_exchange_has_two_clear_bom_tasks_and_template_guide(setup):
     assert 'Update an existing BOM' in page
     assert 'Add a new BOM' in page
     assert 'RECOMMENDED' in page
-    assert 'Download BOM for editing' in page
+    assert 'Download catalogue for editing' in page
+    assert 'scope=all' in page
+    assert 'Product code' not in page
     assert 'Download blank BOM template' in page
     assert 'Upload and review' in page
     assert 'What is in the Excel template?' in page
     assert 'The main working sheet: component codes' in page
     assert 'The BOM register: BOM key, product code' in page
-    assert 'Advanced: download the full catalogue' in page
+    assert 'Advanced: download the full catalogue' not in page
 
 
 def test_edit_screen_does_not_mix_two_boms(setup):
