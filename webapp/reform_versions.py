@@ -188,7 +188,8 @@ def review_version():
             conn.execute('INSERT INTO drafts VALUES (?,?,?)', (row['owner'], payload['draft_revision'] + 1,
                          pack({'base': payload['base'], 'target': payload['target']})))
         elif action == 'accepted' and row['status'] == 'submitted':
-            pass
+            if request.form.get('approve_odoo_sync') != 'yes' or not note:
+                abort(400, 'A Furnibox representative must explicitly approve production Odoo synchronization and record the approval note.')
         elif action == 'implemented' and row['status'] == 'accepted':
             if request.form.get('verified') != 'yes' or not note:
                 abort(400, 'Confirm that Odoo was updated and checked, and record the verification reference.')
@@ -202,7 +203,7 @@ def review_version():
         else:
             abort(409, 'Invalid status transition.')
         conn.execute('UPDATE reform_versions SET status=?,note=?,updated=? WHERE number=?', (action, note, now(), row['number']))
-        event(conn, row['number'], action, note)
+        event(conn, row['number'], 'odoo_sync_approved' if action == 'accepted' else action, note)
     flash('Version status updated. This action does not write to Odoo.')
     return redirect(url_for('reform.versions'))
 
