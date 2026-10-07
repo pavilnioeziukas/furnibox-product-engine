@@ -225,8 +225,10 @@ def test_tabular_changes_use_component_internal_reference_and_owner():
         {'kind': 'boms', 'key': '1', 'before': before, 'after': after}]}]
     rows = tabular_changes(groups)
     by_reference = {row['internal_reference']: row for row in rows}
-    assert by_reference['PANEL-01']['current'] == 'PANEL-01 · 2 vnt.'
-    assert by_reference['PANEL-01']['proposed'] == 'PANEL-01 · 3 vnt.'
+    assert by_reference['PANEL-01']['current_reference'] == 'PANEL-01'
+    assert by_reference['PANEL-01']['current_qty'] == '2 vnt.'
+    assert by_reference['PANEL-01']['proposed_reference'] == 'PANEL-01'
+    assert by_reference['PANEL-01']['proposed_qty'] == '3 vnt.'
     assert by_reference['HINGE-01']['change'] == 'Removed'
     assert by_reference['NEW-PART']['change'] == 'Added'
     assert all(row['owner'] == 'kazimieras' for row in rows)

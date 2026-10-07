@@ -117,12 +117,12 @@ def tabular_changes(proposal_groups):
         value = line.get('quantity', '')
         return f'{value:g}' if isinstance(value, (int, float)) else str(value)
 
-    def component_value(line):
-        return f"{line.get('sku', '')} · {quantity(line)} {line.get('uom', '')}".strip()
+    def quantity_value(item):
+        return f"{quantity(item)} {item.get('uom', '')}".strip() if item else '—'
 
-    def product_value(product):
+    def product_detail(product):
         if not product:
-            return '—'
+            return ''
         state = 'Active' if product.get('active', True) else 'Retired'
         details = [product.get('name', ''), product.get('category', ''), product.get('uom', ''), state]
         return ' · '.join(value for value in details if value)
@@ -134,7 +134,10 @@ def tabular_changes(proposal_groups):
                 item = after or before
                 rows.append({'internal_reference': item['sku'], 'record': 'Product',
                              'change': 'Added' if not before else 'Removed' if not after else 'Changed',
-                             'current': product_value(before), 'proposed': product_value(after),
+                             'current_reference': before['sku'] if before else '—', 'current_qty': '—',
+                             'current_detail': product_detail(before),
+                             'proposed_reference': after['sku'] if after else '—', 'proposed_qty': '—',
+                             'proposed_detail': product_detail(after),
                              'owner': group['owner']})
                 continue
 
@@ -142,14 +145,14 @@ def tabular_changes(proposal_groups):
             parent = bom['sku']
             definition_keys = ('code', 'quantity', 'uom', 'active')
             if not before or not after or any(before.get(key) != after.get(key) for key in definition_keys):
-                def bom_value(value):
-                    if not value:
-                        return '—'
-                    state = 'Active' if value.get('active', True) else 'Retired'
-                    return f"{value.get('code', '')} · {value.get('quantity', '')} {value.get('uom', '')} · {state}"
                 rows.append({'internal_reference': parent, 'record': 'BOM definition',
                              'change': 'Added' if not before else 'Removed' if not after else 'Changed',
-                             'current': bom_value(before), 'proposed': bom_value(after),
+                             'current_reference': before.get('code', '') if before else '—',
+                             'current_qty': quantity_value(before),
+                             'current_detail': ('Active' if before.get('active', True) else 'Retired') if before else '',
+                             'proposed_reference': after.get('code', '') if after else '—',
+                             'proposed_qty': quantity_value(after),
+                             'proposed_detail': ('Active' if after.get('active', True) else 'Retired') if after else '',
                              'owner': group['owner']})
 
             old_lines = {str(line.get('id', '')): line for line in (before or {}).get('components', [])}
@@ -162,8 +165,10 @@ def tabular_changes(proposal_groups):
                 line = new or old
                 rows.append({'internal_reference': line['sku'], 'record': f'Component in BOM {parent}',
                              'change': 'Added' if not old else 'Removed' if not new else 'Changed',
-                             'current': component_value(old) if old else '—',
-                             'proposed': component_value(new) if new else '—',
+                             'current_reference': old['sku'] if old else '—',
+                             'current_qty': quantity_value(old), 'current_detail': '',
+                             'proposed_reference': new['sku'] if new else '—',
+                             'proposed_qty': quantity_value(new), 'proposed_detail': '',
                              'owner': group['owner']})
     return sorted(rows, key=lambda row: (row['internal_reference'].casefold(), row['record'].casefold(), row['owner'].casefold()))
 
