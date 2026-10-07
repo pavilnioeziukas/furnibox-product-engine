@@ -15,6 +15,7 @@
 .diff-tag{font-size:11px;font-weight:750;flex-shrink:0;letter-spacing:.02em}
 .revision-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#dceee3;color:#175b47;font-size:12px;font-weight:800;letter-spacing:.04em}
 .production-gate{margin:18px 0;padding:18px;border:1px solid #d5b56f;border-radius:10px;background:#fff8e7}.production-gate>p{margin:8px 0}.production-gate .check{margin:16px 0}
+.primary-download{background:#1c6654;color:#fff;padding:11px 17px;text-decoration:none}.primary-download:hover{filter:brightness(.95)}
 .diff-legend{display:flex;gap:10px;flex-wrap:wrap}
 .diff-legend>span{padding:5px 10px;border-left:4px solid;border-radius:4px;font-size:12px;font-weight:650}
 
