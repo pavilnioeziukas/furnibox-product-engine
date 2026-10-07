@@ -248,8 +248,16 @@ def index():
         schema(conn)
         current_version = active(conn)
         bom_revisions = released_revisions(conn)
-        rows = conn.execute('SELECT id,owner,created FROM submissions ' +
-            ('' if admin() else 'WHERE owner=? ') + 'ORDER BY id DESC LIMIT 50', () if admin() else (owner(),)).fetchall()
+        rows = conn.execute('SELECT id,owner,created FROM submissions ORDER BY id DESC LIMIT 50').fetchall()
+        proposal_groups = []
+        for draft_row in conn.execute('SELECT owner,revision,payload FROM drafts ORDER BY owner').fetchall():
+            draft_work = unpack(draft_row['payload'])
+            draft_changes = changes(draft_work['base'], draft_work['target'])
+            if draft_changes:
+                proposal_groups.append({'owner': draft_row['owner'], 'revision': draft_row['revision'],
+                                        'changes': draft_changes})
+        proposal_groups.sort(key=lambda group: (group['owner'] != owner(), group['owner']))
+        total_proposed_changes = sum(len(group['changes']) for group in proposal_groups)
     work = visible_work(work)
     if work:
         for bom in work['target']['boms'].values():
@@ -297,6 +305,7 @@ def index():
             selected = ''
     return render_template('reform_catalogue.html', work=work, revision=revision,
         delta=delta, submissions=rows, is_admin=admin(), current_version=current_version,
+        proposal_groups=proposal_groups, total_proposed_changes=total_proposed_changes,
         current_user=owner(),
         query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
         usage=usage, counts=counts, page=page, pages=pages, total=total,
@@ -593,7 +602,7 @@ def submit():
 def download(sid):
     with db() as conn:
         row = conn.execute('SELECT * FROM submissions WHERE id=?', (sid,)).fetchone()
-    if not row or (not admin() and row['owner'] != owner()):
+    if not row:
         abort(404)
     response = jsonify({'submitted_by': row['owner'], 'submitted_at': row['created'], **unpack(row['payload'])})
     response.headers['Content-Disposition'] = f'attachment; filename="reform-changes-{sid}.json"'
@@ -614,7 +623,7 @@ def download_draft():
 def view_submission(sid):
     with db() as conn:
         row = conn.execute('SELECT * FROM submissions WHERE id=?', (sid,)).fetchone()
-    if not row or (not admin() and row['owner'] != owner()):
+    if not row:
         abort(404)
     payload = unpack(row['payload'])
     return render_template('reform_submission.html', submission=row, delta=payload['changes'])

@@ -189,6 +189,29 @@ def test_proposer_is_explicit_in_draft_and_submission_views(setup):
     assert 'Submitted by:</strong> paul' in client.get('/reform/submissions/1/view').text
 
 
+def test_all_reform_users_can_see_every_draft_and_submission(setup):
+    app, client = setup
+    post(client, 'save', action='product', sku='CAB-01', name='Paul update', revision='0')
+    with app.app_context(), db() as conn:
+        other_work = {'base': sample(), 'target': copy.deepcopy(sample())}
+        other_work['target']['products']['HINGE-01']['name'] = 'Other update'
+        conn.execute('INSERT INTO drafts VALUES (?,?,?)', ('other', 1, json.dumps(other_work)))
+    page = client.get('/reform/?view=review').text
+    assert 'All proposed changes' in page
+    assert 'Proposed by paul' in page and 'Paul update' in page
+    assert 'Proposed by other' in page and 'Other update' in page
+    assert 'Changes <span>2</span>' in page
+
+    post(client, 'submit', revision='1', confirm='yes')
+    reviewer = app.test_client()
+    reviewer.get('/reform/login')
+    with reviewer.session_transaction() as sess:
+        token = sess['reform_csrf']
+    reviewer.post('/reform/login', data={'csrf': token, 'username': 'other', 'password': 'other-password'})
+    assert 'Submitted by paul' in reviewer.get('/reform/?view=sent').text
+    assert 'Paul update' in reviewer.get('/reform/submissions/1/view').text
+
+
 def test_duplicate_pending_proposal_is_blocked(setup):
     app, client = setup
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
