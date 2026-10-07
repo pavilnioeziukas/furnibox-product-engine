@@ -53,6 +53,16 @@ def test_missing_rows_and_explicit_removal(setup):
         assert len(work['target']['boms']['1']['components']) == 1
 
 
+def test_zero_quantity_removes_existing_component(setup):
+    app, client = setup
+    book = export_book(client)
+    book['Components']['E3'] = 0
+    assert 'Excel changes saved' in upload_book(client, book).text
+    with app.app_context(), db() as conn:
+        work = unpack(conn.execute('SELECT payload FROM drafts').fetchone()[0])
+        assert [line['id'] for line in work['target']['boms']['1']['components']] == ['11']
+
+
 def test_new_cards_new_bom_and_new_component(setup):
     app, client = setup
     with app.app_context(), db() as conn:
@@ -90,7 +100,7 @@ def test_stale_source_and_other_user(setup):
 
 def test_invalid_workbooks_are_atomic(setup):
     app, client = setup
-    for value, error in [(0, 'greater than zero'), ('=1+1', 'replace formulas')]:
+    for value, error in [(-1, 'greater than zero'), ('=1+1', 'replace formulas')]:
         book = export_book(client)
         book['Components']['E2'] = value
         assert error in upload_book(client, book).text
@@ -151,3 +161,4 @@ def test_full_catalogue_roundtrip_and_read_only_bom(setup):
     with app.app_context(), db() as conn:
         work = unpack(conn.execute('SELECT payload FROM drafts').fetchone()[0])
         assert work['target']['boms']['2'] == data['boms']['2']
+
