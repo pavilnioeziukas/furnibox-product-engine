@@ -242,9 +242,15 @@ def index():
         base = baseline(conn)
         work, revision = draft(conn) if base else (None, 0)
         delta = changes(work['base'], work['target']) if work else []
+        from webapp.reform_versions import schema, released_revisions
+        schema(conn)
+        bom_revisions = released_revisions(conn)
         rows = conn.execute('SELECT id,owner,created FROM submissions ' +
             ('' if admin() else 'WHERE owner=? ') + 'ORDER BY id DESC LIMIT 50', () if admin() else (owner(),)).fetchall()
     work = visible_work(work)
+    if work:
+        for bom in work['target']['boms'].values():
+            bom['revision'] = bom_revisions.get(bom['sku'], 'A')
     query = request.args.get('q', '').strip()[:200]
     view = request.args.get('view') or ('catalogue' if request.args else 'home')
     if view in ('new-product', 'new-bom'):
@@ -506,7 +512,7 @@ def discard():
 
 @reform.post('/submit')
 def submit():
-    from webapp.reform_versions import schema, active, event
+    from webapp.reform_versions import schema, active, event, bom_revision_plan
     try:
         with db() as conn:
             schema(conn)
@@ -550,6 +556,7 @@ def submit():
                 'version': version['number'], 'description': version['description'], 'base': work['base'], 'draft_revision': revision,
                 'baseline_digest': digest(work['base']), 'baseline_captured_at': work['base']['captured_at'],
                 'changes': delta, 'target': work['target'],
+                'bom_revision_plan': bom_revision_plan(conn, delta),
                 'approved_by': [row['actor'] for row in conn.execute(
                     'SELECT actor FROM reform_version_approvals WHERE number=? AND revision=? ORDER BY created',
                     (version['number'], revision)).fetchall()]}
@@ -611,3 +618,4 @@ def view_submission(sid):
 # Register file exchange routes on the same protected blueprint.
 from webapp import reform_excel  # noqa: E402,F401
 from webapp import reform_versions  # noqa: E402,F401
+
