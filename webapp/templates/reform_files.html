@@ -9,18 +9,14 @@
   <section class="bom-choice recommended">
     <div class="choice-label">RECOMMENDED</div>
     <h3>Update an existing BOM</h3>
-    <p>Download one product with its BOMs, change component codes or quantities in Excel, then return the same file.</p>
-    <form method="get" action="{{ url_for('reform.excel_download') }}">
-      <label>Product code
-        <input name="product" list="exchange-products" required placeholder="Select a product, e.g. EUB-C-CAB02-BAS001">
-      </label>
-      <button>Download BOM for editing</button>
-    </form>
+    <p>Download the complete Reform catalogue, find the required BOM in Excel, change its component codes or quantities, then return the same file.</p>
+    <a class="action-link primary-download" href="{{ url_for('reform.excel_download', scope='all') }}">Download catalogue for editing →</a>
     <ol class="mini-steps">
-      <li>Edit the <strong>BOM</strong> sheet.</li>
+      <li>Find and edit the required BOM in the <strong>BOM</strong> sheet.</li>
       <li>Keep existing IDs and rows; use <strong>REMOVE</strong> to delete a component.</li>
       <li>Upload the completed file below.</li>
     </ol>
+    <p class="source-note">Catalogue source: {{ work.base.captured_at|cet_time }}.</p>
   </section>
 
   <section class="bom-choice">
@@ -63,13 +59,6 @@
   </div>
 </details>
 
-<details class="card secondary-downloads">
-  <summary>Advanced: download the full catalogue</summary>
-  <p>Downloads all Reform products and current BOMs. Use this only when you need to work with many BOMs in one file.</p>
-  <a class="action-link" href="{{ url_for('reform.excel_download', scope='all') }}">Download full catalogue →</a>
-  <p class="source-note">Source captured: {{ work.base.captured_at|cet_time }}. The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
-</details>
-
-<datalist id="exchange-products">{% for sku,p in work.target.products|dictsort %}{% if p.active and not p.get('read_only') %}<option value="{{ sku }}">{{ p.name }}</option>{% endif %}{% endfor %}</datalist>
+<p class="source-note">The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
 </section>
 
