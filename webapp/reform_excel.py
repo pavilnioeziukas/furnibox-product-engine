@@ -180,6 +180,14 @@ def text(value):
     return '' if value is None else str(value).strip()
 
 
+def zero_quantity(value):
+    """Return true only for an explicit numeric zero (including Excel text such as 0,0)."""
+    try:
+        return float(str(value).strip().replace(',', '.')) == 0
+    except (ValueError, TypeError):
+        return False
+
+
 def rows_from(wb, name):
     if name not in wb or wb[name].max_row > 20001 or wb[name].max_column > 20:
         raise ValueError(f'{name}: sheet is missing or exceeds the row/column limit.')
@@ -310,6 +318,10 @@ def apply_book(wb, record, reserved):
             if not old or (key, lid) in seen_lines:
                 raise ValueError(prefix + 'Line ID is invalid or duplicated for this BOM.')
             seen_lines.add((key, lid))
+        # For an existing component, zero quantity is an intuitive shorthand for removal.
+        # New component rows must still have a strictly positive quantity.
+        if old and zero_quantity(row[4]):
+            action = 'REMOVE'
         if old and action == 'KEEP' and code == old['sku'] and row[4] == old['quantity']:
             editable[key]['components'].append(copy.deepcopy(old))
             continue
@@ -416,3 +428,4 @@ def excel_upload():
         if wb:
             wb.close()
     return redirect(url_for('reform.index', view='files'))
+
