@@ -116,7 +116,7 @@ def add_vertical_bom(wb, record):
     sheet.sheet_properties.tabColor = '24496B'
     guide = wb['Instructions']
     guide['B5'] = 'Products / Non-BOM: edit names and categories, or add product cards. Supplier Code is an Odoo reference.'
-    guide['B7'] = 'BOM: each parent lists only its direct components. Edit Component SKU or Quantity. Use REMOVE to remove an existing component.'
+    guide['B7'] = 'BOM: each parent lists only its direct components. Edit Component SKU or Quantity. Use REMOVE or set Quantity to 0 to remove an existing component.'
     guide['B9'] = 'Two levels per block: cabinet → FPACK and HRD. Each FPACK or HRD has its own block of direct components. Shared sub-BOMs are listed once.'
     guide['B10'] = 'Choose categories and units from the lists on Products / Non-BOM. New components need a product card or an existing code from Catalogue.'
     guide.append(['Add a component', 'Append a BOM row: Parent BOM SKU, Component SKU, Quantity and KEEP. Leave Unit, Supplier Code, Note and hidden IDs blank.'])
@@ -196,3 +196,4 @@ def translate(wb, record):
     if seen != set(original):
         raise ValueError('BOM: exported rows are missing. Keep existing rows and use REMOVE.')
     return out
+
