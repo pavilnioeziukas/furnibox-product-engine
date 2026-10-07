@@ -127,8 +127,11 @@ def versions():
             submitted = unpack(item['payload'])
             delta = submitted['changes']
         revision_plan = (submitted.get('bom_revision_plan', {}) if submitted else bom_revision_plan(conn, delta))
-        bom_history = conn.execute('''SELECT product_code,revision,change_number,status,created
-            FROM reform_bom_revisions ORDER BY product_code,created DESC''').fetchall()
+        bom_history = conn.execute('''SELECT r.product_code,r.revision,r.change_number,r.status,r.created,
+                v.owner AS proposed_by
+            FROM reform_bom_revisions r
+            LEFT JOIN reform_versions v ON v.number=r.change_number
+            ORDER BY r.product_code,r.created DESC''').fetchall()
     return render_template('reform_versions.html', current=current, versions=rows, history=history,
                            delta=delta, revision=revision, approvals=approvals,
                            revision_plan=revision_plan, bom_history=bom_history,

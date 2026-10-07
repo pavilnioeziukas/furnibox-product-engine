@@ -40,6 +40,25 @@ def test_existing_bom_change_displays_next_plm_revision(setup):
     page = client.get('/reform/versions').text
     assert 'PLM changes and BOM revisions' in page
     assert 'A → B' in page
+    assert 'Proposed by:</strong> paul' in page
+
+
+def test_change_and_bom_revision_history_display_proposer(setup):
+    app, client = setup
+    existing = sample()['boms']['1']
+    changed = json.loads(json.dumps(existing))
+    changed['components'][0]['quantity'] = 3
+    delta = [{'kind': 'boms', 'key': '1', 'before': existing, 'after': changed}]
+    with app.app_context(), db() as conn:
+        schema(conn)
+        conn.execute('INSERT INTO reform_versions VALUES (?,?,?,?,?,?,?,?)',
+                     ('v11.1', 'paul', 'BOM update', 'implemented', None,
+                      '2026-10-07T08:00:00+00:00', '2026-10-07T08:00:00+00:00', ''))
+        record_bom_revisions(conn, 'v11.1', delta, bom_revision_plan(conn, delta))
+    page = client.get('/reform/versions').text
+    assert 'Proposed by paul' in page
+    assert 'Source: Odoo production baseline' in page
+    assert 'BOM update · Proposed by paul' in page
 
 
 def test_batch_submit_return_resubmit_and_admin_review(setup):

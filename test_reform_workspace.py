@@ -171,6 +171,15 @@ def test_login_rate_limit_and_admin_view(setup):
     assert 'Updated' in stranger.get('/reform/submissions/1/view').text
 
 
+def test_proposer_is_explicit_in_draft_and_submission_views(setup):
+    app, client = setup
+    post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
+    assert 'Proposed by:</strong> paul' in client.get('/reform/?view=review').text
+    post(client, 'submit', revision='1', confirm='yes')
+    assert 'Submitted by paul' in client.get('/reform/?view=sent').text
+    assert 'Submitted by:</strong> paul' in client.get('/reform/submissions/1/view').text
+
+
 def test_duplicate_pending_proposal_is_blocked(setup):
     app, client = setup
     post(client, 'save', action='product', sku='CAB-01', name='Updated', revision='0')
