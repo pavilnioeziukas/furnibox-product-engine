@@ -74,6 +74,14 @@ def test_removal_addition_and_row_reordering(setup):
     assert [(r['sku'], r['quantity']) for r in saved(app)['boms']['1']['components']] == [('PANEL-01', 2), ('HINGE-01', 9)]
 
 
+def test_zero_quantity_removes_existing_component(setup):
+    app, client = setup
+    b = export(client)
+    b['BOM']['C2'] = 0
+    assert 'Excel changes saved' in upload_book(client, b).text
+    assert [line['id'] for line in saved(app)['boms']['1']['components']] == ['12']
+
+
 def test_blank_template_new_product_bom_and_non_bom_cards(setup):
     app, client = setup
     data = sample()
@@ -94,7 +102,7 @@ def test_blank_template_new_product_bom_and_non_bom_cards(setup):
 
 @pytest.mark.parametrize('cell,value,error', [
     ('A2', 'OTHER', 'reference field'), ('I2', 'fake', 'Line ID is invalid'),
-    ('C2', 0, 'greater than zero'), ('C2', '=1+1', 'replace formulas'),
+    ('C2', -1, 'greater than zero'), ('C2', '=1+1', 'replace formulas'),
     ('B2', 'APACK-PRIVATE', 'component does not exist'), ('B2', 'CAB-01', 'cycle'),
 ])
 def test_invalid_uploads_are_atomic(setup, cell, value, error):
@@ -122,3 +130,4 @@ def test_missing_duplicate_rows_and_read_only_bom(setup):
     assert 'No changes detected' in upload_book(client, b).text
     b['BOM']['C2'] = 9
     assert 'read-only' in upload_book(client, b).text
+
