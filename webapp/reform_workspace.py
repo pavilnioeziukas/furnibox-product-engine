@@ -194,11 +194,13 @@ def protect():
         abort(400, 'Your session has changed. Refresh the page.')
     if request.endpoint != 'reform.login' and not (session.get('reform_user') or admin()):
         return redirect(url_for('reform.login'))
-    if request.method == 'POST' and request.endpoint in ('reform.save', 'reform.excel_upload', 'reform.discard'):
+    if request.method == 'POST' and request.endpoint in ('reform.save', 'reform.excel_upload'):
         from webapp.reform_versions import schema, active
         with db() as conn:
             schema(conn)
             current = active(conn)
+            if not current:
+                abort(409, 'Open a version draft before adding changes.')
             if current and (current['owner'] != owner() or current['status'] not in ('draft', 'returned')):
                 abort(409, 'The current version is locked for Furnibox review. Open Versions to see its status.')
 
@@ -242,8 +244,9 @@ def index():
         base = baseline(conn)
         work, revision = draft(conn) if base else (None, 0)
         delta = changes(work['base'], work['target']) if work else []
-        from webapp.reform_versions import schema, released_revisions
+        from webapp.reform_versions import schema, released_revisions, active
         schema(conn)
+        current_version = active(conn)
         bom_revisions = released_revisions(conn)
         rows = conn.execute('SELECT id,owner,created FROM submissions ' +
             ('' if admin() else 'WHERE owner=? ') + 'ORDER BY id DESC LIMIT 50', () if admin() else (owner(),)).fetchall()
@@ -293,7 +296,8 @@ def index():
         if selected not in target['products']:
             selected = ''
     return render_template('reform_catalogue.html', work=work, revision=revision,
-        delta=delta, submissions=rows, is_admin=admin(),
+        delta=delta, submissions=rows, is_admin=admin(), current_version=current_version,
+        current_user=owner(),
         query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
         usage=usage, counts=counts, page=page, pages=pages, total=total,
         bom_rows=bom_rows, selected_bom=selected_bom, intent=intent)

@@ -80,6 +80,19 @@ def active(conn):
     return conn.execute("SELECT * FROM reform_versions WHERE status != 'implemented' ORDER BY created LIMIT 1").fetchone()
 
 
+def editable_version(conn):
+    """Require an open version owned by the current Reform user before file exchange."""
+    schema(conn)
+    row = active(conn)
+    if not row:
+        raise ValueError('Open a version draft before downloading or uploading changes.')
+    if row['owner'] != owner():
+        raise ValueError(f"Version {row['number']} is being prepared by {row['owner']}. You can review it under Versions, but only its owner can edit it.")
+    if row['status'] not in ('draft', 'returned'):
+        raise ValueError(f"Version {row['number']} is locked for review and cannot accept more changes.")
+    return row
+
+
 def event(conn, number, status, note=''):
     conn.execute('INSERT INTO reform_version_events(number,actor,status,note,created) VALUES (?,?,?,?,?)',
                  (number, owner(), status, note, now()))

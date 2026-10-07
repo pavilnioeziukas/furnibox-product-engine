@@ -38,8 +38,17 @@ def setup(monkeypatch, tmp_path):
 
 
 def post(client, path, **data):
+    skip_version = data.pop('_skip_version', False)
     with client.session_transaction() as sess:
         token = sess['reform_csrf']
+    if path == 'save' and not skip_version:
+        from webapp.reform_versions import schema, active
+        with client.application.app_context(), db() as conn:
+            schema(conn)
+            version = active(conn)
+        if not version:
+            client.post('/reform/versions/save', data={'csrf': token, 'number': 'v1.0',
+                        'description': 'Test version', 'revision': data.get('revision', '0')})
     if path == 'submit' and 'version' not in data:
         from webapp.reform_versions import schema, active
         with client.application.app_context(), db() as conn:

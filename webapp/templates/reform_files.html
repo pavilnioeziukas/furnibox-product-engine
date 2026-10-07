@@ -2,8 +2,17 @@
 <div class="task-intro">
   <div class="eyebrow">EXCEL EXCHANGE</div>
   <h2>Manage BOMs in Excel</h2>
-  <p>Choose one of the two main tasks. Uploading the completed file creates a draft for review — it does not change Odoo automatically.</p>
+  <p>Choose one of the two main tasks. Uploading the completed file adds changes to the open version — it does not change Odoo automatically.</p>
 </div>
+
+{% if not current_version %}
+<section class="card production-gate"><h3>1. Open a version first</h3><p>Create a version number and description before downloading or uploading an Excel file. All proposed changes will then belong to that version and be visible to its reviewers.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Open a version draft →</a></section>
+{% elif current_version.owner != current_user %}
+<section class="card production-gate"><h3>Version {{ current_version.number }} is open</h3><p><strong>Proposed by:</strong> {{ current_version.owner }}. You can review the complete change package, but only its owner can add files or edit this version.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Review this version →</a></section>
+{% elif current_version.status not in ['draft', 'returned'] %}
+<section class="card production-gate"><h3>Version {{ current_version.number }} is locked</h3><p>This version has already been submitted for review and cannot accept more changes.</p><a class="action-link" href="{{ url_for('reform.versions') }}">View this version →</a></section>
+{% else %}
+<div class="notice"><strong>Open version:</strong> {{ current_version.number }} · Proposed by {{ current_version.owner }}. Downloads and uploads below are added to this version.</div>
 
 <div class="bom-choice-grid">
   <section class="bom-choice recommended">
@@ -60,5 +69,6 @@
 </details>
 
 <p class="source-note">The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
+{% endif %}
 </section>
 

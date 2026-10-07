@@ -61,10 +61,27 @@ def test_change_and_bom_revision_history_display_proposer(setup):
     assert 'BOM update · Proposed by paul' in page
 
 
+def test_other_reform_user_can_review_but_not_edit_open_version(setup):
+    app, owner_client = setup
+    post(owner_client, 'versions/save', number='v11.1', description='Shared review', revision='0')
+    post(owner_client, 'save', action='product', sku='CAB-01', name='Updated cabinet', revision='0')
+    reviewer = app.test_client()
+    reviewer.get('/reform/login')
+    with reviewer.session_transaction() as sess:
+        token = sess['reform_csrf']
+    reviewer.post('/reform/login', data={'csrf': token, 'username': 'other', 'password': 'other-password'})
+    version_page = reviewer.get('/reform/versions').text
+    assert 'Proposed by:</strong> paul' in version_page
+    assert 'Updated cabinet' in version_page
+    files_page = reviewer.get('/reform/?view=files').text
+    assert 'only its owner can add files' in files_page
+    assert 'Review this version' in files_page
+
+
 def test_batch_submit_return_resubmit_and_admin_review(setup):
     app, client = setup
+    assert 'Version draft saved' in post(client,'versions/save',number='v11.1',description='Cabinet update',revision='0').text
     post(client,'save',action='product',new='1',sku='NEW-ONE',name='One',uom='vnt.',revision='0')
-    assert 'Version draft saved' in post(client,'versions/save',number='v11.1',description='Cabinet update',revision='1').text
     post(client,'save',action='product',new='1',sku='NEW-TWO',name='Two',uom='vnt.',revision='1')
     assert '2 changed records' in client.get('/reform/versions').text
     assert 'submitted' in post(client,'submit',version='v11.1',revision='2',confirm='yes').text
@@ -109,17 +126,17 @@ def test_submit_requires_explicit_version_and_stale_draft_rejected(setup):
         token=sess['reform_csrf']
     response=client.post('/reform/submit',data={'csrf':token,'confirm':'yes','revision':'0'},follow_redirects=True)
     assert 'Save and review a version draft' in response.text
+    assert post(client,'save',action='product',new='1',sku='NEW-ONE',name='One',uom='vnt.',revision='0',_skip_version=True).status_code==409
+    assert post(client,'versions/save',number='v11.1',description='Update',revision='0').status_code==200
     post(client,'save',action='product',new='1',sku='NEW-ONE',name='One',uom='vnt.',revision='0')
-    assert post(client,'versions/save',number='v11.1',description='Update',revision='0').status_code==409
-    assert post(client,'versions/save',number='v11.1',description='Update',revision='1').status_code==200
     assert post(client,'submit',version='v11.1',revision='0',confirm='yes').status_code==409
 
 
 def test_two_distinct_reform_users_must_approve_same_revision(setup):
     app, owner_client = setup
     app.config['REFORM_APPROVALS_REQUIRED'] = 2
+    post(owner_client, 'versions/save', number='v11.1', description='Two-person review', revision='0')
     post(owner_client, 'save', action='product', new='1', sku='NEW-ONE', name='One', uom='vnt.', revision='0')
-    post(owner_client, 'versions/save', number='v11.1', description='Two-person review', revision='1')
 
     first = post(owner_client, 'submit', version='v11.1', revision='1', confirm='yes')
     assert '1 more Reform representative' in first.text
@@ -138,6 +155,10 @@ def test_two_distinct_reform_users_must_approve_same_revision(setup):
     page = second_client.get('/reform/versions')
     assert '1 of 2 Reform approvals recorded' in page.text
     assert 'NEW-ONE' in page.text
+    assert 'Proposed by:</strong> paul' in page.text
+    files = second_client.get('/reform/?view=files')
+    assert 'Proposed by:</strong> paul' in files.text
+    assert 'only its owner can add files' in files.text
     final = post(second_client, 'submit', version='v11.1', revision='1', confirm='yes')
     assert 'submitted to Furnibox' in final.text
     with app.app_context(), db() as conn:

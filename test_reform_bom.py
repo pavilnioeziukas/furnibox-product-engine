@@ -3,12 +3,15 @@ import io
 
 import pytest
 from openpyxl import load_workbook
-from test_reform_workspace import setup, sample
+from test_reform_workspace import setup, sample, post
 from test_reform_excel import upload_book
 from webapp.reform_workspace import db, baseline, pack, unpack
 
 
 def export(client, query='scope=all'):
+    page = client.get('/reform/versions')
+    if 'Open a version draft' in page.text:
+        post(client, 'versions/save', number='v1.0', description='BOM test version', revision='0')
     response = client.get('/reform/excel/download?' + query)
     assert response.status_code == 200
     return load_workbook(io.BytesIO(response.data))

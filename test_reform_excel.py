@@ -10,9 +10,23 @@ from webapp.reform_workspace import db, baseline, unpack
 
 
 def export_book(client, product='CAB-01'):
+    page = client.get('/reform/versions')
+    if 'Open a version draft' in page.text:
+        post(client, 'versions/save', number='v1.0', description='Excel test version', revision='0')
     response = client.get('/reform/excel/download', query_string={'product': product, 'layout': 'legacy'})
     assert response.status_code == 200
     return load_workbook(io.BytesIO(response.data))
+
+
+def test_excel_exchange_requires_open_version(setup):
+    app, client = setup
+    response = client.get('/reform/excel/download', follow_redirects=True)
+    assert 'Open a version draft before downloading or uploading changes.' in response.text
+    assert 'Open a version first' in client.get('/reform/?view=files').text
+    post(client, 'versions/save', number='v1.0', description='Catalogue update', revision='0')
+    page = client.get('/reform/?view=files')
+    assert 'Open version:</strong> v1.0' in page.text
+    assert client.get('/reform/excel/download').status_code == 200
 
 
 def upload_book(client, wb):
@@ -88,7 +102,7 @@ def test_stale_source_and_other_user(setup):
     book = export_book(client)
     with client.session_transaction() as sess:
         sess['reform_user'] = 'other'
-    assert 'Export not found for your account' in upload_book(client, book).text
+    assert 'only its owner can edit it' in upload_book(client, book).text
     with client.session_transaction() as sess:
         sess['reform_user'] = 'paul'
     with app.app_context(), db() as conn:
@@ -137,6 +151,8 @@ def test_nested_export_and_row_reordering(setup):
 def test_upload_requires_csrf_and_file_page_renders(setup):
     app, client = setup
     assert client.post('/reform/excel/upload', data={}).status_code == 400
+    assert 'Open a version first' in client.get('/reform/?view=files').text
+    post(client, 'versions/save', number='v1.0', description='Excel exchange', revision='0')
     assert 'Upload and compare' in client.get('/reform/?view=files').text
 
 def test_full_catalogue_roundtrip_and_read_only_bom(setup):
@@ -147,6 +163,7 @@ def test_full_catalogue_roundtrip_and_read_only_bom(setup):
         data['boms']['2'] = copy.deepcopy(data['boms']['1'])
         data['boms']['2'].update(id='2', sku='UNUSED', read_only='Internal assembly')
         conn.execute('UPDATE state SET payload=? WHERE id=1', (json.dumps(data),))
+    post(client, 'versions/save', number='v1.0', description='Full catalogue', revision='0')
     response = client.get('/reform/excel/download?scope=all&layout=legacy')
     book = load_workbook(io.BytesIO(response.data))
     assert book['Products'].max_row == 5

@@ -363,6 +363,8 @@ def apply_book(wb, record, reserved):
 def excel_download():
     try:
         with db() as conn:
+            from webapp.reform_versions import editable_version
+            editable_version(conn)
             work, revision = draft(conn)
             if digest(work['base']) != digest(baseline(conn)):
                 raise ValueError('Your draft uses an older source. Resolve it before downloading an Excel file.')
@@ -395,6 +397,8 @@ def excel_upload():
             raise ValueError('This is not an engine export. Download a template first.')
         token = text(wb['_Exchange']['B1'].value)
         with db() as conn:
+            from webapp.reform_versions import editable_version
+            editable_version(conn)
             exchange_table(conn)
             conn.execute('BEGIN IMMEDIATE')
             export = conn.execute('SELECT * FROM file_exports WHERE id=? AND owner=?', (token, owner())).fetchone()
