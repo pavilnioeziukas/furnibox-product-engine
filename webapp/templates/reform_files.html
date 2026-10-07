@@ -1,11 +1,75 @@
-<section class="card">
-<h2>Download, edit and return an Excel file</h2>
-<p>Use the same file to update existing BOMs or add new products and BOMs. Uploading creates a draft for review.</p>
-<section class="card"><h3>Download everything</h3><p>All Reform products and current BOMs, with a vertical BOM sheet and a separate Non-BOM sheet. Each BOM lists only its parent and direct components. Prices, APACK and codes ending in -A are excluded.</p><a class="action-link" href="{{ url_for('reform.excel_download', scope='all') }}">Download full catalogue →</a><p>Source captured: {{ work.base.captured_at|cet_time }}. Records listed in the Read-only sheet must remain unchanged.</p></section><div class="task-grid">
-<section><h3>1. Download an existing BOM</h3><form method="get" action="{{ url_for('reform.excel_download') }}"><label>Existing product code<input name="product" list="exchange-products" required placeholder="Select a product, e.g. EUB-C-CAB02-BAS001"></label><p>The file contains product cards and separate blocks for the selected BOM and its sub-BOMs.</p><button>Download selected product and BOM</button></form><hr><h3>Create new products and BOMs</h3><p>This template starts with empty BOM, Products, Non-BOM and BOMs sheets for you to fill in.</p><a class="action-link" href="{{ url_for('reform.excel_download') }}">Download blank template for new products and BOMs →</a></section>
-<section><h3>2. Edit in Excel</h3><p><strong>BOM:</strong> edit direct Component SKU and Quantity, add component rows, or mark REMOVE. A cabinet lists FPACK and HRD; each FPACK or HRD has its own BOM block. Shared sub-BOMs appear once, and their changes affect every parent that uses them.</p><p><strong>Products / Non-BOM:</strong> product cards with / without a BOM. Supplier Code shows the Odoo supplier reference.</p><p><strong>BOMs:</strong> assembly definitions and output quantities; add new BOMs with keys such as NEW-1.</p><p>Keep existing IDs and rows. Categories and units are available in dropdown lists. The hierarchical MAP is used for Furnibox pricing; use the vertical BOM sheet for changes.</p></section>
-<section><h3>3. Upload and review</h3><form method="post" enctype="multipart/form-data" action="{{ url_for('reform.excel_upload') }}">{{ fields() }}<label>Completed Excel file<input type="file" name="file" accept=".xlsx" required></label><p>The engine checks the file version and adds the changes to your draft. Submit the complete catalogue version from Versions when ready.</p><button>Upload and compare</button></form></section>
+<section class="exchange-page">
+<div class="task-intro">
+  <div class="eyebrow">EXCEL EXCHANGE</div>
+  <h2>Manage BOMs in Excel</h2>
+  <p>Choose one of the two main tasks. Uploading the completed file creates a draft for review — it does not change Odoo automatically.</p>
 </div>
-<p>The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
+
+<div class="bom-choice-grid">
+  <section class="bom-choice recommended">
+    <div class="choice-label">RECOMMENDED</div>
+    <h3>Update an existing BOM</h3>
+    <p>Download one product with its BOMs, change component codes or quantities in Excel, then return the same file.</p>
+    <form method="get" action="{{ url_for('reform.excel_download') }}">
+      <label>Product code
+        <input name="product" list="exchange-products" required placeholder="Select a product, e.g. EUB-C-CAB02-BAS001">
+      </label>
+      <button>Download BOM for editing</button>
+    </form>
+    <ol class="mini-steps">
+      <li>Edit the <strong>BOM</strong> sheet.</li>
+      <li>Keep existing IDs and rows; use <strong>REMOVE</strong> to delete a component.</li>
+      <li>Upload the completed file below.</li>
+    </ol>
+  </section>
+
+  <section class="bom-choice">
+    <div class="choice-label">NEW BOM</div>
+    <h3>Add a new BOM</h3>
+    <p>Start with an empty template. Use it to add a BOM for an existing product or create the required product cards at the same time.</p>
+    <a class="action-link" href="{{ url_for('reform.excel_download') }}">Download blank BOM template →</a>
+    <ol class="mini-steps">
+      <li>Add a row in <strong>BOMs</strong> and use a key beginning with <strong>NEW-</strong>.</li>
+      <li>Add its component rows in the <strong>BOM</strong> sheet.</li>
+      <li>Upload the completed file below.</li>
+    </ol>
+  </section>
+</div>
+
+<section class="card upload-card">
+  <div>
+    <div class="choice-label">FINAL STEP</div>
+    <h3>Upload and review</h3>
+    <p>The engine validates the file and shows the proposed changes before the complete catalogue version is submitted to Furnibox.</p>
+  </div>
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('reform.excel_upload') }}">
+    {{ fields() }}
+    <label>Completed Excel file<input type="file" name="file" accept=".xlsx" required></label>
+    <button>Upload and compare</button>
+  </form>
+</section>
+
+<details class="card template-guide">
+  <summary>What is in the Excel template?</summary>
+  <div class="sheet-guide">
+    <div><strong>BOM</strong><span>The main working sheet: component codes, quantities and removals for each BOM.</span></div>
+    <div><strong>BOMs</strong><span>The BOM register: BOM key, product code, BOM reference and output quantity.</span></div>
+    <div><strong>Products</strong><span>Product cards for products that have a BOM. Add a card here only when the product is new.</span></div>
+    <div><strong>Non-BOM</strong><span>Product cards for components or products that do not have their own BOM.</span></div>
+    <div><strong>Instructions</strong><span>Detailed editing rules and the return process.</span></div>
+    <div><strong>Read-only</strong><span>Records protected from changes. Leave this sheet unchanged.</span></div>
+    <div><strong>Catalogue</strong><span>A lookup list of available product and component codes.</span></div>
+    <div><strong>Lists</strong><span>Allowed categories and units used by the dropdown fields.</span></div>
+  </div>
+</details>
+
+<details class="card secondary-downloads">
+  <summary>Advanced: download the full catalogue</summary>
+  <p>Downloads all Reform products and current BOMs. Use this only when you need to work with many BOMs in one file.</p>
+  <a class="action-link" href="{{ url_for('reform.excel_download', scope='all') }}">Download full catalogue →</a>
+  <p class="source-note">Source captured: {{ work.base.captured_at|cet_time }}. The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
+</details>
+
 <datalist id="exchange-products">{% for sku,p in work.target.products|dictsort %}{% if p.active and not p.get('read_only') %}<option value="{{ sku }}">{{ p.name }}</option>{% endif %}{% endfor %}</datalist>
 </section>
+
