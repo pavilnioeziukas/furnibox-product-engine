@@ -222,6 +222,21 @@ def test_home_actions_and_specific_bom_edit_flow(setup):
     assert 'PANEL-01 — 3.0' in re.sub(r'<[^>]+>', '', response.text)
 
 
+def test_excel_exchange_has_two_clear_bom_tasks_and_template_guide(setup):
+    app, client = setup
+    page = client.get('/reform/?view=files').text
+    assert 'Update an existing BOM' in page
+    assert 'Add a new BOM' in page
+    assert 'RECOMMENDED' in page
+    assert 'Download BOM for editing' in page
+    assert 'Download blank BOM template' in page
+    assert 'Upload and review' in page
+    assert 'What is in the Excel template?' in page
+    assert 'The main working sheet: component codes' in page
+    assert 'The BOM register: BOM key, product code' in page
+    assert 'Advanced: download the full catalogue' in page
+
+
 def test_edit_screen_does_not_mix_two_boms(setup):
     app, client = setup
     data = sample()
@@ -408,3 +423,4 @@ def test_reform_source_time_is_cet(setup):
     response = client.get('/reform/?view=review')
     assert b'Retrieved 2026-09-28 11:00 CET' in response.data
     assert b' UTC' not in response.data
+
