@@ -14,7 +14,66 @@ def schema(conn):
         status TEXT NOT NULL, note TEXT NOT NULL, created TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS reform_version_approvals (
         number TEXT NOT NULL, actor TEXT NOT NULL, revision INTEGER NOT NULL,
-        created TEXT NOT NULL, PRIMARY KEY(number, actor));''')
+        created TEXT NOT NULL, PRIMARY KEY(number, actor));
+        CREATE TABLE IF NOT EXISTS reform_bom_revisions (
+        product_code TEXT NOT NULL, revision TEXT NOT NULL, bom_id TEXT NOT NULL,
+        change_number TEXT NOT NULL, status TEXT NOT NULL, snapshot BLOB NOT NULL,
+        created TEXT NOT NULL, PRIMARY KEY(product_code, revision));''')
+
+
+def next_revision(value):
+    """Return the next alphabetic PLM revision: A..Z, AA..AZ, BA..."""
+    if not value:
+        return 'A'
+    number = 0
+    for char in value.upper():
+        if not ('A' <= char <= 'Z'):
+            raise ValueError('BOM revision must contain letters only.')
+        number = number * 26 + ord(char) - 64
+    number += 1
+    result = ''
+    while number:
+        number, remainder = divmod(number - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
+def released_revisions(conn):
+    rows = conn.execute("SELECT product_code,revision FROM reform_bom_revisions WHERE status='current' ORDER BY created").fetchall()
+    return {row['product_code']: row['revision'] for row in rows}
+
+
+def bom_revision_plan(conn, delta):
+    """Describe immutable current/proposed BOM revisions for a change package."""
+    released = released_revisions(conn)
+    result = {}
+    for change in delta:
+        if change['kind'] != 'boms':
+            continue
+        sku = change['after']['sku']
+        current = released.get(sku, 'A' if change['before'] else None)
+        result[change['key']] = {'product_code': sku, 'current': current,
+                                 'proposed': next_revision(current) if change['before'] else 'A'}
+    return result
+
+
+def record_bom_revisions(conn, change_number, delta, plan):
+    """Freeze old and newly implemented BOM states without overwriting history."""
+    created = now()
+    for change in delta:
+        if change['kind'] != 'boms':
+            continue
+        item = plan[change['key']]
+        sku, before, after = item['product_code'], change['before'], change['after']
+        if before and not conn.execute(
+                'SELECT 1 FROM reform_bom_revisions WHERE product_code=?', (sku,)).fetchone():
+            conn.execute('INSERT INTO reform_bom_revisions VALUES (?,?,?,?,?,?,?)',
+                         (sku, item['current'], str(before['id']), 'Odoo baseline', 'superseded',
+                          pack(before), created))
+        conn.execute("UPDATE reform_bom_revisions SET status='superseded' WHERE product_code=?", (sku,))
+        conn.execute('INSERT INTO reform_bom_revisions VALUES (?,?,?,?,?,?,?)',
+                     (sku, item['proposed'], str(after['id']), change_number, 'current',
+                      pack(after), created))
 
 
 def active(conn):
@@ -62,11 +121,17 @@ def versions():
             approvals = conn.execute(
                 'SELECT actor,created FROM reform_version_approvals WHERE number=? AND revision=? ORDER BY created',
                 (current['number'], revision)).fetchall()
+        submitted = {}
         if current and current['status'] in ('submitted', 'accepted'):
             item = conn.execute('SELECT payload FROM submissions WHERE id=?', (current['submission_id'],)).fetchone()
-            delta = unpack(item['payload'])['changes']
+            submitted = unpack(item['payload'])
+            delta = submitted['changes']
+        revision_plan = (submitted.get('bom_revision_plan', {}) if submitted else bom_revision_plan(conn, delta))
+        bom_history = conn.execute('''SELECT product_code,revision,change_number,status,created
+            FROM reform_bom_revisions ORDER BY product_code,created DESC''').fetchall()
     return render_template('reform_versions.html', current=current, versions=rows, history=history,
                            delta=delta, revision=revision, approvals=approvals,
+                           revision_plan=revision_plan, bom_history=bom_history,
                            approvals_required=current_app.config.get('REFORM_APPROVALS_REQUIRED', 2),
                            is_admin=admin(), username=owner())
 
@@ -132,9 +197,12 @@ def review_version():
                 abort(409, 'Refresh the catalogue from Odoo after applying the version before marking it implemented.')
             if not reflected_in_source(baseline(conn), submitted['changes']):
                 abort(409, 'The refreshed Odoo catalogue does not yet contain all changes in this version.')
+            record_bom_revisions(conn, row['number'], submitted['changes'],
+                                 submitted.get('bom_revision_plan') or bom_revision_plan(conn, submitted['changes']))
         else:
             abort(409, 'Invalid status transition.')
         conn.execute('UPDATE reform_versions SET status=?,note=?,updated=? WHERE number=?', (action, note, now(), row['number']))
         event(conn, row['number'], action, note)
     flash('Version status updated. This action does not write to Odoo.')
     return redirect(url_for('reform.versions'))
+
