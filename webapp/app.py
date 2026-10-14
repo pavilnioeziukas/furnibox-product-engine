@@ -234,6 +234,17 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
             "{output_dir}",
         ],
     },
+    "stock_by_exact_location": {
+        "title": "Generuoti SKU likučius kiekvienoje lokacijoje",
+        "description": (
+            "Viena eilutė kiekvienai SKU ir konkrečios vidinės lokacijos porai: "
+            "faktinis, rezervuotas ir laisvas kiekis. Sublokacijos nesujungiamos."
+        ),
+        "module": "run_stock_by_exact_location",
+        "args": ["--output-dir", "{output_dir}"],
+        "collect_changed_outputs": False,
+        "requires_upload": False,
+    },
     "stock_by_location": {
         "title": "Generuoti SKU likučius pagal lokaciją",
         "description": (
