@@ -254,10 +254,16 @@ def read_odoo(client, roots=None):
 def protect():
     if session.get('reform_user') and session['reform_user'] not in current_app.config.get('REFORM_USERS', {}):
         session.clear()
+    if session.get('reform_user'):
+        from webapp.reform_passwords import credential
+        with db() as conn:
+            _, version = credential(conn, session['reform_user'], current_app.config['REFORM_USERS'][session['reform_user']])
+        if session.get('reform_password_version', 'initial') != version:
+            session.clear()
     token = session.setdefault('reform_csrf', secrets.token_urlsafe(32))
     if request.method == 'POST' and not secrets.compare_digest(request.form.get('csrf', ''), token):
         abort(400, 'Your session has changed. Refresh the page.')
-    if request.endpoint != 'reform.login' and not (session.get('reform_user') or admin()):
+    if request.endpoint not in ('reform.login', 'reform.forgot_password', 'reform.reset_password') and not (session.get('reform_user') or admin()):
         return redirect(url_for('reform.login'))
     if request.method == 'POST' and request.endpoint in ('reform.save', 'reform.excel_upload'):
         from webapp.reform_versions import schema, active
@@ -283,11 +289,13 @@ def login():
             row = conn.execute('SELECT * FROM attempts WHERE identity=?', (identity,)).fetchone()
             locked = row and row['count'] >= 5 and time.time() - row['started'] < 300
             configured_user = users.get(username)
-            password_hash = configured_user.get('password_hash') if isinstance(configured_user, dict) else configured_user
+            from webapp.reform_passwords import credential
+            password_hash, version = credential(conn, username, configured_user) if configured_user is not None else (None, 'initial')
             if not locked and isinstance(password_hash, str) and check_password_hash(password_hash, request.form.get('password', '')):
                 conn.execute('DELETE FROM attempts WHERE identity=?', (identity,))
                 session.clear()
                 session['reform_user'] = username
+                session['reform_password_version'] = version
                 return redirect(url_for('reform.index'))
             if not locked:
                 count = row['count'] + 1 if row and time.time() - row['started'] < 300 else 1
@@ -295,6 +303,18 @@ def login():
                 conn.execute('INSERT OR REPLACE INTO attempts VALUES (?,?,?)', (identity, count, started))
             error = 'Sign-in failed. Check your details or try again in 5 minutes.'
     return render_template('reform_login.html', error=error)
+
+
+@reform.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    from webapp.reform_passwords import forgot
+    return forgot()
+
+
+@reform.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    from webapp.reform_passwords import reset
+    return reset(token)
 
 
 @reform.post('/logout')
