@@ -1,4 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reform · Sign in</title><link rel="stylesheet" href="{{ url_for('static', filename='reform.css') }}"></head>
 <body><main class="login-card"><div class="eyebrow">FURNIBOX / PRODUCT ENGINE</div><h1>Reform workspace</h1><p>Products, bills of materials and your proposed changes.</p>
 {% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+{% if request.args.get('password_reset') == '1' %}<p class="notice">Your password has been updated. Sign in with your new password.</p>{% endif %}
+<p><a href="{{ url_for('reform.forgot_password') }}">Forgot your password?</a></p>
 <form method="post"><input type="hidden" name="csrf" value="{{ session.reform_csrf }}"><label>Username<input name="username" required autocomplete="username" maxlength="100"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form></main></body></html>
