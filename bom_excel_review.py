@@ -87,7 +87,7 @@ def operation(row, *, baseline=False):
         raise ValueError('Operation name and work center are required')
     return {'name': text(row['Operacija']), 'sequence': integer(row['Eiliškumas']),
             'workcenter': text(row['Darbo centras']),
-            'minutes': str(minutes(row['Laikas (min:sek)'], baseline=baseline))}
+            'minutes': str(minutes(row['Laikas (min:sek)'], baseline=baseline).normalize())}
 
 
 def review_rows(baseline, returned):
