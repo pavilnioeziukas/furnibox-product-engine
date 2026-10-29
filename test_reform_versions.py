@@ -81,8 +81,8 @@ def test_other_reform_user_can_review_but_not_edit_open_version(setup):
 def test_batch_submit_return_resubmit_and_admin_review(setup):
     app, client = setup
     assert 'Version draft saved' in post(client,'versions/save',number='v11.1',description='Cabinet update',revision='0').text
-    post(client,'save',action='product',new='1',sku='NEW-ONE',name='One',uom='vnt.',revision='0')
-    post(client,'save',action='product',new='1',sku='NEW-TWO',name='Two',uom='vnt.',revision='1')
+    post(client,'save',action='product',sku='CAB-01',name='One',uom='vnt.',revision='0')
+    post(client,'save',action='product',sku='PANEL-01',name='Two',uom='vnt.',revision='1')
     assert '2 changed records' in client.get('/reform/versions').text
     assert 'submitted' in post(client,'submit',version='v11.1',revision='2',confirm='yes').text
     with app.app_context(), db() as conn:
@@ -100,7 +100,7 @@ def test_batch_submit_return_resubmit_and_admin_review(setup):
     response = post(admin,'versions/review',number='v11.1',submission_id=first['id'],action='returned',note='Correct product name')
     assert response.status_code == 200
     assert 'returned' in client.get('/reform/versions').text
-    post(client,'save',action='product',sku='NEW-ONE',name='Corrected',revision='3')
+    post(client,'save',action='product',sku='CAB-01',name='Corrected',revision='3')
     post(client,'submit',version='v11.1',revision='4',confirm='yes')
     with app.app_context(), db() as conn:
         assert conn.execute('SELECT payload FROM submissions WHERE id=?',(first['id'],)).fetchone()[0] == original
@@ -126,9 +126,9 @@ def test_submit_requires_explicit_version_and_stale_draft_rejected(setup):
         token=sess['reform_csrf']
     response=client.post('/reform/submit',data={'csrf':token,'confirm':'yes','revision':'0'},follow_redirects=True)
     assert 'Save and review a version draft' in response.text
-    assert post(client,'save',action='product',new='1',sku='NEW-ONE',name='One',uom='vnt.',revision='0',_skip_version=True).status_code==409
+    assert post(client,'save',action='product',sku='CAB-01',name='One',uom='vnt.',revision='0',_skip_version=True).status_code==409
     assert post(client,'versions/save',number='v11.1',description='Update',revision='0').status_code==200
-    post(client,'save',action='product',new='1',sku='NEW-ONE',name='One',uom='vnt.',revision='0')
+    post(client,'save',action='product',sku='CAB-01',name='One',uom='vnt.',revision='0')
     assert post(client,'submit',version='v11.1',revision='0',confirm='yes').status_code==409
 
 
@@ -136,7 +136,7 @@ def test_two_distinct_reform_users_must_approve_same_revision(setup):
     app, owner_client = setup
     app.config['REFORM_APPROVALS_REQUIRED'] = 2
     post(owner_client, 'versions/save', number='v11.1', description='Two-person review', revision='0')
-    post(owner_client, 'save', action='product', new='1', sku='NEW-ONE', name='One', uom='vnt.', revision='0')
+    post(owner_client, 'save', action='product', sku='CAB-01', name='One', uom='vnt.', revision='0')
 
     first = post(owner_client, 'submit', version='v11.1', revision='1', confirm='yes')
     assert '1 more Reform representative' in first.text
@@ -154,7 +154,7 @@ def test_two_distinct_reform_users_must_approve_same_revision(setup):
         'csrf': token, 'username': 'other', 'password': 'other-password'}).status_code == 302
     page = second_client.get('/reform/versions')
     assert '1 of 2 Reform approvals recorded' in page.text
-    assert 'NEW-ONE' in page.text
+    assert 'CAB-01' in page.text
     assert 'Proposed by:</strong> paul' in page.text
     files = second_client.get('/reform/?view=files')
     assert 'Proposed by:</strong> paul' in files.text

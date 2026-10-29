@@ -447,6 +447,8 @@ def excel_upload():
             if target == work['target']:
                 flash('No changes detected. Your draft is unchanged.')
             else:
+                from webapp.reform_versions import invalidate_approvals
+                invalidate_approvals(conn)
                 work['target'] = target
                 conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision+1, pack(work)))
                 flash('Excel changes saved to your draft. Review Current / Proposed below, then open Versions to submit the complete version.')
