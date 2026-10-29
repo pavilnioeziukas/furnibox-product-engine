@@ -569,6 +569,8 @@ def save():
                 target['boms'][bid] = bom
             else:
                 abort(400)
+            from webapp.reform_versions import invalidate_approvals
+            invalidate_approvals(conn)
             # Drafts may temporarily contain unresolved retirements; check at confirmation.
             conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision + 1, pack(work)))
         flash('Draft saved. Review your changes before confirming.')
@@ -580,11 +582,14 @@ def save():
 
 @reform.post('/discard')
 def discard():
+    from webapp.reform_versions import schema, invalidate_approvals
     with db() as conn:
+        schema(conn)
         conn.execute('BEGIN IMMEDIATE')
         _, revision = draft(conn)
         if str(revision) != request.form.get('revision'):
             abort(409)
+        invalidate_approvals(conn)
         conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
     flash('Draft discarded. The latest available data is now shown.')
     return redirect(url_for('reform.index'))
@@ -592,7 +597,7 @@ def discard():
 
 @reform.post('/submit')
 def submit():
-    from webapp.reform_versions import schema, active, event, bom_revision_plan
+    from webapp.reform_versions import schema, active, event, bom_revision_plan, approval_digest
     try:
         with db() as conn:
             schema(conn)
@@ -611,6 +616,9 @@ def submit():
                 abort(409)
             if digest(work['base']) != digest(baseline(conn)):
                 raise ValueError('The source data has changed. Download your draft and start from the latest data.')
+            package_digest = approval_digest(version, work, revision)
+            if not secrets.compare_digest(request.form.get('package_digest', ''), package_digest):
+                abort(409, 'The package changed. Refresh Versions and review the latest changes before approving.')
             delta = changes(work['base'], work['target'])
             if not delta:
                 raise ValueError('There are no changes to submit.')
@@ -620,12 +628,12 @@ def submit():
                     raise ValueError('This product is used in other BOMs outside the pilot scope. Furnibox must review it before retirement.')
             if request.form.get('confirm') != 'yes':
                 raise ValueError('Confirm that you have reviewed the changes.')
-            conn.execute('''INSERT INTO reform_version_approvals(number,actor,revision,created) VALUES (?,?,?,?)
-                            ON CONFLICT(number,actor) DO UPDATE SET revision=excluded.revision,created=excluded.created''',
-                         (version['number'], actor, revision, now()))
+            conn.execute('''INSERT INTO reform_version_approvals(number,actor,revision,created,package_digest) VALUES (?,?,?,?,?)
+                            ON CONFLICT(number,actor) DO UPDATE SET revision=excluded.revision,created=excluded.created,package_digest=excluded.package_digest''',
+                         (version['number'], actor, revision, now(), package_digest))
             approval_count = conn.execute(
-                'SELECT count(*) FROM reform_version_approvals WHERE number=? AND revision=?',
-                (version['number'], revision)).fetchone()[0]
+                'SELECT count(*) FROM reform_version_approvals WHERE number=? AND revision=? AND package_digest=?',
+                (version['number'], revision, package_digest)).fetchone()[0]
             approvals_required = current_app.config.get('REFORM_APPROVALS_REQUIRED', 2)
             event(conn, version['number'], 'approved', f'Approval {approval_count} of {approvals_required} for revision {revision}')
             if approval_count < approvals_required:
@@ -634,12 +642,13 @@ def submit():
                 return redirect(url_for('reform.versions'))
             payload = {'schema': 'reform-change-proposal-v1', 'status': 'awaiting_furnibox',
                 'version': version['number'], 'description': version['description'], 'base': work['base'], 'draft_revision': revision,
+                'approval_digest': package_digest,
                 'baseline_digest': digest(work['base']), 'baseline_captured_at': work['base']['captured_at'],
                 'changes': delta, 'target': work['target'],
                 'bom_revision_plan': bom_revision_plan(conn, delta),
                 'approved_by': [row['actor'] for row in conn.execute(
-                    'SELECT actor FROM reform_version_approvals WHERE number=? AND revision=? ORDER BY created',
-                    (version['number'], revision)).fetchall()]}
+                    'SELECT actor FROM reform_version_approvals WHERE number=? AND revision=? AND package_digest=? ORDER BY created',
+                    (version['number'], revision, package_digest)).fetchall()]}
             keys = {(c['kind'], c['key']) for c in delta}
             for pending in conn.execute('SELECT payload FROM submissions'):
                 existing = unpack(pending['payload'])
