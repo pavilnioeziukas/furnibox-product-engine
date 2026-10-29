@@ -190,10 +190,14 @@ def test_reference_catalogue_without_version_or_edit_permission(setup):
         assert response.status_code == 200
         book = load_workbook(io.BytesIO(response.data))
         assert '_Exchange' not in book
-        assert book['Products'].max_row == len(sample()['products']) + 1
-        assert book['Instructions']['B3'].value == sample()['captured_at']
+        assert book['Products'].max_row + book['Non-BOM'].max_row - 2 == len(sample()['products'])
+        assert book.sheetnames[:2] == ['BOM', 'Non-BOM']
+        assert book['BOM']['A1'].value == 'Parent BOM SKU'
+        assert book['BOM'].column_dimensions['H'].hidden
+        assert book['Components'].sheet_state == 'veryHidden'
+        assert dict(book['Instructions'].values)['Retrieved (UTC)'] == sample()['captured_at']
         book.close()
-        assert 'Download reference catalogue' in client.get('/reform/?view=files').text
+        assert 'Download catalogue' in client.get('/reform/?view=files').text
     with app.app_context(), db() as conn:
         assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
         assert baseline(conn) == sample()
@@ -218,7 +222,28 @@ def test_reference_catalogue_ignores_drafts_and_locked_version(setup):
     products = {row[0]: row[1] for row in book['Products'].iter_rows(min_row=2, values_only=True)}
     assert products['CAB-01'] == source['products']['CAB-01']['name']
     assert 'Draft only name' not in products.values()
-    assert 'Download reference catalogue' in client.get('/reform/?view=files').text
+    assert 'Download catalogue' in client.get('/reform/?view=files').text
     assert 'only its owner can edit it' in client.get('/reform/excel/download', follow_redirects=True).text
     assert app.test_client().get('/reform/excel/catalogue').status_code == 302
     book.close()
+
+
+def test_reference_catalogue_matches_standard_bom_layout_and_upload_boundary(setup):
+    app, client = setup
+    post(client, 'versions/save', number='v1.0', description='Layout test', revision='0')
+    editing = load_workbook(io.BytesIO(client.get('/reform/excel/download?scope=all').data))
+    reference = load_workbook(io.BytesIO(client.get('/reform/excel/catalogue').data))
+    assert [name for name in editing.sheetnames if name != '_Exchange'] == reference.sheetnames
+    for name in ('BOM', 'Non-BOM', 'Products', 'BOMs', 'Components', 'Read-only', 'Catalogue', 'Lists'):
+        assert list(reference[name].values) == list(editing[name].values)
+        assert reference[name].freeze_panes == editing[name].freeze_panes
+        assert copy.copy(reference[name]['A1'].fill) == copy.copy(editing[name]['A1'].fill)
+    assert 'not an engine export' in upload_book(client, reference).text
+    assert 'No changes detected' in upload_book(client, editing).text
+    with client.session_transaction() as sess:
+        sess['reform_user'] = 'other'
+    assert upload_book(client, editing).status_code == 409
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
+    reference.close()
+    editing.close()

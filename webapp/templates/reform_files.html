@@ -6,10 +6,10 @@
 </div>
 
 <section class="card">
-  <h3>Download catalogue for reference</h3>
-  <p>Available to every signed-in user, regardless of who owns the open version. Includes the latest catalogue loaded into this workspace, without proposed draft changes. The workbook records its source and retrieval time; it is not a live Odoo export.</p>
-  <a class="action-link" href="{{ url_for('reform.catalogue_download') }}">Download reference catalogue →</a>
-  <p>This reference file cannot be uploaded as changes. Editing files and uploads remain available only to the open version owner.</p>
+  <h3>Download catalogue</h3>
+  <p>Available to every signed-in user, regardless of who owns the open version. Uses the standard Excel layout with BOM, Products, Non-BOM, BOMs, Catalogue and Lists sheets. Includes the latest catalogue loaded into this workspace, without proposed draft changes. The workbook records its source and retrieval time; it is not a live Odoo export.</p>
+  <a class="action-link" href="{{ url_for('reform.catalogue_download') }}">Download catalogue →</a>
+  <p>For uploading changes, the open version owner must download the editing file below from their own account.</p>
 </section>
 
 {% if not current_version %}

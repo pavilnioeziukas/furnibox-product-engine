@@ -128,9 +128,10 @@ def make_book(token, record):
     action = DataValidation(type='list', formula1='"KEEP,REMOVE"', allow_blank=False)
     wb['Components'].add_data_validation(action)
     action.add('C2:C20001')
-    meta = wb.create_sheet('_Exchange')
-    meta.append(['reform-exchange-v1', token])
-    meta.sheet_state = 'veryHidden'
+    if not record.get('reference_only'):
+        meta = wb.create_sheet('_Exchange')
+        meta.append(['reform-exchange-v1', token])
+        meta.sheet_state = 'veryHidden'
     for sheet in wb:
         sheet.sheet_view.showGridLines = False
         for cell in sheet[1]:
@@ -157,6 +158,12 @@ def make_book(token, record):
     elif record.get('map_format') == 2:
         from webapp.reform_map import add_map
         add_map(wb, record)
+    if record.get('reference_only'):
+        guide['B11'] = 'Catalogue copy for review. To upload changes, the open version owner must download the editing file from their account.'
+        guide['B12'] = 'Only the open version owner may upload and submit changes. This catalogue copy does not grant editing rights.'
+        guide['B13'] = 'This file contains the last stored catalogue, not live Odoo data or proposed draft changes.'
+        guide.append(['Source', record['work']['base'].get('source', '')])
+        guide.append(['Retrieved (UTC)', record['work']['base'].get('captured_at', '')])
     data = io.BytesIO()
     wb.save(data)
     data.seek(0)
@@ -362,47 +369,24 @@ def apply_book(wb, record, reserved):
 
 @reform.get('/excel/catalogue')
 def catalogue_download():
-    """Export the current baseline for reading, independent of version ownership."""
-    with db() as conn:
-        source = baseline(conn)
-    if not source:
-        abort(409, 'Furnibox must first provide the product and BOM data.')
-    source = visible_work({'base': source, 'target': source})['target']
-    book = Workbook()
-    info = book.active
-    info.title = 'Instructions'
-    info.append(['Catalogue for reference only'])
-    info.append(['Source', source.get('source', '')])
-    info.append(['Retrieved (UTC)', source.get('captured_at', '')])
-    info.append(['Upload', 'This reference file cannot be uploaded as changes. The version owner must download an editing file.'])
-    products = book.create_sheet('Products')
-    products.append(['Product code', 'Name', 'Category', 'Unit', 'Active'])
-    for key, product in sorted(source['products'].items()):
-        products.append([product.get('display_sku', key), product['name'],
-                         product.get('category', ''), product['uom'], product.get('active', True)])
-    boms = book.create_sheet('BOMs')
-    boms.append(['BOM key', 'Product code', 'BOM reference', 'Output quantity', 'Unit'])
-    components = book.create_sheet('Components')
-    components.append(['BOM key', 'Component code', 'Quantity', 'Unit'])
-    for key, bom in sorted(source['boms'].items()):
-        boms.append([key, bom['sku'], bom.get('code', ''), bom['quantity'], bom['uom']])
-        for line in bom['components']:
-            components.append([key, line['sku'], line['quantity'], line['uom']])
-    for sheet in book:
-        sheet.freeze_panes = 'A2'
-        sheet.auto_filter.ref = sheet.dimensions
-        for row in sheet:
-            for cell in row:
-                if isinstance(cell.value, str):
-                    cell.data_type = 's'
-        for column in sheet.columns:
-            sheet.column_dimensions[column[0].column_letter].width = 38
-    data = io.BytesIO()
-    book.save(data)
-    book.close()
-    data.seek(0)
-    return send_file(data, as_attachment=True, download_name='Reform-Catalogue-Reference.xlsx',
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    """Use the standard BOM workbook layout for every signed-in reader."""
+    try:
+        with db() as conn:
+            source = baseline(conn)
+            if not source:
+                abort(409, 'Furnibox must first provide the product and BOM data.')
+            work = {'base': source, 'target': source}
+            supplier_reference = conn.execute('SELECT payload FROM state WHERE id=3').fetchone()
+            record = {'work': work, 'revision': 0, 'sku': '', 'full': True,
+                      'scope': scope_for(work, '', True), 'options': options_for(work),
+                      'map_format': 1, 'bom_format': 1, 'reference_only': True,
+                      'supplier_codes': unpack(supplier_reference['payload']) if supplier_reference else {}}
+            data = make_book('', record)
+        return send_file(data, as_attachment=True, download_name='Reform-Full-Catalogue.xlsx',
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    except ValueError as exc:
+        flash(str(exc))
+        return redirect(url_for('reform.index', view='files'))
 
 @reform.get('/excel/download')
 def excel_download():
