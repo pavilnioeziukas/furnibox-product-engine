@@ -18,6 +18,7 @@ def login(app, username, password):
         csrf = session['reform_csrf']
     assert client.post('/reform/login', data={'csrf': csrf, 'username': username,
                                              'password': password}).status_code == 302
+    client.get('/reform/versions')
     return client
 
 
@@ -167,3 +168,41 @@ def test_approval_workflow_old_schema_approvals_do_not_count(pair):
     assert '1 more Reform representative' in approve(reviewer).text
     assert snapshot(app)['submissions'] == 0
     assert 'submitted to Furnibox' in approve(author).text
+
+
+def test_approval_workflow_legacy_schema_migrates_without_accepting_old_approvals(pair):
+    app, author, reviewer = pair
+    with app.app_context(), db() as conn:
+        conn.execute('DROP TABLE reform_version_approvals')
+        conn.execute('CREATE TABLE reform_version_approvals (number TEXT NOT NULL, actor TEXT NOT NULL, revision INTEGER NOT NULL, created TEXT NOT NULL, PRIMARY KEY(number,actor))')
+        conn.execute("INSERT INTO reform_version_approvals VALUES ('v2.0','paul',1,'old')")
+    page = reviewer.get('/reform/versions')
+    assert page.status_code == 200
+    assert '0 of 2 Reform approvals recorded' in page.text
+    with app.app_context(), db() as conn:
+        assert 'package_digest' in {row['name'] for row in conn.execute('PRAGMA table_info(reform_version_approvals)')}
+    assert '1 more Reform representative' in approve(reviewer).text
+    assert snapshot(app)['submissions'] == 0
+
+
+def test_approval_workflow_returned_package_needs_two_fresh_approvals(pair):
+    app, author, reviewer = pair
+    approve(author)
+    approve(reviewer)
+    app.config['REFORM_ADMIN_ENABLED'] = True
+    admin = app.test_client()
+    with admin.session_transaction() as session:
+        session['authenticated'] = True
+        session['reform_csrf'] = 'admin-token'
+    with app.app_context(), db() as conn:
+        original = conn.execute('SELECT payload FROM submissions').fetchone()[0]
+        sid = conn.execute('SELECT id FROM submissions').fetchone()[0]
+    assert post(admin, 'versions/review', number='v2.0', submission_id=str(sid),
+                action='returned', note='Correct the package').status_code == 200
+    assert '0 of 2 Reform approvals recorded' in reviewer.get('/reform/versions').text
+    assert '1 more Reform representative' in approve(author, revision='2').text
+    assert snapshot(app)['submissions'] == 1
+    assert 'submitted to Furnibox' in approve(reviewer, revision='2').text
+    assert snapshot(app)['submissions'] == 2
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT payload FROM submissions WHERE id=?', (sid,)).fetchone()[0] == original
