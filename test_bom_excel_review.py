@@ -39,6 +39,9 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(result['proposed_eco_count'], 0)
         self.assertEqual(result['changes'], [])
         self.assertFalse(result['ready_to_write'])
+        numeric = row(**{'Laikas (min:sek)': 30.0})
+        textual = row(**{'Laikas (min:sek)': '30:00'})
+        self.assertEqual(review_rows([numeric], [textual])['changes'], [])
 
     def test_update_all_operation_fields(self):
         changed = row(**{'Eiliškumas': 20, 'Operacija': 'Pack',
