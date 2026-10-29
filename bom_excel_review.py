@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 
 IMMUTABLE = ('Produkto kodas', 'Produkto pavadinimas', 'Kategorija',
              'BOM reference', 'BOM tipas', 'TECH BOM write_date')
-EDITABLE = ('Eiliskumas', 'Operacija', 'Darbo centras', 'Laikas (min:sek)')
+EDITABLE = ('Eiliškumas', 'Operacija', 'Darbo centras', 'Laikas (min:sek)')
 REQUIRED = IMMUTABLE + EDITABLE + ('Routing', 'Pastaba', 'TECH BOM ID',
                                  'TECH operacijos ID', 'TECH operacijos write_date')
 
@@ -85,7 +85,7 @@ def read_rows(path):
 def operation(row, *, baseline=False):
     if not text(row['Operacija']) or not text(row['Darbo centras']):
         raise ValueError('Operation name and work center are required')
-    return {'name': text(row['Operacija']), 'sequence': integer(row['Eiliskumas']),
+    return {'name': text(row['Operacija']), 'sequence': integer(row['Eiliškumas']),
             'workcenter': text(row['Darbo centras']),
             'minutes': str(minutes(row['Laikas (min:sek)'], baseline=baseline))}
 
