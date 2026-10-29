@@ -14,11 +14,29 @@ def schema(conn):
         status TEXT NOT NULL, note TEXT NOT NULL, created TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS reform_version_approvals (
         number TEXT NOT NULL, actor TEXT NOT NULL, revision INTEGER NOT NULL,
-        created TEXT NOT NULL, PRIMARY KEY(number, actor));
+        created TEXT NOT NULL, package_digest TEXT NOT NULL DEFAULT '', PRIMARY KEY(number, actor));
         CREATE TABLE IF NOT EXISTS reform_bom_revisions (
         product_code TEXT NOT NULL, revision TEXT NOT NULL, bom_id TEXT NOT NULL,
         change_number TEXT NOT NULL, status TEXT NOT NULL, snapshot BLOB NOT NULL,
         created TEXT NOT NULL, PRIMARY KEY(product_code, revision));''')
+
+    columns = {row['name'] for row in conn.execute('PRAGMA table_info(reform_version_approvals)')}
+    if 'package_digest' not in columns:
+        conn.execute("ALTER TABLE reform_version_approvals ADD COLUMN package_digest TEXT NOT NULL DEFAULT ''")
+
+
+def approval_digest(version, work, revision):
+    return digest({'number': version['number'], 'description': version['description'],
+                   'revision': revision, 'work': work})
+
+
+def invalidate_approvals(conn):
+    current = active(conn)
+    if current and current['owner'] == owner() and current['status'] in ('draft', 'returned'):
+        removed = conn.execute('DELETE FROM reform_version_approvals WHERE number=?',
+                               (current['number'],)).rowcount
+        if removed:
+            event(conn, current['number'], 'approvals_reset', 'Package changed; all reviewers must approve again.')
 
 
 def next_revision(value):
@@ -129,11 +147,12 @@ def versions():
         rows = conn.execute('SELECT * FROM reform_versions ORDER BY created DESC').fetchall()
         history = conn.execute('SELECT * FROM reform_version_events ORDER BY id DESC LIMIT 100').fetchall()
         delta = changes(work['base'], work['target']) if work else []
+        package_digest = approval_digest(current, work, revision) if current and work else ''
         approvals = []
         if current and current['status'] in ('draft', 'returned'):
             approvals = conn.execute(
-                'SELECT actor,created FROM reform_version_approvals WHERE number=? AND revision=? ORDER BY created',
-                (current['number'], revision)).fetchall()
+                'SELECT actor,created FROM reform_version_approvals WHERE number=? AND revision=? AND package_digest=? ORDER BY created',
+                (current['number'], revision, package_digest)).fetchall()
         submitted = {}
         if current and current['status'] in ('submitted', 'accepted'):
             item = conn.execute('SELECT payload FROM submissions WHERE id=?', (current['submission_id'],)).fetchone()
@@ -146,7 +165,8 @@ def versions():
             LEFT JOIN reform_versions v ON v.number=r.change_number
             ORDER BY r.product_code,r.created DESC''').fetchall()
     return render_template('reform_versions.html', current=current, versions=rows, history=history,
-                           delta=delta, revision=revision, approvals=approvals,
+                           delta=delta, revision=revision, approvals=approvals, package_digest=package_digest,
+                           already_approved=owner() in [a['actor'] for a in approvals],
                            revision_plan=revision_plan, bom_history=bom_history,
                            approvals_required=current_app.config.get('REFORM_APPROVALS_REQUIRED', 2),
                            is_admin=admin(), username=owner())
@@ -178,6 +198,8 @@ def save_version():
                          (number, owner(), description, 'draft', None, now(), now(), ''))
             event(conn, number, 'draft', description)
         else:
+            if description != current['description']:
+                invalidate_approvals(conn)
             conn.execute('UPDATE reform_versions SET description=?,updated=? WHERE number=?', (description, now(), number))
     flash('Version draft saved. Continue editing products and BOMs, or review the complete version here.')
     return redirect(url_for('reform.versions'))
