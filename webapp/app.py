@@ -2572,6 +2572,10 @@ def health():
     )
 
 
+from bom_excel_web import register as register_bom_excel
+register_bom_excel(app)
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
