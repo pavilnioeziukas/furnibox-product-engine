@@ -57,6 +57,11 @@ def post(client, path, **data):
         if not version:
             client.post('/reform/versions/save', data={'csrf': token, 'number': 'v1.0', 'description': 'Test release', 'revision': data.get('revision', '0')})
         data['version'] = version['number'] if version else 'v1.0'
+    if path == 'submit' and 'package_digest' not in data:
+        page = client.get('/reform/versions').text
+        match = re.search(r'name="package_digest" value="([^"]+)"', page)
+        if match:
+            data['package_digest'] = match.group(1)
     return client.post('/reform/' + path, data={'csrf': token, **data}, follow_redirects=True)
 
 
