@@ -179,3 +179,46 @@ def test_full_catalogue_roundtrip_and_read_only_bom(setup):
         work = unpack(conn.execute('SELECT payload FROM drafts').fetchone()[0])
         assert work['target']['boms']['2'] == data['boms']['2']
 
+
+
+def test_reference_catalogue_without_version_or_edit_permission(setup):
+    app, client = setup
+    for user in ('paul', 'other'):
+        with client.session_transaction() as sess:
+            sess['reform_user'] = user
+        response = client.get('/reform/excel/catalogue')
+        assert response.status_code == 200
+        book = load_workbook(io.BytesIO(response.data))
+        assert '_Exchange' not in book
+        assert book['Products'].max_row == len(sample()['products']) + 1
+        assert book['Instructions']['B3'].value == sample()['captured_at']
+        book.close()
+        assert 'Download reference catalogue' in client.get('/reform/?view=files').text
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
+        assert baseline(conn) == sample()
+
+
+def test_reference_catalogue_ignores_drafts_and_locked_version(setup):
+    app, client = setup
+    post(client, 'versions/save', number='v1.0', description='Reference export test', revision='0')
+    with app.app_context(), db() as conn:
+        from webapp.reform_workspace import pack
+        source = baseline(conn)
+        proposed = copy.deepcopy(source)
+        proposed['products']['CAB-01']['name'] = 'Draft only name'
+        conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)',
+                     ('paul', 1, pack({'base': source, 'target': proposed})))
+        conn.execute("UPDATE reform_versions SET status='submitted'")
+    with client.session_transaction() as sess:
+        sess['reform_user'] = 'other'
+    response = client.get('/reform/excel/catalogue')
+    assert response.status_code == 200
+    book = load_workbook(io.BytesIO(response.data))
+    products = {row[0]: row[1] for row in book['Products'].iter_rows(min_row=2, values_only=True)}
+    assert products['CAB-01'] == source['products']['CAB-01']['name']
+    assert 'Draft only name' not in products.values()
+    assert 'Download reference catalogue' in client.get('/reform/?view=files').text
+    assert 'only its owner can edit it' in client.get('/reform/excel/download', follow_redirects=True).text
+    assert app.test_client().get('/reform/excel/catalogue').status_code == 302
+    book.close()
