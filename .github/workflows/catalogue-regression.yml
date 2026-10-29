@@ -1,0 +1,46 @@
+name: Catalogue regression comparison
+on:
+  pull_request:
+    branches: [feature/reform-portal]
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest -r requirements.txt
+      - name: Verify reference exports
+        run: python -m pytest -q test_reform_excel.py -k reference_catalogue
+      - name: Compare existing failures with base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, subprocess, sys, tempfile, xml.etree.ElementTree as ET
+          tests = ['test_reform_bom.py','test_reform_map.py','test_reform_excel.py','test_reform_workspace.py','test_reform_versions.py','test_reform_notifications.py','test_webapp.py']
+          temp = pathlib.Path(tempfile.mkdtemp())
+          base = temp / 'base'
+          subprocess.run(['git','worktree','add','--detach',str(base),os.environ['BASE_SHA']],check=True)
+          def run(directory, name):
+              report = temp / (name + '.xml')
+              result = subprocess.run([sys.executable,'-m','pytest','-q',*tests,'--junitxml',str(report)],cwd=directory)
+              if result.returncode not in (0,1):
+                  raise RuntimeError(name + ' test execution failed')
+              cases = ET.parse(report).findall('.//testcase')
+              failed = {case.attrib['classname'] + '::' + case.attrib['name'] for case in cases if case.find('failure') is not None or case.find('error') is not None}
+              print(name + ': ' + str(len(cases)) + ' tests, ' + str(len(failed)) + ' failures', flush=True)
+              return failed
+          previous = run(base, 'base')
+          current = run(pathlib.Path.cwd(), 'head')
+          print('Existing failures:', sorted(previous), flush=True)
+          print('New failures:', sorted(current - previous), flush=True)
+          print('Resolved failures:', sorted(previous - current), flush=True)
+          if current - previous:
+              sys.exit(1)
+          PY
