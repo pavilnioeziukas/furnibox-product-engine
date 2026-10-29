@@ -5,6 +5,8 @@ from io import BytesIO
 import os
 from pathlib import Path
 import secrets
+import socket
+import xmlrpc.client
 
 from flask import Blueprint, abort, jsonify, render_template_string, request, session
 
@@ -35,7 +37,27 @@ def stage_status():
         return 'Blokuota: integracijos ODOO_URL nėra patvirtintas Furnibox Stage adresas.'
     if not all(os.getenv(k, '').strip() for k in ('ODOO_DB', 'ODOO_LOGIN', 'ODOO_API_KEY')):
         return 'Blokuota: trūksta Stage API konfigūracijos.'
-    return 'Nustatytas stageodoo.furnibox.lt. Autentifikacija tikrinama serverio diagnostikoje.'
+    try:
+        # Each proxy uses a bounded transport without changing global sockets.
+        class Transport(xmlrpc.client.SafeTransport):
+            def make_connection(self, host):
+                connection = super().make_connection(host)
+                connection.timeout = 20
+                return connection
+        db, key = os.environ['ODOO_DB'], os.environ['ODOO_API_KEY']
+        uid = xmlrpc.client.ServerProxy(url + '/xmlrpc/2/common', transport=Transport()).authenticate(
+            db, os.environ['ODOO_LOGIN'], key, {})
+        if not uid:
+            return 'Stage API autentifikacija nepavyko.'
+        proxy = xmlrpc.client.ServerProxy(url + '/xmlrpc/2/object', transport=Transport())
+        fields = proxy.execute_kw(db, uid, key, 'mrp.eco', 'fields_get', [],
+                                  {'attributes': ['type', 'relation']})
+        needed = {'bom_id', 'new_bom_id', 'product_tmpl_id', 'type_id'}
+        if not needed <= fields.keys():
+            return 'Stage API veikia, tačiau PLM laukų sutartis neatitinka laukiamų laukų.'
+        return 'Stage API autentifikacija ir ECO laukų skaitymas patvirtinti.'
+    except Exception as exc:
+        return 'Stage API patikra nepavyko (' + type(exc).__name__ + ').'
 
 
 def trusted_baseline():
