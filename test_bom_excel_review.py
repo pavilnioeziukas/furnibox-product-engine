@@ -17,7 +17,7 @@ def row(oid=10, **values):
               'TECH operacijos write_date': '2026-10-06' if oid else '',
               '_row': 2})
     if oid:
-        r.update({'Eiliskumas': 10, 'Operacija': 'Assemble',
+        r.update({'Eiliškumas': 10, 'Operacija': 'Assemble',
                   'Darbo centras': 'Assembly', 'Laikas (min:sek)': '01:30'})
     r.update(values)
     return r
@@ -41,14 +41,14 @@ class ReviewTests(unittest.TestCase):
         self.assertFalse(result['ready_to_write'])
 
     def test_update_all_operation_fields(self):
-        changed = row(**{'Eiliskumas': 20, 'Operacija': 'Pack',
+        changed = row(**{'Eiliškumas': 20, 'Operacija': 'Pack',
                          'Darbo centras': 'Packing', 'Laikas (min:sek)': '00:30'})
         result = review_rows([row()], [changed])
         self.assertEqual(len(result['changes']), 1)
         self.assertEqual(result['changes'][0]['after']['minutes'], '0.5')
 
     def test_new_with_and_without_old_operations(self):
-        new = row(None, **{'Eiliskumas': 30, 'Operacija': 'Pack',
+        new = row(None, **{'Eiliškumas': 30, 'Operacija': 'Pack',
                            'Darbo centras': 'Packing', 'Laikas (min:sek)': '120:00'})
         for baseline, returned in [([row(), row(None)], [row(), new]),
                                    ([row(None)], [new])]:
@@ -67,7 +67,7 @@ class ReviewTests(unittest.TestCase):
         missing = review_rows([row()], [])
         self.assertFalse(missing['changes'])
         self.assertTrue(missing['warnings'])
-        note = review_rows([row()], [row(Pastaba='Pasalinti operacija')])
+        note = review_rows([row()], [row(Pastaba='Pašalinti operaciją')])
         self.assertFalse(note['changes'])
         self.assertTrue(note['human_review'])
         kit = row(**{'BOM tipas': 'Kit'})
@@ -85,7 +85,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_reordered_changes_have_same_hash(self):
         a = row(Operacija='Pack')
-        b = row(None, **{'Operacija': 'Check', 'Eiliskumas': 30,
+        b = row(None, **{'Operacija': 'Check', 'Eiliškumas': 30,
                          'Darbo centras': 'QA', 'Laikas (min:sek)': '00:30'})
         self.assertEqual(review_rows([row()], [a, b])['change_hash'],
                          review_rows([row()], [b, a])['change_hash'])
