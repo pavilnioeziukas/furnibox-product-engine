@@ -1,5 +1,6 @@
 """Version batches over existing revision-checked drafts and immutable submissions."""
 import re
+import sqlite3
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from webapp.reform_workspace import reform, db, owner, admin, draft, baseline, digest, pack, unpack, now, changes
 
@@ -22,7 +23,12 @@ def schema(conn):
 
     columns = {row['name'] for row in conn.execute('PRAGMA table_info(reform_version_approvals)')}
     if 'package_digest' not in columns:
-        conn.execute("ALTER TABLE reform_version_approvals ADD COLUMN package_digest TEXT NOT NULL DEFAULT ''")
+        try:
+            conn.execute("ALTER TABLE reform_version_approvals ADD COLUMN package_digest TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            # Another worker may complete the same additive migration first.
+            if 'package_digest' not in {row['name'] for row in conn.execute('PRAGMA table_info(reform_version_approvals)')}:
+                raise
 
 
 def approval_digest(version, work, revision):
@@ -167,6 +173,7 @@ def versions():
     return render_template('reform_versions.html', current=current, versions=rows, history=history,
                            delta=delta, revision=revision, approvals=approvals, package_digest=package_digest,
                            already_approved=owner() in [a['actor'] for a in approvals],
+                           submitted_approvers=submitted.get('approved_by', []),
                            revision_plan=revision_plan, bom_history=bom_history,
                            approvals_required=current_app.config.get('REFORM_APPROVALS_REQUIRED', 2),
                            is_admin=admin(), username=owner())
