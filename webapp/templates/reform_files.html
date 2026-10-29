@@ -5,8 +5,15 @@
   <p>Choose one of the two main tasks. Uploading the completed file adds changes to the open version — it does not change Odoo automatically.</p>
 </div>
 
+<section class="card">
+  <h3>Download catalogue for reference</h3>
+  <p>Available to every signed-in user, regardless of who owns the open version. Includes the latest catalogue loaded into this workspace, without proposed draft changes. The workbook records its source and retrieval time; it is not a live Odoo export.</p>
+  <a class="action-link" href="{{ url_for('reform.catalogue_download') }}">Download reference catalogue →</a>
+  <p>This reference file cannot be uploaded as changes. Editing files and uploads remain available only to the open version owner.</p>
+</section>
+
 {% if not current_version %}
-<section class="card production-gate"><h3>1. Open a version first</h3><p>Create a version number and description before downloading or uploading an Excel file. All proposed changes will then belong to that version and be visible to its reviewers.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Open a version draft →</a></section>
+<section class="card production-gate"><h3>1. Open a version first</h3><p>Create a version number and description before downloading an editing file or uploading changes. All proposed changes will then belong to that version and be visible to its reviewers.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Open a version draft →</a></section>
 {% elif current_version.owner != current_user %}
 <section class="card production-gate"><h3>Version {{ current_version.number }} is open</h3><p><strong>Proposed by:</strong> {{ current_version.owner }}. You can review the complete change package, but only its owner can add files or edit this version.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Review this version →</a></section>
 {% elif current_version.status not in ['draft', 'returned'] %}
