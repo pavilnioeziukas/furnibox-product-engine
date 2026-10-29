@@ -237,7 +237,7 @@ def test_reference_catalogue_matches_standard_bom_layout_and_upload_boundary(set
     for name in ('BOM', 'Non-BOM', 'Products', 'BOMs', 'Components', 'Read-only', 'Catalogue', 'Lists'):
         assert list(reference[name].values) == list(editing[name].values)
         assert reference[name].freeze_panes == editing[name].freeze_panes
-        assert reference[name]['A1'].fill == editing[name]['A1'].fill
+        assert copy.copy(reference[name]['A1'].fill) == copy.copy(editing[name]['A1'].fill)
     assert 'not an engine export' in upload_book(client, reference).text
     assert 'No changes detected' in upload_book(client, editing).text
     with client.session_transaction() as sess:
