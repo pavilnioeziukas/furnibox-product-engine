@@ -695,7 +695,7 @@ def submit():
             approval_count = conn.execute(
                 'SELECT count(*) FROM reform_version_approvals WHERE number=? AND revision=? AND package_digest=?',
                 (version['number'], revision, package_digest)).fetchone()[0]
-            approvals_required = current_app.config.get('REFORM_APPROVALS_REQUIRED', 2)
+            approvals_required = current_app.config.get('REFORM_APPROVALS_REQUIRED', 1)
             event(conn, version['number'], 'approved', f'Approval {approval_count} of {approvals_required} for revision {revision}')
             if approval_count < approvals_required:
                 remaining = approvals_required - approval_count
