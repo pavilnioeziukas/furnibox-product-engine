@@ -29,7 +29,10 @@ def code(value):
 
 
 def parse(content):
-    wb = read_book(content)
+    try:
+        wb = read_book(content)
+    except ValueError as exc:
+        raise PivotError([{'row': '', 'sku': '', 'material': '', 'reason': 'Choose a readable Excel workbook smaller than 5 MB containing the Pivot sheet.'}]) from exc
     try:
         candidates, issues = [], []
         for name in ALIASES:
@@ -129,8 +132,8 @@ def reference(conn, key=None):
 
 def upload():
     file = request.files.get('file')
-    if not file or not file.filename.lower().endswith('.xlsx'):
-        raise PivotError([{'row': '', 'sku': '', 'material': '', 'reason': 'Select an .xlsx workbook containing the Pivot sheet.'}])
+    if not file or not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise PivotError([{'row': '', 'sku': '', 'material': '', 'reason': 'Select an .xlsx or .xlsm workbook containing the Pivot sheet.'}])
     raw = file.stream.read(LIMIT + 1)
     return file.filename[:200], raw, parse(raw)
 
