@@ -34,12 +34,12 @@ def test_alphabetic_bom_revision_sequence_and_immutable_history(setup):
 
 def test_existing_bom_change_displays_next_plm_revision(setup):
     app, client = setup
-    post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spintelės komplektacija',
+    post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spinteles komplektacija',
          component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'], revision='0')
     post(client, 'versions/save', number='v11.1', description='BOM revision', revision='1')
     page = client.get('/reform/versions').text
     assert 'PLM changes and BOM revisions' in page
-    assert 'A → B' in page
+    assert 'A  B' in page
     assert 'Proposed by:</strong> paul' in page
 
 
@@ -58,10 +58,10 @@ def test_change_and_bom_revision_history_display_proposer(setup):
     page = client.get('/reform/versions').text
     assert 'Proposed by paul' in page
     assert 'Source: Odoo production baseline' in page
-    assert 'BOM update · Proposed by paul' in page
+    assert 'BOM update � Proposed by paul' in page
 
 
-def test_other_reform_user_can_review_but_not_edit_open_version(setup):
+def test_other_reform_user_can_review_and_edit_open_version(setup):
     app, owner_client = setup
     post(owner_client, 'versions/save', number='v11.1', description='Shared review', revision='0')
     post(owner_client, 'save', action='product', sku='CAB-01', name='Updated cabinet', revision='0')
@@ -74,8 +74,8 @@ def test_other_reform_user_can_review_but_not_edit_open_version(setup):
     assert 'Proposed by:</strong> paul' in version_page
     assert 'Updated cabinet' in version_page
     files_page = reviewer.get('/reform/?view=files').text
-    assert 'only its owner can add files' in files_page
-    assert 'Review this version' in files_page
+    assert 'Download catalogue for editing' in files_page
+    assert reviewer.get('/reform/excel/download?scope=all').status_code == 200
 
 
 def test_batch_submit_return_resubmit_and_admin_review(setup):
@@ -157,11 +157,12 @@ def test_two_distinct_reform_users_must_approve_same_revision(setup):
     assert 'CAB-01' in page.text
     assert 'Proposed by:</strong> paul' in page.text
     files = second_client.get('/reform/?view=files')
-    assert 'Proposed by:</strong> paul' in files.text
-    assert 'only its owner can add files' in files.text
+    assert 'Proposed by paul' in files.text
+    assert 'Download catalogue for editing' in files.text
     final = post(second_client, 'submit', version='v11.1', revision='1', confirm='yes')
     assert 'submitted to Furnibox' in final.text
     with app.app_context(), db() as conn:
         payload = unpack(conn.execute('SELECT payload FROM submissions').fetchone()['payload'])
         assert payload['approved_by'] == ['paul', 'other']
+
 
