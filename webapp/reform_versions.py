@@ -197,7 +197,7 @@ def versions():
                            already_approved=owner() in [a['actor'] for a in approvals],
                            submitted_approvers=submitted.get('approved_by', []),
                            revision_plan=revision_plan, bom_history=bom_history,
-                           approvals_required=current_app.config.get('REFORM_APPROVALS_REQUIRED', 2),
+                           approvals_required=current_app.config.get('REFORM_APPROVALS_REQUIRED', 1),
                            is_admin=admin(), username=owner())
 
 
