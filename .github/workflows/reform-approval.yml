@@ -13,4 +13,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install pytest -r requirements.txt
-      - run: python -m pytest -v test_reform_approval_workflow.py test_reform_versions.py
+      - run: python -m pytest -v test_reform_pivot.py test_reform_approval_workflow.py test_reform_versions.py
+
