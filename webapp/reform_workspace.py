@@ -771,4 +771,5 @@ def view_submission(sid):
 # Register file exchange routes on the same protected blueprint.
 from webapp import reform_excel  # noqa: E402,F401
 from webapp import reform_versions  # noqa: E402,F401
+from webapp import reform_pivot_compare  # noqa: E402,F401
 
