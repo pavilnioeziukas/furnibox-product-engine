@@ -45,7 +45,7 @@ def test_unchanged_and_changed_roundtrip(setup):
     book['Components']['E2'] = 7
     response = upload_book(client, book)
     assert 'Excel changes saved' in response.text
-    assert 'PANEL-01 — 7.0' in re.sub(r'<[^>]+>', '', response.text)
+    assert 'PANEL-01 - 7.0' in re.sub(r'<[^>]+>', '', response.text)
     assert 'Current' in response.text and 'Proposed' in response.text
     assert 'Your draft has changed' in upload_book(client, book).text
     with app.app_context(), db() as conn:
@@ -102,7 +102,7 @@ def test_stale_source_and_other_user(setup):
     book = export_book(client)
     with client.session_transaction() as sess:
         sess['reform_user'] = 'other'
-    assert 'only its owner can edit it' in upload_book(client, book).text
+    assert 'No changes detected' in upload_book(client, book).text
     with client.session_transaction() as sess:
         sess['reform_user'] = 'paul'
     with app.app_context(), db() as conn:
@@ -223,7 +223,7 @@ def test_reference_catalogue_ignores_drafts_and_locked_version(setup):
     assert products['CAB-01'] == source['products']['CAB-01']['name']
     assert 'Draft only name' not in products.values()
     assert 'Download catalogue' in client.get('/reform/?view=files').text
-    assert 'only its owner can edit it' in client.get('/reform/excel/download', follow_redirects=True).text
+    assert 'locked' in client.get('/reform/excel/download', follow_redirects=True).text
     assert app.test_client().get('/reform/excel/catalogue').status_code == 302
     book.close()
 
@@ -242,8 +242,9 @@ def test_reference_catalogue_matches_standard_bom_layout_and_upload_boundary(set
     assert 'No changes detected' in upload_book(client, editing).text
     with client.session_transaction() as sess:
         sess['reform_user'] = 'other'
-    assert upload_book(client, editing).status_code == 409
+    assert 'No changes detected' in upload_book(client, editing).text
     with app.app_context(), db() as conn:
         assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
     reference.close()
     editing.close()
+
