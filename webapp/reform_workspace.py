@@ -89,8 +89,16 @@ def admin():
     return bool(current_app.config.get('REFORM_ADMIN_ENABLED')) and bool(session.get('authenticated')) and not session.get('reform_user')
 
 
+def draft_owner(conn):
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='reform_versions'").fetchone():
+        version = conn.execute("SELECT owner FROM reform_versions WHERE status IN ('draft','returned') ORDER BY created LIMIT 1").fetchone()
+        if version:
+            return version['owner']
+    return owner()
+
+
 def draft(conn):
-    row = conn.execute('SELECT * FROM drafts WHERE owner=?', (owner(),)).fetchone()
+    row = conn.execute('SELECT * FROM drafts WHERE owner=?', (draft_owner(conn),)).fetchone()
     if row:
         return unpack(row['payload']), row['revision']
     base = baseline(conn)
@@ -266,7 +274,9 @@ def protect():
             current = active(conn)
             if not current:
                 abort(409, 'Open a version draft before adding changes.')
-            if current and (current['owner'] != owner() or current['status'] not in ('draft', 'returned')):
+            if not session.get('reform_user'):
+                abort(403)
+            if current and current['status'] not in ('draft', 'returned'):
                 abort(409, 'The current version is locked for Furnibox review. Open Versions to see its status.')
 
 
@@ -309,7 +319,7 @@ def index():
         base = baseline(conn)
         work, revision = draft(conn) if base else (None, 0)
         delta = changes(work['base'], work['target']) if work else []
-        from webapp.reform_versions import schema, released_revisions, active
+        from webapp.reform_versions import schema, released_revisions, active, change_authors
         schema(conn)
         current_version = active(conn)
         bom_revisions = released_revisions(conn)
@@ -319,8 +329,13 @@ def index():
             draft_work = unpack(draft_row['payload'])
             draft_changes = changes(draft_work['base'], draft_work['target'])
             if draft_changes:
-                proposal_groups.append({'owner': draft_row['owner'], 'revision': draft_row['revision'],
-                                        'changes': draft_changes})
+                authors = change_authors(conn, current_version['number']) if current_version and draft_row['owner'] == current_version['owner'] else {}
+                by_actor = {}
+                for change in draft_changes:
+                    actor = authors.get((change['kind'], change['key']), draft_row['owner'])
+                    by_actor.setdefault(actor, []).append(change)
+                for actor, actor_changes in by_actor.items():
+                    proposal_groups.append({'owner': actor, 'revision': draft_row['revision'], 'changes': actor_changes})
         proposal_groups.sort(key=lambda group: (group['owner'] != owner(), group['owner']))
         total_proposed_changes = sum(len(group['changes']) for group in proposal_groups)
         proposal_rows = tabular_changes(proposal_groups)
@@ -479,9 +494,12 @@ def save():
     try:
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            from webapp.reform_versions import require_open_version
+            require_open_version(conn)
             work, revision = draft(conn)
             if str(revision) != request.form.get('revision'):
                 abort(409, 'The draft was changed in another window. Refresh the page.')
+            before_target = copy.deepcopy(work['target'])
             target = work['target']
             action = request.form.get('action')
             if action == 'product':
@@ -571,8 +589,10 @@ def save():
                 abort(400)
             from webapp.reform_versions import invalidate_approvals
             invalidate_approvals(conn)
+            from webapp.reform_versions import record_edit
+            record_edit(conn, before_target, target, revision + 1, 'Interface edit')
             # Drafts may temporarily contain unresolved retirements; check at confirmation.
-            conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision + 1, pack(work)))
+            conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (draft_owner(conn), revision + 1, pack(work)))
         flash('Draft saved. Review your changes before confirming.')
     except ValueError as exc:
         flash(str(exc))
@@ -586,11 +606,15 @@ def discard():
     with db() as conn:
         schema(conn)
         conn.execute('BEGIN IMMEDIATE')
+        from webapp.reform_versions import active
+        version = active(conn)
+        if version and (version['owner'] != owner() or version['status'] not in ('draft', 'returned')):
+            abort(403, 'Only the version coordinator can discard the shared draft.')
         _, revision = draft(conn)
         if str(revision) != request.form.get('revision'):
             abort(409)
         invalidate_approvals(conn)
-        conn.execute('DELETE FROM drafts WHERE owner=?', (owner(),))
+        conn.execute('DELETE FROM drafts WHERE owner=?', (draft_owner(conn),))
     flash('Draft discarded. The latest available data is now shown.')
     return redirect(url_for('reform.index'))
 
@@ -640,7 +664,10 @@ def submit():
                 remaining = approvals_required - approval_count
                 flash(f'Your approval is recorded. {remaining} more Reform representative(s) must approve this version before it is submitted to Furnibox.')
                 return redirect(url_for('reform.versions'))
+            from webapp.reform_versions import change_authors
+            authors = change_authors(conn, version['number'])
             payload = {'schema': 'reform-change-proposal-v1', 'status': 'awaiting_furnibox',
+                'contributors': [{'kind': c['kind'], 'key': c['key'], 'actor': authors.get((c['kind'], c['key']), version['owner'])} for c in delta],
                 'version': version['number'], 'description': version['description'], 'base': work['base'], 'draft_revision': revision,
                 'approval_digest': package_digest,
                 'baseline_digest': digest(work['base']), 'baseline_captured_at': work['base']['captured_at'],

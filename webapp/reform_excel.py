@@ -159,8 +159,8 @@ def make_book(token, record):
         from webapp.reform_map import add_map
         add_map(wb, record)
     if record.get('reference_only'):
-        guide['B11'] = 'Catalogue copy for review. To upload changes, the open version owner must download the editing file from their account.'
-        guide['B12'] = 'Only the open version owner may upload and submit changes. This catalogue copy does not grant editing rights.'
+        guide['B11'] = 'Catalogue copy for review. To upload changes, any signed-in Reform user must download an editing file for the open version.'
+        guide['B12'] = 'All signed-in Reform users can contribute to the open version using its editing file. This reference copy cannot be uploaded.'
         guide['B13'] = 'This file contains the last stored catalogue, not live Odoo data or proposed draft changes.'
         guide.append(['Source', record['work']['base'].get('source', '')])
         guide.append(['Retrieved (UTC)', record['work']['base'].get('captured_at', '')])
@@ -403,7 +403,7 @@ def excel_download():
     try:
         with db() as conn:
             from webapp.reform_versions import editable_version
-            editable_version(conn)
+            version = editable_version(conn)
             work, revision = draft(conn)
             if digest(work['base']) != digest(baseline(conn)):
                 raise ValueError('Your draft uses an older source. Resolve it before downloading an Excel file.')
@@ -411,6 +411,7 @@ def excel_download():
             full = request.args.get('scope') == 'all'
             record = {'work': work, 'revision': revision, 'sku': sku, 'full': full, 'scope': scope_for(work, sku, full), 'options': options_for(work)}
             record['map_format'] = 1
+            record['version'] = version['number']
             record['bom_format'] = 0 if request.args.get('layout') == 'legacy' else 1
             supplier_reference = conn.execute('SELECT payload FROM state WHERE id=3').fetchone()
             record['supplier_codes'] = unpack(supplier_reference['payload']) if supplier_reference else {}
@@ -440,10 +441,14 @@ def excel_upload():
             editable_version(conn)
             exchange_table(conn)
             conn.execute('BEGIN IMMEDIATE')
-            export = conn.execute('SELECT * FROM file_exports WHERE id=? AND owner=?', (token, owner())).fetchone()
+            from webapp.reform_versions import require_open_version, record_edit
+            version = require_open_version(conn)
+            export = conn.execute('SELECT * FROM file_exports WHERE id=?', (token,)).fetchone()
             if not export:
-                raise ValueError('Export not found for your account. Upload a file downloaded by this account.')
+                raise ValueError('Export not found. Download a fresh editing file.')
             record = unpack(export['payload'])
+            if record.get('version') != version['number']:
+                raise ValueError('This file belongs to another or older version. Download a fresh editing file.')
             work, revision = draft(conn)
             if digest(record['work']['base']) != digest(baseline(conn)):
                 raise ValueError('Source data has changed since this download. Download a fresh file and reapply your changes.')
@@ -459,8 +464,10 @@ def excel_upload():
             else:
                 from webapp.reform_versions import invalidate_approvals
                 invalidate_approvals(conn)
+                record_edit(conn, work['target'], target, revision + 1, 'Excel upload')
                 work['target'] = target
-                conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (owner(), revision+1, pack(work)))
+                from webapp.reform_workspace import draft_owner
+                conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)', (draft_owner(conn), revision+1, pack(work)))
                 flash('Excel changes saved to your draft. Review Current / Proposed below, then open Versions to submit the complete version.')
         return redirect(url_for('reform.index', view='review'))
     except ValueError as exc:
@@ -473,5 +480,4 @@ def excel_upload():
         if wb:
             wb.close()
     return redirect(url_for('reform.index', view='files'))
-
 
