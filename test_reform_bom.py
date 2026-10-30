@@ -27,7 +27,7 @@ def test_default_vertical_roundtrip_and_supplier_reference(setup):
     with app.app_context(), db() as conn:
         conn.execute('INSERT INTO state VALUES (3,?)', (pack({'PANEL-01': ['SUP-1']}),))
     b = export(client)
-    assert b.sheetnames[:2] == ['BOM', 'Non-BOM'] and 'BOM Map' not in b
+    assert b.sheetnames[:3] == ['Product MBOM Pivot', 'BOM', 'Non-BOM'] and 'BOM Map' not in b
     assert b['Components'].sheet_state == 'veryHidden'
     assert b['BOM']['E2'].value == 'SUP-1'
     assert b['BOM']['B2'].font.sz == 9 and b['BOM'].freeze_panes == 'B2'
