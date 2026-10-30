@@ -126,7 +126,7 @@ def test_excel_macro_workbook_extension_and_invalid_file_message(setup):
     assert page.status_code == 400 and 'readable Excel workbook' in page.text
 
 
-def test_partial_upload_ignores_absent_rows_even_for_same_parent(setup):
+def test_partial_upload_removes_missing_components_but_ignores_absent_skus(setup):
     app, client = setup
     rid = seed(client, [('P', 'A', 1), ('P', 'B', 2), ('Q', 'C', 3)])
     response = send(client, 'pivot-compare', xlsx([('P', 'A', 4)]), reference_id=rid)
@@ -134,10 +134,10 @@ def test_partial_upload_ignores_absent_rows_even_for_same_parent(setup):
     with app.app_context(), db() as conn:
         item = conn.execute('SELECT * FROM pivot_comparisons').fetchone()
         report = unpack(item['payload'])
-        assert (report['changed'], report['removed'], report['ignored']) == (1, 0, 2)
+        assert (report['changed'], report['removed'], report['ignored']) == (1, 1, 1)
     result_id = url.rsplit('/', 1)[1]
     out = load_workbook(io.BytesIO(client.get(f'{url}/download').data))
-    assert out['Changes'].max_row == 2
+    assert out['Changes'].max_row == 3
     assert 'Complete version; missing rows are removals' in client.get(url + '?scope=all').text
     full = load_workbook(io.BytesIO(client.get(f'{url}/download?scope=all').data))
     assert full['Changes'].max_row == 4
@@ -151,14 +151,14 @@ def test_legacy_full_report_reconstructs_uploaded_rows_without_reupload(setup):
     legacy.pop('scope')
     assert legacy['removed'] == 2
     assert displayed_report(original, legacy)['changed'] == 1
-    assert displayed_report(original, legacy)['removed'] == 0
+    assert displayed_report(original, legacy)['removed'] == 2
     assert displayed_report(original, legacy)['unchanged'] == 1
     rid = seed(client, [('P', 'A', 1), ('P', 'B', 2), ('Q', 'C', 3), ('Q', 'D', 4)])
     from webapp.reform_workspace import pack
     with app.app_context(), db() as conn:
         conn.execute('INSERT INTO pivot_comparisons VALUES (?,?,?,?,?,?,?)', ('legacy', rid, 'Old-upload.xlsx', 'paul', '2026-10-30', 'hash', pack(legacy)))
     page = client.get('/reform/pivot-compare/results/legacy')
-    assert 'Only uploaded rows; missing rows are unchanged' in page.text
+    assert 'Uploaded SKUs; missing components are removals' in page.text
     out = load_workbook(io.BytesIO(client.get('/reform/pivot-compare/results/legacy/download').data))
     assert out['Changes'].max_row == 2
     with app.app_context(), db() as conn:
@@ -166,10 +166,29 @@ def test_legacy_full_report_reconstructs_uploaded_rows_without_reupload(setup):
 
 
 def test_partial_26_row_upload_against_7333_row_reference():
-    before = [{'sku': 'SKU', 'material': str(i), 'quantity': '1', 'row': i + 3} for i in range(7333)]
+    before = [{'sku': 'SKU' if i < 26 else 'OTHER', 'material': str(i), 'quantity': '1', 'row': i + 3} for i in range(7333)]
     after = [{**r, 'quantity': '2' if i < 3 else '1'} for i, r in enumerate(before[:26])]
     old = compare(before, after, 'all')
     old.pop('scope')
     assert (old['removed'], old['changed'], old['unchanged']) == (7307, 3, 23)
     fixed = displayed_report(before, old)
     assert (fixed['removed'], fixed['changed'], fixed['unchanged'], len(fixed['changes'])) == (0, 3, 23, 3)
+
+
+def test_component_replacement_is_added_and_removed_in_page_and_excel(setup):
+    app, client = setup
+    sku = 'FPACK-US-CAB03-HBI003'
+    old_part = 'US-STIFFENER-SREW-574x100-NO'
+    new_part = 'US-TOPVEN-SREW-726x576-NO'
+    rid = seed(client, [(sku, old_part, 2), (sku, 'UNCHANGED', 1), ('OTHER', 'KEEP', 1)])
+    response = send(client, 'pivot-compare', xlsx([(sku, new_part, 2), (sku, 'UNCHANGED', 1)]), reference_id=rid)
+    assert old_part in response.text and new_part in response.text
+    assert '<td>Removed</td>' in response.text and '<td>Added</td>' in response.text
+    assert '<td>OTHER</td>' not in response.text
+    out = load_workbook(io.BytesIO(client.get(response.request.path + '/download').data))
+    rows = list(out['Changes'].values)[1:]
+    assert {(r[0], r[2], r[3], r[4]) for r in rows} == {
+        ('Removed', old_part, 2, None), ('Added', new_part, None, 2)}
+    with app.app_context(), db() as conn:
+        saved = unpack(conn.execute('SELECT payload FROM pivot_comparisons').fetchone()[0])
+    assert (saved['added'], saved['removed'], saved['changed'], saved['unchanged'], saved['ignored']) == (1, 1, 0, 1, 1)
