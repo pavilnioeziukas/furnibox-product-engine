@@ -45,7 +45,7 @@ def test_unchanged_and_changed_roundtrip(setup):
     book['Components']['E2'] = 7
     response = upload_book(client, book)
     assert 'Excel changes saved' in response.text
-    assert 'PANEL-01 - 7.0' in re.sub(r'<[^>]+>', '', response.text)
+    assert 'PANEL-01 — 7.0' in re.sub(r'<[^>]+>', '', response.text)
     assert 'Current' in response.text and 'Proposed' in response.text
     assert 'Your draft has changed' in upload_book(client, book).text
     with app.app_context(), db() as conn:
@@ -247,4 +247,3 @@ def test_reference_catalogue_matches_standard_bom_layout_and_upload_boundary(set
         assert conn.execute('SELECT count(*) FROM drafts').fetchone()[0] == 0
     reference.close()
     editing.close()
-
