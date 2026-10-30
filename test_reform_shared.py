@@ -103,4 +103,3 @@ def test_file_cannot_cross_version_boundary_or_source_refresh(setup):
         source['captured_at'] = '2026-10-30T12:00:00+00:00'
         conn.execute('UPDATE state SET payload=? WHERE id=1', (pack(source),))
     assert 'Source data has changed' in upload_book(coordinator, fresh).text
-
