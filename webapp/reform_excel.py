@@ -481,4 +481,3 @@ def excel_upload():
             wb.close()
     return redirect(url_for('reform.index', view='files'))
 
-
