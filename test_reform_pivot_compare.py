@@ -163,3 +163,13 @@ def test_legacy_full_report_reconstructs_uploaded_rows_without_reupload(setup):
     assert out['Changes'].max_row == 2
     with app.app_context(), db() as conn:
         assert unpack(conn.execute("SELECT payload FROM pivot_comparisons WHERE id='legacy'").fetchone()[0]) == legacy
+
+
+def test_partial_26_row_upload_against_7333_row_reference():
+    before = [{'sku': 'SKU', 'material': str(i), 'quantity': '1', 'row': i + 3} for i in range(7333)]
+    after = [{**r, 'quantity': '2' if i < 3 else '1'} for i, r in enumerate(before[:26])]
+    old = compare(before, after, 'all')
+    old.pop('scope')
+    assert (old['removed'], old['changed'], old['unchanged']) == (7307, 3, 23)
+    fixed = displayed_report(before, old)
+    assert (fixed['removed'], fixed['changed'], fixed['unchanged'], len(fixed['changes'])) == (0, 3, 23, 3)
