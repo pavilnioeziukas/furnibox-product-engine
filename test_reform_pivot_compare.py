@@ -281,7 +281,7 @@ def test_confirmation_rejects_tampering_and_preserves_first_actor_and_scope(setu
         assert len(approvals) == 1 and approvals[0]['actor'] == 'paul'
         frozen = unpack(approvals[0]['payload'])
         assert frozen['scope'] == 'uploaded' and frozen['removed'] == 0
-    assert client.application.test_client().post(url + '/confirm').status_code == 302
+    assert client.application.test_client().post(url + '/confirm').status_code == 400
     # A later upload is a distinct package awaiting its own confirmation.
     newer = send(client, 'pivot-compare', xlsx([('P', 'C', 3)]), reference_id=rid)
     assert '<button>Confirm changes</button>' in newer.text
