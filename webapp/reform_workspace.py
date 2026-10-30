@@ -322,6 +322,8 @@ def index():
         from webapp.reform_versions import schema, released_revisions, active, change_authors
         schema(conn)
         current_version = active(conn)
+        from webapp.reform_versions import approval_digest
+        cancel_digest = approval_digest(current_version, work, revision) if current_version and work else ''
         bom_revisions = released_revisions(conn)
         rows = conn.execute('SELECT id,owner,created FROM submissions ORDER BY id DESC LIMIT 50').fetchall()
         proposal_groups = []
@@ -388,7 +390,7 @@ def index():
         delta=delta, submissions=rows, is_admin=admin(), current_version=current_version,
         proposal_groups=proposal_groups, total_proposed_changes=total_proposed_changes,
         proposal_rows=proposal_rows,
-        current_user=owner(),
+        current_user=owner(), cancel_digest=cancel_digest,
         query=query, view=view, selected=selected, product_rows=product_rows, product_boms=product_boms,
         usage=usage, counts=counts, page=page, pages=pages, total=total,
         bom_rows=bom_rows, selected_bom=selected_bom, intent=intent)
@@ -617,6 +619,41 @@ def discard():
         conn.execute('DELETE FROM drafts WHERE owner=?', (draft_owner(conn),))
     flash('Draft discarded. The latest available data is now shown.')
     return redirect(url_for('reform.index'))
+
+
+@reform.post('/cancel-all')
+def cancel_all():
+    from webapp.reform_versions import schema, require_open_version, invalidate_approvals, event, approval_digest
+    with db() as conn:
+        schema(conn)
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            version = require_open_version(conn)
+        except ValueError as exc:
+            abort(409, str(exc))
+        work, revision = draft(conn)
+        if (request.form.get('version') != version['number'] or
+                request.form.get('revision') != str(revision) or
+                request.form.get('package_digest') != approval_digest(version, work, revision)):
+            abort(409, 'The shared version changed. Refresh and review it before cancelling.')
+        if request.form.get('confirm') != 'yes':
+            abort(400, 'Confirm cancellation of all proposed changes in this version.')
+        source = baseline(conn)
+        if not source:
+            abort(409)
+        conn.execute('CREATE TABLE IF NOT EXISTS reform_cancelled_drafts (id INTEGER PRIMARY KEY, number TEXT, actor TEXT, revision INTEGER, created TEXT, payload BLOB)')
+        conn.execute('INSERT INTO reform_cancelled_drafts(number,actor,revision,created,payload) VALUES (?,?,?,?,?)',
+                     (version['number'], owner(), revision, now(), pack(work)))
+        count = len(changes(work['base'], work['target']))
+        invalidate_approvals(conn)
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE name='reform_change_authors'").fetchone():
+            conn.execute('DELETE FROM reform_change_authors WHERE number=?', (version['number'],))
+        conn.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?)',
+                     (version['owner'], revision + 1, pack({'base': source, 'target': copy.deepcopy(source)})))
+        event(conn, version['number'], 'changes_cancelled', f'Cancelled all {count} proposed record changes; restored latest catalogue. Revision {revision + 1}.')
+        conn.execute('UPDATE reform_versions SET updated=? WHERE number=?', (now(), version['number']))
+    flash('All proposed changes in the shared version were cancelled. The latest catalogue is now shown. Odoo was not changed.')
+    return redirect(url_for('reform.index', view='review'))
 
 
 @reform.post('/submit')
