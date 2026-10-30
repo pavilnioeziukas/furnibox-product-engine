@@ -9,13 +9,11 @@
   <h3>Download catalogue</h3>
   <p>Available to every signed-in user, regardless of who owns the open version. Uses the standard Excel layout with BOM, Products, Non-BOM, BOMs, Catalogue and Lists sheets. Includes the latest catalogue loaded into this workspace, without proposed draft changes. The workbook records its source and retrieval time; it is not a live Odoo export.</p>
   <a class="action-link" href="{{ url_for('reform.catalogue_download') }}">Download catalogue </a>
-  <p>For uploading changes, the open version owner must download the editing file below from their own account.</p>
+  <p>Every signed-in Reform user can download the editing file below and upload changes to the shared open version.</p>
 </section>
 
 {% if not current_version %}
 <section class="card production-gate"><h3>1. Open a version first</h3><p>Create a version number and description before downloading an editing file or uploading changes. All proposed changes will then belong to that version and be visible to its reviewers.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Open a version draft </a></section>
-{% elif current_version.owner != current_user %}
-<section class="card production-gate"><h3>Version {{ current_version.number }} is open</h3><p><strong>Proposed by:</strong> {{ current_version.owner }}. You can review the complete change package, but only its owner can add files or edit this version.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Review this version </a></section>
 {% elif current_version.status not in ['draft', 'returned'] %}
 <section class="card production-gate"><h3>Version {{ current_version.number }} is locked</h3><p>This version has already been submitted for review and cannot accept more changes.</p><a class="action-link" href="{{ url_for('reform.versions') }}">View this version </a></section>
 {% else %}
@@ -77,7 +75,7 @@
   </div>
 </details>
 
-<p class="source-note">The file belongs to the account that downloaded it. Maximum file size: 5 MB.</p>
+<p class="source-note">All signed-in Reform users contribute to this shared version. The uploader is recorded. Download a fresh file if the version changes. Maximum file size: 5 MB.</p>
 {% endif %}
 </section>
 
