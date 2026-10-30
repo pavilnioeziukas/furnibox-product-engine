@@ -12,7 +12,11 @@ HEADERS = ['SKU', 'MATERIAL_SKU', 'Total']
 
 
 def add_sheet(wb):
-    ws = wb.create_sheet(NAME)
+    ws = wb.create_sheet(NAME, 0)
+    wb.active = 0
+    wb.views[0].firstSheet = 0
+    for sheet in wb:
+        sheet.sheet_view.tabSelected = sheet is ws
     ws.append(['Sum of Part Qty.'])
     ws.append(HEADERS)
     ws.freeze_panes = 'C3'
@@ -129,4 +133,3 @@ def apply_rows(rows, record):
     delta = changes(record['work']['base'], target)
     validate_proposal(target, delta)
     return target
-

@@ -25,6 +25,7 @@ def paste(book, rows):
 def test_pivot_export_empty_and_roundtrip_unchanged(setup):
     app, client = setup
     book = export(client)
+    assert book.sheetnames[0] == NAME and book.active.title == NAME
     assert list(book[NAME].values) == [('Sum of Part Qty.', None, None), ('SKU', 'MATERIAL_SKU', 'Total')]
     paste(book, [('CAB-01', 'HINGE-01', 4), ('CAB-01', 'PANEL-01', 2)])
     assert 'No changes detected' in upload_book(client, book).text
@@ -148,4 +149,3 @@ def test_pivot_cannot_remove_hidden_internal_lines(setup):
     paste(book, [('CAB-01', 'PANEL-01', 2), ('CAB-01', 'HINGE-01', 4)])
     assert 'read-only' in upload_book(client, book).text
     assert saved(app) == data
-

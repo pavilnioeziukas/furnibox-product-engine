@@ -191,7 +191,8 @@ def test_reference_catalogue_without_version_or_edit_permission(setup):
         book = load_workbook(io.BytesIO(response.data))
         assert '_Exchange' not in book
         assert book['Products'].max_row + book['Non-BOM'].max_row - 2 == len(sample()['products'])
-        assert book.sheetnames[:2] == ['BOM', 'Non-BOM']
+        assert book.sheetnames[:3] == ['Product MBOM Pivot', 'BOM', 'Non-BOM']
+        assert book.active.title == 'Product MBOM Pivot'
         assert book['BOM']['A1'].value == 'Parent BOM SKU'
         assert book['BOM'].column_dimensions['H'].hidden
         assert book['Components'].sheet_state == 'veryHidden'
