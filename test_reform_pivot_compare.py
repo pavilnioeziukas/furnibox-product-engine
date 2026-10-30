@@ -23,11 +23,11 @@ def xlsx(rows, title='Product MBOMs - Pivot'):
     return out.getvalue()
 
 
-def send(client, path, content, **fields):
+def send(client, path, content, filename='Poul.xlsx', **fields):
     client.get('/reform/pivot-compare')
     with client.session_transaction() as session:
         csrf = session['reform_csrf']
-    return client.post('/reform/' + path, data={'csrf': csrf, 'file': (io.BytesIO(content), 'Poul.xlsx'), **fields}, follow_redirects=True)
+    return client.post('/reform/' + path, data={'csrf': csrf, 'file': (io.BytesIO(content), filename), **fields}, follow_redirects=True)
 
 
 def seed(client, rows):
@@ -116,3 +116,11 @@ def test_template_roundtrip_and_exact_code_changes():
     new = parse(xlsx([('P', 'PART', 1), ('P', 'Zero', 0)], title='Product MBOM Pivot'))
     report = compare(old, new)
     assert (report['added'], report['removed'], report['changed'], report['unchanged']) == (1, 1, 0, 1)
+
+
+def test_excel_macro_workbook_extension_and_invalid_file_message(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1)])
+    assert 'No differences' in send(client, 'pivot-compare', xlsx([('P', 'C', 1)]), filename='Poul.xlsm', reference_id=rid).text
+    page = send(client, 'pivot-compare', b'not an Excel file', reference_id=rid)
+    assert page.status_code == 400 and 'readable Excel workbook' in page.text
