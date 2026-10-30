@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BOM v10 Pivot comparison</title><link rel="stylesheet" href="{{ url_for('static', filename='reform.css') }}"></head>
+<body><main class="catalogue-shell">
+<p><a href="{{ url_for('reform.index', view='files') }}">Back to Excel exchange</a></p>
+<h1>BOM v10 Pivot comparison</h1>
+<p>Temporary comparison of two complete Pivot tables. This report uses the reference Excel below. It does not use the Odoo catalogue or save changes to Odoo or the shared proposal version.</p>
+{% for message in get_flashed_messages() %}<div class="notice">{{ message }}</div>{% endfor %}
+{% if issues %}<section class="card"><h2>Check the uploaded Pivot ({{ issue_count }} issues)</h2><table><thead><tr><th>Excel row</th><th>SKU</th><th>MATERIAL_SKU</th><th>Reason</th></tr></thead><tbody>{% for issue in issues %}<tr><td>{{ issue.row }}</td><td>{{ issue.sku }}</td><td>{{ issue.material }}</td><td>{{ issue.reason }}</td></tr>{% endfor %}</tbody></table>{% if issue_count > 200 %}<p>Showing the first 200 issues. Correct these and upload again.</p>{% endif %}</section>{% endif %}
+<section class="card"><h2>1. Reference version</h2>
+{% if reference %}<p><strong>{{ reference.label }}</strong> — {{ base_count }} SKU / MATERIAL_SKU pairs.</p><p>Source: {{ reference.filename }}</p><p>Loaded: {{ reference.created|cet_time }} · By: {{ reference.actor }}</p><details><summary>Source checksum</summary><p>{{ reference.sha256 }}</p></details>
+{% else %}<p>No reference Pivot has been loaded yet. Load the current BOM v10 file below.</p>{% endif %}
+<details><summary>{{ 'Load another reference (previous reports are preserved)' if reference else 'Load reference Pivot' }}</summary>
+<form method="post" enctype="multipart/form-data" action="{{ url_for('reform.pivot_reference_upload') }}"><input type="hidden" name="csrf" value="{{ session.reform_csrf }}"><label>Reference version name<input name="label" value="BOM v10" required maxlength="100"></label><label>Reference Excel<input type="file" name="file" accept=".xlsx,.xlsm" required></label><button>Load reference Pivot</button></form></details></section>
+{% if reference %}<section class="card"><h2>2. Upload Poul's new version</h2>
+<p>Upload a workbook containing <strong>Product MBOM Pivot</strong> or <strong>Product MBOMs - Pivot</strong>, with <strong>SKU / MATERIAL_SKU / Total</strong> in columns A:C. An engine export marker is not required.</p>
+<p>Supply the complete new Pivot. Rows absent from the new version are reported as removed. Codes are matched exactly after trimming surrounding spaces; no Odoo code mapping is applied. Row order and numeric formatting do not count as changes.</p>
+<p><a href="{{ url_for('reform.pivot_compare_template') }}">Download blank Pivot comparison template</a> — paste values under the headers, or upload your existing Pivot workbook.</p>
+<form method="post" enctype="multipart/form-data" action="{{ url_for('reform.pivot_compare_upload') }}"><input type="hidden" name="csrf" value="{{ session.reform_csrf }}"><input type="hidden" name="reference_id" value="{{ reference.id }}"><label>New version Excel<input type="file" name="file" accept=".xlsx,.xlsm" required></label><button>Compare with {{ reference.label }}</button></form></section>{% endif %}
+{% if result %}<section class="card"><h2>3. Comparison results</h2><p><strong>{{ reference.label }}</strong> → <strong>{{ result.filename }}</strong> · Uploaded by {{ result.actor }} · {{ result.created|cet_time }}</p>
+<div class="stats"><div><strong>{{ summary.added }}</strong><span>Added pairs</span></div><div><strong>{{ summary.removed }}</strong><span>Removed pairs</span></div><div><strong>{{ summary.changed }}</strong><span>Quantity changes</span></div><div><strong>{{ summary.unchanged }}</strong><span>Unchanged pairs</span></div></div>
+<p><a class="action-link" href="{{ url_for('reform.pivot_compare_download',result_id=result.id) }}">Download changes in Excel</a></p>
+{% if not summary.changes %}<p>No differences. Both Pivot tables contain the same codes and quantities.</p>{% else %}
+<form method="get"><label>Filter by SKU or MATERIAL_SKU<input name="q" value="{{ query }}"></label><button>Search changes</button></form>
+<div class="table-scroll"><table><thead><tr><th>Change</th><th>SKU</th><th>MATERIAL_SKU</th><th>{{ reference.label }}</th><th>New quantity</th><th>Difference</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.status }}</td><td>{{ row.sku }}</td><td>{{ row.material }}</td><td>{{ row.old if row.old is not none else '—' }}</td><td>{{ row.new if row.new is not none else '—' }}</td><td>{{ row.difference }}</td></tr>{% else %}<tr><td colspan="6">No changes match the filter.</td></tr>{% endfor %}</tbody></table></div>
+<p>Page {{ page }} / {{ pages }} (100 changed pairs per page). {% if page > 1 %}<a href="{{ url_for('reform.pivot_compare_result',result_id=result.id,page=page-1,q=query) }}">Previous</a>{% endif %} {% if page < pages %}<a href="{{ url_for('reform.pivot_compare_result',result_id=result.id,page=page+1,q=query) }}">Next</a>{% endif %}</p>{% endif %}
+</section>{% endif %}
+</main></body></html>
