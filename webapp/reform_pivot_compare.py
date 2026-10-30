@@ -88,8 +88,9 @@ def parse(content):
 
 def compare(before, after, scope='uploaded'):
     new = {(r['sku'], r['material']): r for r in after}
+    uploaded_skus = {r['sku'] for r in after}
     old = {(r['sku'], r['material']): r for r in before
-           if scope == 'all' or (r['sku'], r['material']) in new}
+           if scope == 'all' or r['sku'] in uploaded_skus}
     result, unchanged = [], 0
     for key in sorted(set(old) | set(new)):
         a, b = old.get(key), new.get(key)
@@ -273,7 +274,7 @@ def pivot_compare_download(result_id):
                 ['New version file', item['filename']], ['New version SHA256', item['sha256']], ['Uploaded by', item['actor']],
                 ['Compared at (UTC)', item['created']], ['Added', report['added']], ['Removed', report['removed']],
                 ['Quantity changed', report['changed']], ['Unchanged', report['unchanged']],
-                ['Comparison scope', 'Complete version: absent rows are removals' if report['scope'] == 'all' else 'Uploaded rows only: absent rows are unchanged'],
+                ['Comparison scope', 'Complete version: absent rows are removals' if report['scope'] == 'all' else 'Uploaded SKUs: missing components are removals; absent SKUs are unchanged'],
                 ['Reference rows outside scope', report['ignored']],
                 ['Comparison', 'No Odoo data used. Codes are compared exactly after trimming surrounding spaces.']]:
         info.append(row)
