@@ -34,12 +34,12 @@ def test_alphabetic_bom_revision_sequence_and_immutable_history(setup):
 
 def test_existing_bom_change_displays_next_plm_revision(setup):
     app, client = setup
-    post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spinteles komplektacija',
+    post(client, 'save', action='bom', bom_id='1', quantity='1', code='Spintelės komplektacija',
          component_sku=['PANEL-01'], component_quantity=['3'], component_id=['10'], revision='0')
     post(client, 'versions/save', number='v11.1', description='BOM revision', revision='1')
     page = client.get('/reform/versions').text
     assert 'PLM changes and BOM revisions' in page
-    assert 'A  B' in page
+    assert 'A → B' in page
     assert 'Proposed by:</strong> paul' in page
 
 
@@ -58,7 +58,7 @@ def test_change_and_bom_revision_history_display_proposer(setup):
     page = client.get('/reform/versions').text
     assert 'Proposed by paul' in page
     assert 'Source: Odoo production baseline' in page
-    assert 'BOM update � Proposed by paul' in page
+    assert 'BOM update · Proposed by paul' in page
 
 
 def test_other_reform_user_can_review_and_edit_open_version(setup):
@@ -164,5 +164,4 @@ def test_two_distinct_reform_users_must_approve_same_revision(setup):
     with app.app_context(), db() as conn:
         payload = unpack(conn.execute('SELECT payload FROM submissions').fetchone()['payload'])
         assert payload['approved_by'] == ['paul', 'other']
-
 
