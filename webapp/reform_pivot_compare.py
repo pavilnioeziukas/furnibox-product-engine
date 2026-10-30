@@ -86,9 +86,10 @@ def parse(content):
         wb.close()
 
 
-def compare(before, after):
-    old = {(r['sku'], r['material']): r for r in before}
+def compare(before, after, scope='uploaded'):
     new = {(r['sku'], r['material']): r for r in after}
+    old = {(r['sku'], r['material']): r for r in before
+           if scope == 'all' or (r['sku'], r['material']) in new}
     result, unchanged = [], 0
     for key in sorted(set(old) | set(new)):
         a, b = old.get(key), new.get(key)
@@ -100,10 +101,23 @@ def compare(before, after):
                        'new': str(y) if b else None, 'difference': str((y or Decimal(0)) - (x or Decimal(0))),
                        'status': 'Added' if not a else 'Removed' if not b else 'Quantity changed',
                        'old_row': a['row'] if a else None, 'new_row': b['row'] if b else None})
-    return {'changes': result, 'unchanged': unchanged, 'old_count': len(before), 'new_count': len(after),
+    return {'changes': result, 'unchanged': unchanged, 'old_count': len(old), 'new_count': len(after),
+            'scope': scope, 'ignored': len(before) - len(old),
             'added': sum(r['status'] == 'Added' for r in result),
             'removed': sum(r['status'] == 'Removed' for r in result),
             'changed': sum(r['status'] == 'Quantity changed' for r in result)}
+
+
+def displayed_report(before, saved, scope=None):
+    """Reconstruct legacy full comparisons without changing their stored evidence."""
+    after = saved.get('uploaded_rows')
+    if after is None:
+        changed = {(r['sku'], r['material']): r for r in saved['changes']}
+        after = [r for r in before if (r['sku'], r['material']) not in changed]
+        after += [{'sku': r['sku'], 'material': r['material'], 'quantity': r['new'], 'row': r['new_row']}
+                  for r in saved['changes'] if r['new'] is not None]
+    selected = scope if scope in ('uploaded', 'all') else saved.get('scope', 'uploaded')
+    return compare(before, after, selected)
 
 
 def schema(conn):
@@ -145,7 +159,7 @@ def page(result_id=None, issues=None, status=200):
         if result_id and not item:
             abort(404)
         ref = reference(conn, item['reference_id'] if item else None)
-        summary = unpack(item['payload']) if item else None
+        summary = displayed_report(unpack(ref['payload']), unpack(item['payload']), request.args.get('scope')) if item else None
         query = request.args.get('q', '').strip()[:200]
         changed = summary['changes'] if summary else []
         if query:
@@ -193,7 +207,9 @@ def pivot_compare_upload():
             ref = reference(conn, request.form.get('reference_id', ''))
             if not ref:
                 abort(409, 'Choose an existing reference Pivot before uploading the new version.')
-            report = compare(unpack(ref['payload']), rows)
+            selected = 'all' if request.form.get('scope') == 'all' else 'uploaded'
+            report = compare(unpack(ref['payload']), rows, selected)
+            report['uploaded_rows'] = rows
             key = secrets.token_hex(16)
             conn.execute('INSERT INTO pivot_comparisons VALUES (?,?,?,?,?,?,?)',
                          (key, ref['id'], filename, owner(), now(), hashlib.sha256(raw).hexdigest(), pack(report)))
@@ -248,7 +264,7 @@ def pivot_compare_download(result_id):
         if not item:
             abort(404)
         ref = reference(conn, item['reference_id'])
-        report = unpack(item['payload'])
+        report = displayed_report(unpack(ref['payload']), unpack(item['payload']), request.args.get('scope'))
     numeric = lambda q: None if q is None else float(Decimal(q))
     wb = workbook(['Change', 'SKU', 'MATERIAL_SKU', 'Reference quantity', 'New quantity', 'Difference', 'Reference row', 'New row'],
                   [[r['status'], r['sku'], r['material'], numeric(r['old']), numeric(r['new']), numeric(r['difference']), r['old_row'], r['new_row']] for r in report['changes']], 'Changes')
@@ -256,7 +272,10 @@ def pivot_compare_download(result_id):
     for row in [['Reference version', ref['label']], ['Reference file', ref['filename']], ['Reference SHA256', ref['sha256']],
                 ['New version file', item['filename']], ['New version SHA256', item['sha256']], ['Uploaded by', item['actor']],
                 ['Compared at (UTC)', item['created']], ['Added', report['added']], ['Removed', report['removed']],
-                ['Quantity changed', report['changed']], ['Unchanged', report['unchanged']], ['Comparison', 'Complete Pivot tables; no Odoo data used. Missing rows are reported as removals. Codes are compared exactly after trimming surrounding spaces.']]:
+                ['Quantity changed', report['changed']], ['Unchanged', report['unchanged']],
+                ['Comparison scope', 'Complete version: absent rows are removals' if report['scope'] == 'all' else 'Uploaded rows only: absent rows are unchanged'],
+                ['Reference rows outside scope', report['ignored']],
+                ['Comparison', 'No Odoo data used. Codes are compared exactly after trimming surrounding spaces.']]:
         info.append(row)
         for cell in info[info.max_row]:
             if isinstance(cell.value, str):
