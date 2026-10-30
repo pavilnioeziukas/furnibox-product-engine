@@ -274,4 +274,3 @@ def review_version():
     flash('Version status updated. This action does not write to Odoo.')
     return redirect(url_for('reform.versions'))
 
-
