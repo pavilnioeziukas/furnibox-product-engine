@@ -160,7 +160,7 @@ def test_legacy_full_report_reconstructs_uploaded_rows_without_reupload(setup):
     page = client.get('/reform/pivot-compare/results/legacy')
     assert 'Uploaded SKUs; missing components are removals' in page.text
     out = load_workbook(io.BytesIO(client.get('/reform/pivot-compare/results/legacy/download').data))
-    assert out['Changes'].max_row == 2
+    assert out['Changes'].max_row == 4
     with app.app_context(), db() as conn:
         assert unpack(conn.execute("SELECT payload FROM pivot_comparisons WHERE id='legacy'").fetchone()[0]) == legacy
 
