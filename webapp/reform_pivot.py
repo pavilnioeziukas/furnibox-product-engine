@@ -91,7 +91,7 @@ def apply_rows(rows, record):
                 math.isclose(q, old_totals[c], rel_tol=1e-10, abs_tol=1e-10)
                 for c, q in positive_wanted.items()):
             continue
-        if bom.get('read_only') or products[bom['sku']].get('read_only'):
+        if record['scope']['boms'][key].get('read_only') or bom.get('read_only') or products[bom['sku']].get('read_only'):
             raise ValueError(f'{parent}: BOM is read-only; ask Furnibox to review it.')
         if not products[bom['sku']]['active'] or not reform_visible(bom['sku']):
             raise ValueError(f'{parent}: product is unavailable.')

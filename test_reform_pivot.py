@@ -136,3 +136,16 @@ def test_pivot_locked_unchanged_and_private_component_protection(setup):
     assert 'unknown or unavailable' in upload_book(client, book).text
     assert saved(app) == data
 
+
+def test_pivot_cannot_remove_hidden_internal_lines(setup):
+    app, client = setup
+    data = sample()
+    data['products']['APACK-PRIVATE'] = dict(data['products']['HINGE-01'], sku='APACK-PRIVATE')
+    data['boms']['1']['components'].append(dict(data['boms']['1']['components'][1], id='hidden', sku='APACK-PRIVATE'))
+    with app.app_context(), db() as conn:
+        conn.execute('UPDATE state SET payload=? WHERE id=1', (pack(data),))
+    book = export(client)
+    paste(book, [('CAB-01', 'PANEL-01', 2), ('CAB-01', 'HINGE-01', 4)])
+    assert 'read-only' in upload_book(client, book).text
+    assert saved(app) == data
+
