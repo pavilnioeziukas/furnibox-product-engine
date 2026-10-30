@@ -164,6 +164,8 @@ def make_book(token, record):
         guide['B13'] = 'This file contains the last stored catalogue, not live Odoo data or proposed draft changes.'
         guide.append(['Source', record['work']['base'].get('source', '')])
         guide.append(['Retrieved (UTC)', record['work']['base'].get('captured_at', '')])
+    from webapp.reform_pivot import add_sheet
+    add_sheet(wb)
     data = io.BytesIO()
     wb.save(data)
     data.seek(0)
@@ -213,19 +215,27 @@ def rows_from(wb, name):
     return result
 
 
-def apply_book(wb, record, reserved):
+def apply_book(wb, record, reserved, _skip_pivot=False):
+    if not _skip_pivot:
+        from webapp.reform_pivot import read_rows, apply_rows
+        pivot = read_rows(wb)
+        if pivot:
+            ordinary = apply_book(wb, record, reserved, _skip_pivot=True)
+            if ordinary != record['work']['target']:
+                raise ValueError('Product MBOM Pivot: leave the other editable sheets unchanged. Upload pivot changes separately.')
+            return apply_rows(pivot, record)
     if record.get('bom_format') == 1:
         from webapp.reform_bom import translate
         translated = translate(wb, record)
         try:
-            return apply_book(translated, {**record, 'bom_format': 0, 'map_format': 1}, reserved)
+            return apply_book(translated, {**record, 'bom_format': 0, 'map_format': 1}, reserved, _skip_pivot=True)
         finally:
             translated.close()
     if record.get('map_format') == 2:
         from webapp.reform_map import translate
         translated = translate(wb, record)
         try:
-            return apply_book(translated, {**record, 'map_format': 1}, reserved)
+            return apply_book(translated, {**record, 'map_format': 1}, reserved, _skip_pivot=True)
         finally:
             translated.close()
     target = copy.deepcopy(record['work']['target'])
@@ -463,4 +473,5 @@ def excel_upload():
         if wb:
             wb.close()
     return redirect(url_for('reform.index', view='files'))
+
 
