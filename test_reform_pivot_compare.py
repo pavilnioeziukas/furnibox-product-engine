@@ -7,7 +7,7 @@ from openpyxl import Workbook, load_workbook
 from test_reform_workspace import setup
 from test_reform_approval_workflow import login
 from webapp.reform_workspace import db, baseline, unpack
-from webapp.reform_pivot_compare import parse, compare, PivotError
+from webapp.reform_pivot_compare import parse, compare, PivotError, displayed_report
 
 
 def xlsx(rows, title='Product MBOMs - Pivot'):
@@ -42,7 +42,7 @@ def test_complete_pivot_comparison_without_odoo_or_exchange_token(setup):
     with app.app_context(), db() as conn:
         original = baseline(conn)
     rid = seed(first, [('NOT-IN-ODOO', 'Supplier-001', 2), ('NOT-IN-ODOO', 'Old-part', 1), ('REMOVED-PARENT', 12345, 4), ('UNCHANGED', 'A', 1)])
-    response = send(second, 'pivot-compare', xlsx([('UNCHANGED', 'A', '1,00'), ('NOT-IN-ODOO', 'Supplier-001', 3), ('NEW-PARENT', 'New-component', 5)]), reference_id=rid)
+    response = send(second, 'pivot-compare', xlsx([('UNCHANGED', 'A', '1,00'), ('NOT-IN-ODOO', 'Supplier-001', 3), ('NEW-PARENT', 'New-component', 5)]), reference_id=rid, scope='all')
     assert response.status_code == 200 and 'Quantity changed' in response.text
     with app.app_context(), db() as conn:
         row = conn.execute('SELECT * FROM pivot_comparisons').fetchone()
@@ -114,7 +114,7 @@ def test_unknown_reference_and_anonymous_access_are_rejected(setup):
 def test_template_roundtrip_and_exact_code_changes():
     old = parse(xlsx([('P', 'part', 1), ('P', 'Zero', 0)]))
     new = parse(xlsx([('P', 'PART', 1), ('P', 'Zero', 0)], title='Product MBOM Pivot'))
-    report = compare(old, new)
+    report = compare(old, new, 'all')
     assert (report['added'], report['removed'], report['changed'], report['unchanged']) == (1, 1, 0, 1)
 
 
@@ -124,3 +124,52 @@ def test_excel_macro_workbook_extension_and_invalid_file_message(setup):
     assert 'No differences' in send(client, 'pivot-compare', xlsx([('P', 'C', 1)]), filename='Poul.xlsm', reference_id=rid).text
     page = send(client, 'pivot-compare', b'not an Excel file', reference_id=rid)
     assert page.status_code == 400 and 'readable Excel workbook' in page.text
+
+
+def test_partial_upload_ignores_absent_rows_even_for_same_parent(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'A', 1), ('P', 'B', 2), ('Q', 'C', 3)])
+    response = send(client, 'pivot-compare', xlsx([('P', 'A', 4)]), reference_id=rid)
+    url = response.request.path
+    with app.app_context(), db() as conn:
+        item = conn.execute('SELECT * FROM pivot_comparisons').fetchone()
+        report = unpack(item['payload'])
+        assert (report['changed'], report['removed'], report['ignored']) == (1, 0, 2)
+    result_id = url.rsplit('/', 1)[1]
+    out = load_workbook(io.BytesIO(client.get(f'{url}/download').data))
+    assert out['Changes'].max_row == 2
+    assert 'Complete version; missing rows are removals' in client.get(url + '?scope=all').text
+    full = load_workbook(io.BytesIO(client.get(f'{url}/download?scope=all').data))
+    assert full['Changes'].max_row == 4
+
+
+def test_legacy_full_report_reconstructs_uploaded_rows_without_reupload(setup):
+    app, client = setup
+    original = parse(xlsx([('P', 'A', 1), ('P', 'B', 2), ('Q', 'C', 3), ('Q', 'D', 4)]))
+    uploaded = parse(xlsx([('P', 'A', 5), ('Q', 'C', 3)]))
+    legacy = compare(original, uploaded, 'all')
+    legacy.pop('scope')
+    assert legacy['removed'] == 2
+    assert displayed_report(original, legacy)['changed'] == 1
+    assert displayed_report(original, legacy)['removed'] == 0
+    assert displayed_report(original, legacy)['unchanged'] == 1
+    rid = seed(client, [('P', 'A', 1), ('P', 'B', 2), ('Q', 'C', 3), ('Q', 'D', 4)])
+    from webapp.reform_workspace import pack
+    with app.app_context(), db() as conn:
+        conn.execute('INSERT INTO pivot_comparisons VALUES (?,?,?,?,?,?,?)', ('legacy', rid, 'Old-upload.xlsx', 'paul', '2026-10-30', 'hash', pack(legacy)))
+    page = client.get('/reform/pivot-compare/results/legacy')
+    assert 'Only uploaded rows; missing rows are unchanged' in page.text
+    out = load_workbook(io.BytesIO(client.get('/reform/pivot-compare/results/legacy/download').data))
+    assert out['Changes'].max_row == 2
+    with app.app_context(), db() as conn:
+        assert unpack(conn.execute("SELECT payload FROM pivot_comparisons WHERE id='legacy'").fetchone()[0]) == legacy
+
+
+def test_partial_26_row_upload_against_7333_row_reference():
+    before = [{'sku': 'SKU', 'material': str(i), 'quantity': '1', 'row': i + 3} for i in range(7333)]
+    after = [{**r, 'quantity': '2' if i < 3 else '1'} for i, r in enumerate(before[:26])]
+    old = compare(before, after, 'all')
+    old.pop('scope')
+    assert (old['removed'], old['changed'], old['unchanged']) == (7307, 3, 23)
+    fixed = displayed_report(before, old)
+    assert (fixed['removed'], fixed['changed'], fixed['unchanged'], len(fixed['changes'])) == (0, 3, 23, 3)
