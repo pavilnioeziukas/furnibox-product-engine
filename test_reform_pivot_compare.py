@@ -207,7 +207,8 @@ def with_non_bom(rows, bom_rows=None):
 
 def confirm_result(client, url, **overrides):
     page = client.get(url)
-    fingerprint = re.search(r'name="package_digest" value="([^"]+)"', page.text).group(1)
+    match = re.search(r'name="package_digest" value="([^"]+)"', page.text) or re.search(r'Package SHA256: ([0-9a-f]{64})', page.text)
+    fingerprint = match.group(1)
     with client.session_transaction() as session:
         csrf = session['reform_csrf']
     return client.post(url + '/confirm', data={
