@@ -38,7 +38,7 @@ def approval_digest(version, work, revision):
 
 def invalidate_approvals(conn):
     current = active(conn)
-    if current and current['owner'] == owner() and current['status'] in ('draft', 'returned'):
+    if current and current['status'] in ('draft', 'returned'):
         removed = conn.execute('DELETE FROM reform_version_approvals WHERE number=?',
                                (current['number'],)).rowcount
         if removed:
@@ -105,21 +105,43 @@ def active(conn):
 
 
 def editable_version(conn):
-    """Require an open version owned by the current Reform user before file exchange."""
+    """Require an open shared version and an authenticated Reform contributor."""
     schema(conn)
+    return require_open_version(conn)
+
+
+def require_open_version(conn):
+    from flask import session
+    if not session.get('reform_user'):
+        abort(403)
     row = active(conn)
     if not row:
         raise ValueError('Open a version draft before downloading or uploading changes.')
-    if row['owner'] != owner():
-        raise ValueError(f"Version {row['number']} is being prepared by {row['owner']}. You can review it under Versions, but only its owner can edit it.")
     if row['status'] not in ('draft', 'returned'):
         raise ValueError(f"Version {row['number']} is locked for review and cannot accept more changes.")
     return row
 
 
+def record_edit(conn, before, after, revision, method):
+    version = active(conn)
+    delta = changes({'products': before['products'], 'boms': before['boms']}, after)
+    conn.execute('CREATE TABLE IF NOT EXISTS reform_change_authors (number TEXT, kind TEXT, record_key TEXT, actor TEXT, revision INTEGER, PRIMARY KEY(number,kind,record_key))')
+    for change in delta:
+        conn.execute('INSERT OR REPLACE INTO reform_change_authors VALUES (?,?,?,?,?)',
+                     (version['number'], change['kind'], change['key'], owner(), revision))
+    event(conn, version['number'], 'edited', f'{method}: revision {revision}, {len(delta)} changed record(s).')
+
+
 def event(conn, number, status, note=''):
     conn.execute('INSERT INTO reform_version_events(number,actor,status,note,created) VALUES (?,?,?,?,?)',
                  (number, owner(), status, note, now()))
+
+
+def change_authors(conn, number):
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='reform_change_authors'").fetchone():
+        return {}
+    return {(r['kind'], r['record_key']): r['actor'] for r in conn.execute(
+        'SELECT kind,record_key,actor FROM reform_change_authors WHERE number=?', (number,))}
 
 
 def reflected_in_source(source, delta):
@@ -251,4 +273,5 @@ def review_version():
         event(conn, row['number'], 'odoo_sync_approved' if action == 'accepted' else action, note)
     flash('Version status updated. This action does not write to Odoo.')
     return redirect(url_for('reform.versions'))
+
 
