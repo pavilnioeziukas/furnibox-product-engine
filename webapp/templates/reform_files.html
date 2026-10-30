@@ -2,29 +2,29 @@
 <div class="task-intro">
   <div class="eyebrow">EXCEL EXCHANGE</div>
   <h2>Manage BOMs in Excel</h2>
-  <p>Choose one of the two main tasks. Uploading the completed file adds changes to the open version - it does not change Odoo automatically.</p>
+  <p>Choose one of the two main tasks. Uploading the completed file adds changes to the open version — it does not change Odoo automatically.</p>
 </div>
 
 <section class="card">
   <h3>Download catalogue</h3>
   <p>Available to every signed-in user, regardless of who owns the open version. Uses the standard Excel layout with BOM, Products, Non-BOM, BOMs, Catalogue and Lists sheets. Includes the latest catalogue loaded into this workspace, without proposed draft changes. The workbook records its source and retrieval time; it is not a live Odoo export.</p>
-  <a class="action-link" href="{{ url_for('reform.catalogue_download') }}">Download catalogue </a>
+  <a class="action-link" href="{{ url_for('reform.catalogue_download') }}">Download catalogue →</a>
   <p>Every signed-in Reform user can download the editing file below and upload changes to the shared open version.</p>
 </section>
 
 {% if not current_version %}
-<section class="card production-gate"><h3>1. Open a version first</h3><p>Create a version number and description before downloading an editing file or uploading changes. All proposed changes will then belong to that version and be visible to its reviewers.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Open a version draft </a></section>
+<section class="card production-gate"><h3>1. Open a version first</h3><p>Create a version number and description before downloading an editing file or uploading changes. All proposed changes will then belong to that version and be visible to its reviewers.</p><a class="action-link" href="{{ url_for('reform.versions') }}">Open a version draft →</a></section>
 {% elif current_version.status not in ['draft', 'returned'] %}
-<section class="card production-gate"><h3>Version {{ current_version.number }} is locked</h3><p>This version has already been submitted for review and cannot accept more changes.</p><a class="action-link" href="{{ url_for('reform.versions') }}">View this version </a></section>
+<section class="card production-gate"><h3>Version {{ current_version.number }} is locked</h3><p>This version has already been submitted for review and cannot accept more changes.</p><a class="action-link" href="{{ url_for('reform.versions') }}">View this version →</a></section>
 {% else %}
-<div class="notice"><strong>Open version:</strong> {{ current_version.number }} � Proposed by {{ current_version.owner }}. Downloads and uploads below are added to this version.</div>
+<div class="notice"><strong>Open version:</strong> {{ current_version.number }} · Proposed by {{ current_version.owner }}. Downloads and uploads below are added to this version.</div>
 
 <div class="bom-choice-grid">
   <section class="bom-choice recommended">
     <div class="choice-label">RECOMMENDED</div>
     <h3>Update an existing BOM</h3>
     <p>Download the complete Reform catalogue, find the required BOM in Excel, change its component codes or quantities, then return the same file.</p>
-    <a class="action-link primary-download" href="{{ url_for('reform.excel_download', scope='all') }}">Download catalogue for editing </a>
+    <a class="action-link primary-download" href="{{ url_for('reform.excel_download', scope='all') }}">Download catalogue for editing →</a>
     <ol class="mini-steps">
       <li>To paste Poul's pivot: use <strong>Product MBOM Pivot</strong>, columns <strong>SKU / MATERIAL_SKU / Total</strong>. Paste values from row 3. Include every direct component for each supplied parent. Missing components are removed; omitted parents stay unchanged. Quantities are per one parent unit. Keep other editable sheets unchanged.</li>
       <li>Find and edit the required BOM in the <strong>BOM</strong> sheet.</li>
@@ -38,7 +38,7 @@
     <div class="choice-label">NEW BOM</div>
     <h3>Add a new BOM</h3>
     <p>Start with an empty template. Use it to add a BOM for an existing product or create the required product cards at the same time.</p>
-    <a class="action-link" href="{{ url_for('reform.excel_download') }}">Download blank BOM template </a>
+    <a class="action-link" href="{{ url_for('reform.excel_download') }}">Download blank BOM template →</a>
     <ol class="mini-steps">
       <li>Add a row in <strong>BOMs</strong> and use a key beginning with <strong>NEW-</strong>.</li>
       <li>Add its component rows in the <strong>BOM</strong> sheet.</li>
@@ -78,5 +78,4 @@
 <p class="source-note">All signed-in Reform users contribute to this shared version. The uploader is recorded. Download a fresh file if the version changes. Maximum file size: 5 MB.</p>
 {% endif %}
 </section>
-
 
