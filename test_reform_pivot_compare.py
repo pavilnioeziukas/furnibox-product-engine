@@ -192,3 +192,118 @@ def test_component_replacement_is_added_and_removed_in_page_and_excel(setup):
     with app.app_context(), db() as conn:
         saved = unpack(conn.execute('SELECT payload FROM pivot_comparisons').fetchone()[0])
     assert (saved['added'], saved['removed'], saved['changed'], saved['unchanged'], saved['ignored']) == (1, 1, 0, 1, 1)
+
+
+def with_non_bom(rows, bom_rows=None):
+    wb = load_workbook(io.BytesIO(xlsx(bom_rows or [])))
+    ws = wb.create_sheet('Non-BOM')
+    ws.append(['Product code', 'Name', 'Category', 'Unit', 'Supplier Code'])
+    for row in rows:
+        ws.append(row)
+    data = io.BytesIO()
+    wb.save(data)
+    return data.getvalue()
+
+
+def confirm_result(client, url, **overrides):
+    page = client.get(url)
+    fingerprint = re.search(r'name="package_digest" value="([^"]+)"', page.text).group(1)
+    with client.session_transaction() as session:
+        csrf = session['reform_csrf']
+    return client.post(url + '/confirm', data={
+        'csrf': csrf, 'confirm': 'yes', 'scope': 'uploaded',
+        'package_digest': fingerprint, **overrides}, follow_redirects=True)
+
+
+def test_non_bom_only_upload_and_single_confirmation_freezes_exact_package(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1)])
+    response = send(client, 'pivot-compare', with_non_bom([
+        ('NEW-ITEM', 'New item', 'Accessories', 'vnt.', 'SUP-123'),
+        ('HINGE-01', 'Existing item', '', 'vnt.', '')]), reference_id=rid, scope='all')
+    assert response.status_code == 200 and 'NEW-ITEM' in response.text
+    url = response.request.path
+    with app.app_context(), db() as conn:
+        saved = unpack(conn.execute('SELECT payload FROM pivot_comparisons').fetchone()[0])
+        assert saved['changes'] == [] and saved['non_bom']['existing'] == 1
+        assert len(saved['non_bom']['new']) == 1
+    confirmed = confirm_result(client, url)
+    assert confirmed.status_code == 200 and 'Confirmed by paul' in confirmed.text
+    assert '<button>Confirm changes</button>' not in confirmed.text
+    with app.app_context(), db() as conn:
+        approval = conn.execute('SELECT * FROM pivot_confirmations').fetchone()
+        assert approval['actor'] == 'paul' and approval['created']
+        assert unpack(approval['payload'])['non_bom']['new'][0]['sku'] == 'NEW-ITEM'
+        assert conn.execute('SELECT count(*) FROM pivot_confirmations').fetchone()[0] == 1
+    out = load_workbook(io.BytesIO(client.get(url + '/download?scope=all').data))
+    assert out['Changes'].max_row == 1
+    assert out['New Non-BOM items']['A2'].value == 'NEW-ITEM'
+    assert ('Confirmed by', 'paul') in list(out['Sources'].values)
+    second = login(app, 'other', 'other-password')
+    assert 'Confirmed by paul' in second.get(url).text
+
+
+@pytest.mark.parametrize('cards,reason', [
+    ([('NEW', '', 'Accessories', 'vnt.', '')], 'require Name'),
+    ([('NEW', 'Name', '', 'vnt.', '')], 'require Name'),
+    ([('NEW', 'Name', 'Accessories', 'Unknown', '')], 'unknown Unit'),
+    ([('hinge-01', 'Name', 'Accessories', 'vnt.', '')], 'letter case'),
+    ([('CAB-01', 'Name', 'Accessories', 'vnt.', '')], 'BOM parent'),
+    ([('NEW', 'Name', 'Accessories', 'vnt.', ''), ('new', 'Name', 'Accessories', 'vnt.', '')], 'duplicate'),
+    ([('NEW', '=1+1', 'Accessories', 'vnt.', '')], 'formulas'),
+])
+def test_non_bom_validation_rejects_whole_upload(setup, cards, reason):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1)])
+    response = send(client, 'pivot-compare', with_non_bom(cards, [('P', 'C', 2)]), reference_id=rid)
+    assert response.status_code == 400 and reason in response.text
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM pivot_comparisons').fetchone()[0] == 0
+
+
+def test_confirmation_rejects_tampering_and_preserves_first_actor_and_scope(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1), ('Q', 'D', 2)])
+    response = send(client, 'pivot-compare', with_non_bom(
+        [('NEW', 'Name', 'Accessories', 'vnt.', '')], [('P', 'C', 2)]), reference_id=rid)
+    url = response.request.path
+    assert confirm_result(client, url, package_digest='tampered').status_code == 409
+    assert confirm_result(client, url, scope='all').status_code == 409
+    assert confirm_result(client, url, confirm='').status_code == 400
+    assert client.post(url + '/confirm', data={}).status_code == 400
+    assert confirm_result(client, url).status_code == 200
+    assert 'Confirmed by paul' in client.get(url + '?scope=all').text
+    second = login(app, 'other', 'other-password')
+    assert confirm_result(second, url).status_code == 200
+    with app.app_context(), db() as conn:
+        approvals = conn.execute('SELECT * FROM pivot_confirmations').fetchall()
+        assert len(approvals) == 1 and approvals[0]['actor'] == 'paul'
+        frozen = unpack(approvals[0]['payload'])
+        assert frozen['scope'] == 'uploaded' and frozen['removed'] == 0
+    assert client.application.test_client().post(url + '/confirm').status_code == 302
+    # A later upload is a distinct package awaiting its own confirmation.
+    newer = send(client, 'pivot-compare', xlsx([('P', 'C', 3)]), reference_id=rid)
+    assert '<button>Confirm changes</button>' in newer.text
+
+
+def test_non_bom_template_and_no_changes_cannot_be_confirmed(setup):
+    app, client = setup
+    template = load_workbook(io.BytesIO(client.get('/reform/pivot-compare/template').data))
+    assert template.sheetnames == ['Product MBOM Pivot', 'Non-BOM']
+    rid = seed(client, [('P', 'C', 1)])
+    response = send(client, 'pivot-compare', xlsx([('P', 'C', 1)]), reference_id=rid)
+    assert '<button>Confirm changes</button>' not in response.text
+
+
+def test_single_approval_submits_legacy_version(setup):
+    from test_reform_workspace import post
+    app, client = setup
+    app.config.pop('REFORM_APPROVALS_REQUIRED', None)
+    response = post(client, 'save', action='bom', bom_id='1', quantity='1',
+                    code='BOM', component_sku=['PANEL-01', 'HINGE-01'],
+                    component_quantity=['3', '4'], component_id=['10', '11'], revision='0')
+    assert response.status_code == 200
+    response = post(client, 'submit', revision='1', confirm='yes')
+    assert response.status_code == 200
+    with app.app_context(), db() as conn:
+        assert conn.execute('SELECT count(*) FROM submissions').fetchone()[0] == 1
