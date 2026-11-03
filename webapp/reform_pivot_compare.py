@@ -10,7 +10,7 @@ from flask import abort, flash, redirect, render_template, request, send_file, u
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-from webapp.reform_workspace import reform, db, owner, now, pack, unpack, baseline
+from webapp.reform_workspace import reform, db, owner, now, pack, unpack, baseline, admin
 from webapp.reform_excel import LIMIT, read_book
 from webapp.reform_pivot import ALIASES, NAME, HEADERS
 
@@ -206,6 +206,7 @@ def displayed_report(before, saved, scope=None):
 
 
 def schema(conn):
+    conn.execute('CREATE TABLE IF NOT EXISTS pivot_discards (result_id TEXT PRIMARY KEY, actor TEXT NOT NULL, created TEXT NOT NULL, package_digest TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS pivot_confirmations (result_id TEXT PRIMARY KEY, actor TEXT NOT NULL, created TEXT NOT NULL, package_digest TEXT NOT NULL, payload BLOB NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS pivot_references (id TEXT PRIMARY KEY, label TEXT, filename TEXT, actor TEXT, created TEXT, sha256 TEXT, payload BLOB)')
     conn.execute('CREATE TABLE IF NOT EXISTS pivot_comparisons (id TEXT PRIMARY KEY, reference_id TEXT, filename TEXT, actor TEXT, created TEXT, sha256 TEXT, payload BLOB)')
@@ -247,6 +248,7 @@ def page(result_id=None, issues=None, status=200):
         ref = reference(conn, item['reference_id'] if item else None)
         confirmation = conn.execute('SELECT * FROM pivot_confirmations WHERE result_id=?', (result_id,)).fetchone() if item else None
         summary = (unpack(confirmation['payload']) if confirmation else displayed_report(unpack(ref['payload']), unpack(item['payload']), request.args.get('scope'))) if item else None
+        discarded = conn.execute('SELECT * FROM pivot_discards WHERE result_id=?', (result_id,)).fetchone() if item else None
         package_digest = confirmation_digest(ref, item, summary) if item else ''
         query = request.args.get('q', '').strip()[:200]
         changed = summary['changes'] if summary else []
@@ -260,11 +262,14 @@ def page(result_id=None, issues=None, status=200):
         number = min(number, pages)
         visible = changed[(number - 1) * 100:number * 100]
         base_count = len(unpack(ref['payload'])) if ref else 0
-        recent = conn.execute('SELECT p.id,p.filename,p.actor,p.created,c.actor AS confirmed_by,c.created AS confirmed_at FROM pivot_comparisons p LEFT JOIN pivot_confirmations c ON c.result_id=p.id ORDER BY p.created DESC LIMIT 20').fetchall()
+        recent = conn.execute('SELECT p.id,p.filename,p.actor,p.created,c.actor AS confirmed_by,c.created AS confirmed_at,d.actor AS discarded_by,d.created AS discarded_at FROM pivot_comparisons p LEFT JOIN pivot_confirmations c ON c.result_id=p.id LEFT JOIN pivot_discards d ON d.result_id=p.id ORDER BY p.created DESC LIMIT 50').fetchall()
     return render_template('reform_pivot_compare.html', reference=ref, base_count=base_count,
                            result=item, summary=summary, rows=visible, issues=(issues or [])[:200],
                            issue_count=len(issues or []), query=query, page=number, pages=pages,
-                           confirmation=confirmation, package_digest=package_digest, recent=recent), status
+                           confirmation=confirmation, discarded=discarded, package_digest=package_digest, recent=recent,
+                           history=request.args.get('view') == 'history', is_admin=admin(), username=owner(),
+                           can_discard=bool(item and (item['actor'] == owner() or admin())),
+                           resume=next((r for r in recent if r['actor'] == owner() and not r['confirmed_by'] and not r['discarded_by']), None)), status
 
 
 @reform.get('/pivot-compare')
@@ -336,6 +341,8 @@ def pivot_compare_confirm(result_id):
         if not item:
             abort(404)
         ref = reference(conn, item['reference_id'])
+        if conn.execute('SELECT 1 FROM pivot_discards WHERE result_id=?', (result_id,)).fetchone():
+            abort(409, 'This upload was discarded. Upload a corrected workbook to continue.')
         existing = conn.execute('SELECT * FROM pivot_confirmations WHERE result_id=?', (result_id,)).fetchone()
         if existing:
             if request.form.get('package_digest') != existing['package_digest']:
@@ -354,6 +361,30 @@ def pivot_compare_confirm(result_id):
                          (result_id, owner(), now(), expected, pack(report)))
     flash('Changes confirmed and submitted to Furnibox. The reviewed package is locked.')
     return redirect(url_for('reform.pivot_compare_result', result_id=result_id))
+
+
+
+@reform.post('/pivot-compare/results/<result_id>/discard')
+def pivot_compare_discard(result_id):
+    with db() as conn:
+        schema(conn)
+        conn.execute('BEGIN IMMEDIATE')
+        item = conn.execute('SELECT * FROM pivot_comparisons WHERE id=?', (result_id,)).fetchone()
+        if not item:
+            abort(404)
+        if item['actor'] != owner() and not admin():
+            abort(403, 'Only the uploader or Furnibox can discard this upload.')
+        if conn.execute('SELECT 1 FROM pivot_confirmations WHERE result_id=?', (result_id,)).fetchone():
+            abort(409, 'A submitted package cannot be discarded.')
+        ref = reference(conn, item['reference_id'])
+        report = displayed_report(unpack(ref['payload']), unpack(item['payload']), request.form.get('scope'))
+        expected = confirmation_digest(ref, item, report)
+        if request.form.get('package_digest') != expected:
+            abort(409, 'The reviewed package does not match. Refresh before discarding.')
+        conn.execute('INSERT OR IGNORE INTO pivot_discards VALUES (?,?,?,?)',
+                     (result_id, owner(), now(), expected))
+    flash('Upload discarded. Correct your workbook and upload it again.')
+    return redirect(url_for('reform.pivot_compare'))
 
 
 def workbook(headers, rows, title):
@@ -399,6 +430,8 @@ def pivot_compare_download(result_id):
         item = conn.execute('SELECT * FROM pivot_comparisons WHERE id=?', (result_id,)).fetchone()
         if not item:
             abort(404)
+        if conn.execute('SELECT 1 FROM pivot_discards WHERE result_id=?', (result_id,)).fetchone():
+            abort(409, 'This upload was discarded. Upload a corrected workbook to continue.')
         ref = reference(conn, item['reference_id'])
         confirmation = conn.execute('SELECT * FROM pivot_confirmations WHERE result_id=?', (result_id,)).fetchone()
         report = unpack(confirmation['payload']) if confirmation else displayed_report(unpack(ref['payload']), unpack(item['payload']), request.args.get('scope'))

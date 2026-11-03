@@ -315,6 +315,8 @@ def logout():
 
 @reform.get('/')
 def index():
+    if not request.args:
+        return redirect(url_for('reform.pivot_compare'))
     with db() as conn:
         base = baseline(conn)
         work, revision = draft(conn) if base else (None, 0)
