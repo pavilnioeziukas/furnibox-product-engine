@@ -270,7 +270,7 @@ def test_catalogue_search_pagination_and_existing_bom(setup):
 
 def test_home_actions_and_specific_bom_edit_flow(setup):
     app, client = setup
-    home = client.get('/reform/').text
+    home = client.get('/reform/?view=home').text
     for text in ['What would you like to do?', 'Browse products and BOMs', 'Edit an existing BOM in the interface',
                  'Create new products and BOMs in Excel']:
         assert text in home
