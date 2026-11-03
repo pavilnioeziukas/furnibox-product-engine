@@ -183,7 +183,7 @@ def test_component_replacement_is_added_and_removed_in_page_and_excel(setup):
     rid = seed(client, [(sku, old_part, 2), (sku, 'UNCHANGED', 1), ('OTHER', 'KEEP', 1)])
     response = send(client, 'pivot-compare', xlsx([(sku, new_part, 2), (sku, 'UNCHANGED', 1)]), reference_id=rid)
     assert old_part in response.text and new_part in response.text
-    assert '<td>Removed</td>' in response.text and '<td>Added</td>' in response.text
+    assert '>Removed</span>' in response.text and '>Added</span>' in response.text
     assert '<td>OTHER</td>' not in response.text
     out = load_workbook(io.BytesIO(client.get(response.request.path + '/download').data))
     rows = list(out['Changes'].values)[1:]
@@ -230,7 +230,7 @@ def test_non_bom_only_upload_and_single_confirmation_freezes_exact_package(setup
         assert len(saved['non_bom']['new']) == 1
     confirmed = confirm_result(client, url)
     assert confirmed.status_code == 200 and 'Confirmed by paul' in confirmed.text
-    assert '<button>Confirm changes</button>' not in confirmed.text
+    assert 'data-testid="submit-changes"' not in confirmed.text
     with app.app_context(), db() as conn:
         approval = conn.execute('SELECT * FROM pivot_confirmations').fetchone()
         assert approval['actor'] == 'paul' and approval['created']
@@ -284,7 +284,7 @@ def test_confirmation_rejects_tampering_and_preserves_first_actor_and_scope(setu
     assert client.application.test_client().post(url + '/confirm').status_code == 400
     # A later upload is a distinct package awaiting its own confirmation.
     newer = send(client, 'pivot-compare', xlsx([('P', 'C', 3)]), reference_id=rid)
-    assert '<button>Confirm changes</button>' in newer.text
+    assert 'data-testid="submit-changes"' in newer.text
 
 
 def test_non_bom_template_and_no_changes_cannot_be_confirmed(setup):
@@ -293,7 +293,7 @@ def test_non_bom_template_and_no_changes_cannot_be_confirmed(setup):
     assert template.sheetnames == ['Product MBOM Pivot', 'Non-BOM']
     rid = seed(client, [('P', 'C', 1)])
     response = send(client, 'pivot-compare', xlsx([('P', 'C', 1)]), reference_id=rid)
-    assert '<button>Confirm changes</button>' not in response.text
+    assert 'data-testid="submit-changes"' not in response.text
 
 
 def test_single_approval_submits_legacy_version(setup):
@@ -308,3 +308,80 @@ def test_single_approval_submits_legacy_version(setup):
     assert response.status_code == 200
     with app.app_context(), db() as conn:
         assert conn.execute('SELECT count(*) FROM submissions').fetchone()[0] == 1
+
+
+def discard_result(client, url, **overrides):
+    page = client.get(url)
+    fingerprint = re.search(r'name="package_digest" value="([^"]+)"', page.text).group(1)
+    with client.session_transaction() as session:
+        csrf = session['reform_csrf']
+    return client.post(url + '/discard', data={
+        'csrf': csrf, 'scope': 'uploaded', 'package_digest': fingerprint,
+        **overrides}, follow_redirects=True)
+
+
+def test_focused_exchange_home_review_and_history(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1)])
+    home = client.get('/reform/pivot-compare').text
+    assert 'Download template' in home and 'Upload and review changes' in home
+    assert 'name="scope" value="uploaded"' in home
+    assert '<select' not in home and 'Load another reference' not in home
+    assert 'Load reference Pivot' not in home
+    assert client.get('/reform/').location.endswith('/reform/pivot-compare')
+    result = send(client, 'pivot-compare', xlsx([('P', 'C', 2)]), reference_id=rid)
+    assert 'Check your changes' in result.text
+    assert 'data-testid="submit-changes"' in result.text
+    assert 'data-testid="discard-upload"' in result.text
+    assert 'Upload and review changes' not in result.text
+    assert 'Download template' not in result.text.split('<ol')[0]
+    history = client.get('/reform/pivot-compare?view=history').text
+    assert 'Poul.xlsx' in history and 'Ready for review' in history
+    assert 'Upload and review changes' not in history
+
+
+def test_discard_is_audited_and_blocks_submission_and_download(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1)])
+    response = send(client, 'pivot-compare', xlsx([('P', 'C', 2)]), reference_id=rid)
+    url = response.request.path
+    page = client.get(url)
+    fingerprint = re.search(r'name="package_digest" value="([^"]+)"', page.text).group(1)
+    assert discard_result(client, url, package_digest='stale').status_code == 409
+    assert client.post(url + '/discard', data={}).status_code == 400
+    assert discard_result(client, url).status_code == 200
+    result = client.get(url)
+    assert 'Upload discarded' in result.text and 'Discarded by paul' in result.text
+    assert 'data-testid="submit-changes"' not in result.text
+    assert client.get(url + '/download').status_code == 409
+    with client.session_transaction() as session:
+        csrf = session['reform_csrf']
+    assert client.post(url + '/confirm', data={'csrf': csrf, 'scope': 'uploaded',
+        'confirm': 'yes', 'package_digest': fingerprint}).status_code == 409
+    with app.app_context(), db() as conn:
+        audit = conn.execute('SELECT * FROM pivot_discards').fetchone()
+        assert audit['actor'] == 'paul' and audit['created']
+        assert audit['package_digest'] == fingerprint
+        assert conn.execute('SELECT count(*) FROM pivot_comparisons').fetchone()[0] == 1
+        assert conn.execute('SELECT count(*) FROM pivot_confirmations').fetchone()[0] == 0
+    assert 'Discarded' in client.get('/reform/pivot-compare?view=history').text
+    corrected = send(client, 'pivot-compare', xlsx([('P', 'C', 3)]), reference_id=rid)
+    assert 'data-testid="submit-changes"' in corrected.text
+
+
+def test_other_user_cannot_discard_and_submitted_package_stays_locked(setup):
+    app, client = setup
+    rid = seed(client, [('P', 'C', 1)])
+    response = send(client, 'pivot-compare', xlsx([('P', 'C', 2)]), reference_id=rid)
+    url = response.request.path
+    other = login(app, 'other', 'other-password')
+    assert 'data-testid="discard-upload"' not in other.get(url).text
+    assert discard_result(other, url).status_code == 403
+    page = client.get(url)
+    fingerprint = re.search(r'name="package_digest" value="([^"]+)"', page.text).group(1)
+    assert confirm_result(client, url).status_code == 200
+    with client.session_transaction() as session:
+        csrf = session['reform_csrf']
+    assert client.post(url + '/discard', data={'csrf': csrf, 'scope': 'uploaded',
+        'package_digest': fingerprint}).status_code == 409
+    assert 'data-testid="discard-upload"' not in client.get(url).text
