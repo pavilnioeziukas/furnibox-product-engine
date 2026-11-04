@@ -234,6 +234,14 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
             "{output_dir}",
         ],
     },
+    "inventory_aging": {
+        "title": "Generuoti atsargų senėjimo ataskaitą",
+        "description": "Visos įmonės atsargų senėjimas pagal SKU ir sutikrinimas su On Hand.",
+        "module": "run_inventory_aging",
+        "args": ["--output-dir", "{output_dir}"],
+        "collect_changed_outputs": False,
+        "requires_upload": False,
+    },
     "stock_by_exact_location": {
         "title": "Generuoti SKU likučius kiekvienoje lokacijoje",
         "description": (
