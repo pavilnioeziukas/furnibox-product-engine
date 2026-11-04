@@ -1,0 +1,57 @@
+name: Inventory aging production smoke test
+on:
+  pull_request:
+    branches: [feature/shelf-pp-transformation]
+    paths:
+      - run_inventory_aging.py
+      - .github/workflows/inventory-aging-smoke.yml
+permissions:
+  contents: read
+jobs:
+  smoke:
+    if: github.event.pull_request.number == 60 && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check read-only Odoo access configuration
+        env:
+          ODOO_DB: ${{ secrets.ODOO_DB || secrets.ODOO_DATABASE }}
+          ODOO_LOGIN: ${{ secrets.ODOO_LOGIN || secrets.ODOO_USERNAME }}
+          ODOO_API_KEY: ${{ secrets.ODOO_API_KEY }}
+        run: |
+          if [ -z "$ODOO_DB" ] || [ -z "$ODOO_LOGIN" ] || [ -z "$ODOO_API_KEY" ]; then
+            echo "::error::Production Odoo connection secrets are unavailable to this workflow."
+            exit 1
+          fi
+      - run: python -m pip install -r requirements.txt
+      - name: Generate and validate workbook without publishing inventory data
+        env:
+          ODOO_URL: https://odoo.furnibox.lt
+          ODOO_DB: ${{ secrets.ODOO_DB || secrets.ODOO_DATABASE }}
+          ODOO_LOGIN: ${{ secrets.ODOO_LOGIN || secrets.ODOO_USERNAME }}
+          ODOO_API_KEY: ${{ secrets.ODOO_API_KEY }}
+        run: |
+          set -eu
+          report_dir="$(mktemp -d)"
+          trap 'rm -rf "$report_dir"' EXIT
+          python -m run_inventory_aging --output-dir "$report_dir"
+          python - "$report_dir" <<'PY'
+          from pathlib import Path
+          import sys
+          from openpyxl import load_workbook
+
+          workbook = load_workbook(next(Path(sys.argv[1]).glob("Inventory_Aging_*.xlsx")), read_only=True)
+          rows = workbook["Atsargų senėjimas"].values
+          headers = next(rows)
+          assert headers[:5] == ("SKU", "Produktas", "Kategorija", "Mato vnt.", "On Hand")
+          matches = [row for row in rows if row[0] == "1283507"]
+          assert len(matches) == 1, "Expected exactly one row for acceptance SKU"
+          row = matches[0]
+          assert abs(sum(row[6:12]) - row[4]) < 0.000001, "Acceptance SKU aging and On Hand differ"
+          workbook.close()
+          print("Production XLSX smoke test passed.")
+          PY
