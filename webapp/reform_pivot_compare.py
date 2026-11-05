@@ -147,13 +147,14 @@ def check_non_bom(cards, catalogue, pivot_rows):
     for card in cards:
         sku = card['sku']
         reason = ''
-        if sku in products:
+        matching_codes = folded.get(sku.casefold(), [])
+        if sku in products or len(matching_codes) == 1:
             existing += 1
             continue
         if sku.casefold() in parents:
             reason = 'Non-BOM: this new product has a BOM in the workbook. Remove its row from Non-BOM and keep its BOM in the pivot sheet.'
-        elif sku.casefold() in folded:
-            reason = 'Non-BOM: code differs only in letter case from existing code(s): ' + ', '.join(folded[sku.casefold()])
+        elif matching_codes:
+            reason = 'Non-BOM: ambiguous Product code. Catalogue matches: ' + ', '.join(sorted(matching_codes))
         elif not all(card[k] for k in ('name', 'category', 'unit')):
             reason = 'Non-BOM: new items require Name, Category and Unit.'
         else:
