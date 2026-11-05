@@ -140,7 +140,9 @@ def check_non_bom(cards, catalogue, pivot_rows):
         folded.setdefault(sku.casefold(), []).append(sku)
     parents = {r['sku'].casefold() for r in pivot_rows}
     parents.update(b['sku'].casefold() for b in catalogue['boms'].values())
-    units = {p['uom'] for p in products.values()}
+    units = {}
+    for label in {p['uom'] for p in products.values()}:
+        units.setdefault(label.strip().casefold(), set()).add(label)
     new, issues, existing = [], [], 0
     for card in cards:
         sku = card['sku']
@@ -154,8 +156,18 @@ def check_non_bom(cards, catalogue, pivot_rows):
             reason = 'Non-BOM: code differs only in letter case from existing code(s): ' + ', '.join(folded[sku.casefold()])
         elif not all(card[k] for k in ('name', 'category', 'unit')):
             reason = 'Non-BOM: new items require Name, Category and Unit.'
-        elif card['unit'] not in units:
-            reason = 'Non-BOM: unknown Unit. Use a unit from the current catalogue.'
+        else:
+            entered_unit = card['unit']
+            key = entered_unit.strip().casefold()
+            matches = units.get(key, set())
+            if not matches and key in ('unit', 'units'):
+                matches = units.get('units' if key == 'unit' else 'unit', set())
+            if len(matches) == 1:
+                card = dict(card, unit=next(iter(matches)))
+            elif matches:
+                reason = f'Non-BOM: ambiguous Unit {entered_unit!r}. Catalogue matches: {", ".join(sorted(matches))}.'
+            else:
+                reason = f'Non-BOM: unknown Unit {entered_unit!r}. Use a unit from the current catalogue.'
         if reason:
             issues.append({'row': card['row'], 'sku': sku, 'material': '', 'reason': reason})
         else:
