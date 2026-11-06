@@ -3426,6 +3426,118 @@ def health():
     )
 
 
+def reconcile_non_bom(cards, products, supplier_rows):
+    """Classify submitted rows without changing the catalogue or the submission."""
+    from collections import defaultdict
+
+    def key(value):
+        return str(value or '').strip().casefold()
+
+    internal, vendor, variants = defaultdict(set), defaultdict(set), defaultdict(set)
+    by_id = {product['id']: product for product in products}
+    for product in products:
+        if product.get('default_code'):
+            internal[key(product['default_code'])].add(product['id'])
+        variants[product['product_tmpl_id'][0]].add(product['id'])
+    for supplier in supplier_rows:
+        code = key(supplier.get('product_code'))
+        if code in ('', '0', '(blank)'):
+            continue
+        if supplier.get('product_id'):
+            vendor[code].add(supplier['product_id'][0])
+        elif supplier.get('product_tmpl_id'):
+            vendor[code].update(variants[supplier['product_tmpl_id'][0]])
+
+    result = []
+    for card in cards:
+        internal_ids = internal.get(key(card['sku']), set())
+        vendor_ids = vendor.get(key(card['sku']), set()) | vendor.get(key(card.get('supplier')), set())
+        ids = internal_ids | vendor_ids
+        matches = [dict(by_id[pid], internal_match=pid in internal_ids, vendor_match=pid in vendor_ids)
+                   for pid in sorted(ids) if pid in by_id]
+        if len(ids) > 1:
+            status = 'conflict'
+        elif not ids:
+            status = 'candidate'
+        elif not matches:
+            status = 'unresolved'
+        elif not matches[0]['active']:
+            status = 'archived'
+        elif key(matches[0]['name']) != key(card['name']):
+            status = 'name_review'
+        else:
+            status = 'existing'
+        result.append(dict(card, status=status, matches=matches))
+    return result
+
+
+
+@app.route("/reform-review/non-bom", methods=["GET", "POST"])
+def internal_reform_non_bom():
+    from contextlib import closing
+    from io import BytesIO
+    from urllib.parse import urlsplit
+    from zipfile import BadZipFile
+
+    from flask import abort, render_template_string
+    from openpyxl import load_workbook
+    from openpyxl.utils.exceptions import InvalidFileException
+
+    from config import load_settings
+    from odoo_client import OdooClient
+
+    if not auth_enabled() or not session.get("authenticated"):
+        abort(403)
+    token = session.setdefault("reform_review_csrf", secrets.token_urlsafe(32))
+    if request.method == "GET":
+        return render_template_string("""
+<h1>Reform Non-BOM review</h1>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ token }}">
+<label>Submitted Reform export <input name="workbook" type="file" accept=".xlsx" required></label>
+<button>Compare with Odoo</button></form>
+""", token=token)
+
+    if not secrets.compare_digest(request.form.get("csrf_token", ""), token):
+        abort(403)
+    upload = request.files.get("workbook")
+    content = upload.read(2_000_001) if upload else b""
+    if not content or len(content) > 2_000_000:
+        abort(400, "Select a Reform XLSX export under 2 MB.")
+    try:
+        with closing(load_workbook(BytesIO(content), read_only=True, data_only=True)) as book:
+            sources = dict(book["Sources"].values)
+            if sources.get("Status") != "Submitted to Furnibox" or not sources.get("Confirmed package SHA256"):
+                abort(400, "Select the export of a submitted Reform package.")
+            sheet = book["New Non-BOM items"]
+            if sheet.max_column != 6 or sheet.max_row > 10001:
+                abort(400, "Invalid Non-BOM sheet size.")
+            cards = [dict(zip(("sku", "name", "category", "unit", "supplier", "row"), row))
+                     for row in sheet.iter_rows(min_row=2, values_only=True)]
+    except (BadZipFile, InvalidFileException, KeyError, OSError, ValueError):
+        abort(400, "Invalid Reform export.")
+    if len(cards) != sources.get("New Non-BOM items") or any(not card["sku"] or not card["name"] for card in cards):
+        abort(400, "The Non-BOM sheet is incomplete.")
+
+    settings = load_settings()
+    if urlsplit(settings.url).hostname != "odoo.furnibox.lt":
+        abort(503, "Furnibox production catalogue connection is required.")
+    client = OdooClient(settings)
+    context = {"active_test": False}
+    suppliers = client.search_read_all("res.partner",
+        [("name", "=", "Reform Supply & Logistics, UAB")], ["id"], context=context)
+    if len(suppliers) != 1:
+        abort(503, "The Reform supplier could not be uniquely identified.")
+    products = client.search_read_all("product.product", [],
+        ["id", "default_code", "name", "active", "product_tmpl_id"], context=context)
+    vendor_rows = client.search_read_all("product.supplierinfo",
+        [("partner_id", "=", suppliers[0]["id"])],
+        ["product_id", "product_tmpl_id", "product_code"], context=context)
+    rows = reconcile_non_bom(cards, products, vendor_rows)
+    from collections import Counter
+    return {"counts": dict(Counter(row["status"] for row in rows)), "rows": rows}
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
