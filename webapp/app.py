@@ -3461,6 +3461,8 @@ def reconcile_non_bom(cards, products, supplier_rows):
             status = 'candidate'
         elif not matches:
             status = 'unresolved'
+        elif matches[0]['vendor_match']:
+            status = 'vendor_existing'
         elif not matches[0]['active']:
             status = 'archived'
         elif key(matches[0]['name']) != key(card['name']):
@@ -3543,6 +3545,7 @@ def internal_reform_non_bom():
         "unresolved": "Neišspręstas atitikmuo",
         "candidate": "Kandidatai kurti",
         "existing": "Aktyvi kortelė",
+        "vendor_existing": "Rasta pagal tiekėjo kodą · nauja kortelė nekuriama",
     }
     return render_template_string("""
 <!doctype html><html lang="lt"><meta charset="utf-8"><title>Reform Non-BOM</title>
