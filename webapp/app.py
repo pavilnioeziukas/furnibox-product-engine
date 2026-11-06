@@ -3537,6 +3537,22 @@ def internal_reform_non_bom():
         ["product_id", "product_tmpl_id", "product_code"], context=context)
     rows = reconcile_non_bom(cards, products, vendor_rows)
     from collections import Counter
+    from hashlib import sha256
+    from itsdangerous import URLSafeSerializer
+
+    package = sha256(content).hexdigest()
+    signer = URLSafeSerializer(app.secret_key, salt="reform-non-bom-decision")
+    with closing(reform_decisions_db()) as db:
+        for row in rows:
+            if row["status"] in ("vendor_existing", "existing"):
+                continue
+            fingerprint = sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()
+            row["decision_token"] = signer.dumps([package, fingerprint])
+            row["decision"] = db.execute(
+                "SELECT decision, note, saved_at FROM decisions WHERE package=? AND fingerprint=? ORDER BY id DESC LIMIT 1",
+                (package, fingerprint),
+            ).fetchone()
+
     counts = Counter(row["status"] for row in rows)
     groups = {
         "conflict": "Keli galimi atitikmenys",
@@ -3565,7 +3581,7 @@ summary {cursor: pointer; font-weight: 600}
 <details {% if status in ('conflict', 'name_review', 'unresolved') %}open{% endif %}>
 <summary>{{ label }} ({{ counts[status] }})</summary>
 <table><thead><tr><th>Excel eilutė</th><th>Reform kodas</th><th>Reform pavadinimas</th>
-<th>Tiekėjo kodas</th><th>Odoo atitikmenys</th></tr></thead><tbody>
+<th>Tiekėjo kodas</th><th>Odoo atitikmenys</th><th>Peržiūros sprendimas</th></tr></thead><tbody>
 {% for row in rows if row.status == status %}
 <tr><td>{{ row.row }}</td><td>{{ row.sku }}</td><td>{{ row.name }}</td>
 <td>{{ row.supplier or '—' }}</td><td>
@@ -3575,14 +3591,77 @@ summary {cursor: pointer; font-weight: 600}
 {% if match.internal_match %} · Internal Reference{% endif %}
 {% if match.vendor_match %} · Vendor Product Code{% endif %}</div>
 {% else %}—{% endfor %}
+</td><td>
+{% if row.decision_token %}
+{% if row.decision %}<p>{{ decisions[row.decision[0]] }} · {{ row.decision[2] }} UTC<br>{{ row.decision[1] }}</p>{% endif %}
+<form method="post" target="_blank" action="{{ url_for('save_reform_decision') }}">
+<input type="hidden" name="csrf_token" value="{{ token }}">
+<input type="hidden" name="row_token" value="{{ row.decision_token }}">
+<select name="decision" required><option value="">Pasirinkti</option>
+{% for value, label in decisions.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+</select>
+<input name="note" maxlength="500" placeholder="Pastaba arba Odoo kodas">
+<button>Išsaugoti</button>
+</form>
+{% else %}Informacijai{% endif %}
 </td></tr>
 {% endfor %}
 </tbody></table></details>
 {% endfor %}
 </html>
 """, rows=rows, counts=counts, groups=groups,
-        digest=sources["Confirmed package SHA256"],
+        digest=sources["Confirmed package SHA256"], token=token, decisions=REFORM_DECISIONS,
         vendor_count=sum(any(match["vendor_match"] for match in row["matches"]) for row in rows))
+
+
+
+REFORM_DECISIONS = {
+    "existing": "Naudoti esamą kortelę",
+    "restore": "Siūlyti atkurti kortelę",
+    "new": "Siūlyti kurti",
+    "reject": "Atmesti",
+    "clarify": "Reikia patikslinti",
+}
+
+
+def reform_decisions_db():
+    import sqlite3
+
+    db = sqlite3.connect(STATE_DIR / "reform-review-decisions.sqlite3")
+    db.execute("""CREATE TABLE IF NOT EXISTS decisions (
+        id INTEGER PRIMARY KEY, package TEXT NOT NULL, fingerprint TEXT NOT NULL,
+        decision TEXT NOT NULL, note TEXT NOT NULL, saved_at TEXT NOT NULL
+    )""")
+    return db
+
+
+@app.post("/reform-review/non-bom/decision")
+def save_reform_decision():
+    from contextlib import closing
+
+    from flask import abort, render_template_string
+    from itsdangerous import BadSignature, URLSafeSerializer
+
+    csrf_token = session.get("reform_review_csrf")
+    if not auth_enabled() or not session.get("authenticated") or not csrf_token or not secrets.compare_digest(
+        request.form.get("csrf_token", ""), csrf_token
+    ):
+        abort(403)
+    signer = URLSafeSerializer(app.secret_key, salt="reform-non-bom-decision")
+    try:
+        package, fingerprint = signer.loads(request.form.get("row_token", ""))
+    except BadSignature:
+        abort(400, "Invalid review row.")
+    decision = request.form.get("decision")
+    note = request.form.get("note", "").strip()
+    if decision not in REFORM_DECISIONS or len(note) > 500:
+        abort(400, "Invalid review decision.")
+    with closing(reform_decisions_db()) as db, db:
+        db.execute(
+            "INSERT INTO decisions (package, fingerprint, decision, note, saved_at) VALUES (?, ?, ?, ?, ?)",
+            (package, fingerprint, decision, note, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+        )
+    return render_template_string("<p>Sprendimas išsaugotas. Galite užverti šį skirtuką.</p>")
 
 
 if __name__ == "__main__":
