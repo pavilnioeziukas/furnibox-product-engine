@@ -3535,7 +3535,51 @@ def internal_reform_non_bom():
         ["product_id", "product_tmpl_id", "product_code"], context=context)
     rows = reconcile_non_bom(cards, products, vendor_rows)
     from collections import Counter
-    return {"counts": dict(Counter(row["status"] for row in rows)), "rows": rows}
+    counts = Counter(row["status"] for row in rows)
+    groups = {
+        "conflict": "Keli galimi atitikmenys",
+        "archived": "Archyvuota kortelė",
+        "name_review": "Skiriasi pavadinimas",
+        "unresolved": "Neišspręstas atitikmuo",
+        "candidate": "Kandidatai kurti",
+        "existing": "Aktyvi kortelė",
+    }
+    return render_template_string("""
+<!doctype html><html lang="lt"><meta charset="utf-8"><title>Reform Non-BOM</title>
+<style>
+body {font: 16px system-ui; margin: 2rem; color: #19312a}
+table {border-collapse: collapse; width: 100%; margin: 1rem 0}
+th, td {border: 1px solid #d6dfda; padding: .5rem; text-align: left; vertical-align: top}
+th {background: #edf4ef}
+details {margin: 1rem 0}
+summary {cursor: pointer; font-weight: 600}
+</style>
+<h1>Reform Non-BOM peržiūra</h1>
+<p>Patikrinta {{ rows|length }} eilučių. Pagal tiekėjo kodą rasta {{ vendor_count }}.</p>
+<p>Paketo kontrolinė suma <code>{{ digest }}</code></p>
+<p><a href="{{ url_for('internal_reform_non_bom') }}">Patikrinti kitą paketą</a></p>
+{% for status, label in groups.items() if counts[status] %}
+<details {% if status in ('conflict', 'name_review', 'unresolved') %}open{% endif %}>
+<summary>{{ label }} ({{ counts[status] }})</summary>
+<table><thead><tr><th>Excel eilutė</th><th>Reform kodas</th><th>Reform pavadinimas</th>
+<th>Tiekėjo kodas</th><th>Odoo atitikmenys</th></tr></thead><tbody>
+{% for row in rows if row.status == status %}
+<tr><td>{{ row.row }}</td><td>{{ row.sku }}</td><td>{{ row.name }}</td>
+<td>{{ row.supplier or '—' }}</td><td>
+{% for match in row.matches %}
+<div><strong>{{ match.default_code or 'Be vidinio kodo' }}</strong> · {{ match.name }}
+· {{ 'aktyvi' if match.active else 'archyvuota' }}
+{% if match.internal_match %} · Internal Reference{% endif %}
+{% if match.vendor_match %} · Vendor Product Code{% endif %}</div>
+{% else %}—{% endfor %}
+</td></tr>
+{% endfor %}
+</tbody></table></details>
+{% endfor %}
+</html>
+""", rows=rows, counts=counts, groups=groups,
+        digest=sources["Confirmed package SHA256"],
+        vendor_count=sum(any(match["vendor_match"] for match in row["matches"]) for row in rows))
 
 
 if __name__ == "__main__":
