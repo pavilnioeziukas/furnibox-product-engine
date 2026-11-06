@@ -495,3 +495,83 @@ def pivot_compare_download(result_id):
     wb.save(data)
     data.seek(0)
     return send_file(data, as_attachment=True, download_name='Reform-Pivot-Changes.xlsx')
+
+
+def reconcile_non_bom(cards, products, supplier_rows):
+    """Classify submitted rows without changing the catalogue or the submission."""
+    from collections import defaultdict
+
+    def key(value):
+        return str(value or '').strip().casefold()
+
+    internal, vendor, variants = defaultdict(set), defaultdict(set), defaultdict(set)
+    by_id = {product['id']: product for product in products}
+    for product in products:
+        if product.get('default_code'):
+            internal[key(product['default_code'])].add(product['id'])
+        variants[product['product_tmpl_id'][0]].add(product['id'])
+    for supplier in supplier_rows:
+        code = key(supplier.get('product_code'))
+        if code in ('', '0', '(blank)'):
+            continue
+        if supplier.get('product_id'):
+            vendor[code].add(supplier['product_id'][0])
+        elif supplier.get('product_tmpl_id'):
+            vendor[code].update(variants[supplier['product_tmpl_id'][0]])
+
+    result = []
+    for card in cards:
+        internal_ids = internal.get(key(card['sku']), set())
+        vendor_ids = vendor.get(key(card['sku']), set()) | vendor.get(key(card.get('supplier')), set())
+        ids = internal_ids | vendor_ids
+        matches = [dict(by_id[pid], internal_match=pid in internal_ids, vendor_match=pid in vendor_ids)
+                   for pid in sorted(ids) if pid in by_id]
+        if len(ids) > 1:
+            status = 'conflict'
+        elif not ids:
+            status = 'candidate'
+        elif not matches:
+            status = 'unresolved'
+        elif not matches[0]['active']:
+            status = 'archived'
+        elif key(matches[0]['name']) != key(card['name']):
+            status = 'name_review'
+        else:
+            status = 'existing'
+        result.append(dict(card, status=status, matches=matches))
+    return result
+
+
+@reform.get('/pivot-compare/results/<result_id>/furnibox-non-bom-check')
+def furnibox_non_bom_check(result_id):
+    if not admin():
+        abort(403)
+    with db() as conn:
+        schema(conn)
+        confirmed = conn.execute(
+            'SELECT * FROM pivot_confirmations WHERE result_id=?', (result_id,)
+        ).fetchone()
+        if not confirmed:
+            abort(404)
+        report = unpack(confirmed['payload'])
+
+    from urllib.parse import urlsplit
+    from config import load_settings
+    from odoo_client import OdooClient
+
+    settings = load_settings()
+    if urlsplit(settings.url).hostname != 'odoo.furnibox.lt':
+        abort(503, 'Furnibox production catalogue connection is required.')
+    client = OdooClient(settings)
+    context = {'active_test': False}
+    suppliers = client.search_read_all('res.partner',
+        [('name', '=', 'Reform Supply & Logistics, UAB')], ['id'], context=context)
+    if len(suppliers) != 1:
+        abort(503, 'The Reform supplier could not be uniquely identified.')
+    products = client.search_read_all('product.product', [],
+        ['id', 'default_code', 'name', 'active', 'product_tmpl_id'], context=context)
+    supplier_rows = client.search_read_all('product.supplierinfo',
+        [('partner_id', '=', suppliers[0]['id'])],
+        ['product_id', 'product_tmpl_id', 'product_code'], context=context)
+    rows = reconcile_non_bom((report.get('non_bom') or {}).get('new', []), products, supplier_rows)
+    return {'result_id': result_id, 'checked_at': now(), 'rows': rows}
