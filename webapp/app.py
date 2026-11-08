@@ -134,28 +134,6 @@ TOC_STORE.bootstrap_admin(
     SETTINGS.initial_admin_password or SETTINGS.web_password,
 )
 
-# Temporary read-only diagnostics for the authorized Stage recovery incident.
-# Never log credentials, hashes, database URLs or submitted passwords.
-if os.getenv("RAILWAY_ENVIRONMENT_ID") == "67ee29c1-07f5-4242-aa13-d3e4972f16a9":
-    from sqlalchemy import select as _recovery_select
-    from webapp.toc_foundation import User as _RecoveryUser, StageAccountRecovery as _RecoveryReceipt
-    with TOC_STORE.sessions() as _db:
-        _users = list(_db.scalars(_recovery_select(_RecoveryUser).limit(50)))
-        _diagnostic = {
-            "users": [{"username": u.username, "active": u.active, "role": u.role} for u in _users],
-            "initial_username": SETTINGS.initial_admin_username,
-            "stage_url_matches": os.getenv("ODOO_URL", "").strip().rstrip("/") == "https://stageodoo.furnibox.lt",
-            "recovery_consumed": bool(_db.get(_RecoveryReceipt, "stage-mindaugas-2026-11-08")),
-            "initial_password_configured": bool(SETTINGS.initial_admin_password),
-            "web_password_configured": bool(SETTINGS.web_password),
-            "odoo_host": __import__("urllib.parse", fromlist=["urlparse"]).urlparse(os.getenv("ODOO_URL", "")).hostname,
-            "admin_accepts_web": bool(SETTINGS.web_password and TOC_STORE.authenticate("admin", SETTINGS.web_password)),
-            "mindaugas_accepts_initial": bool(SETTINGS.initial_admin_password and TOC_STORE.authenticate("mindaugas", SETTINGS.initial_admin_password)),
-            "mindaugas_accepts_web": bool(SETTINGS.web_password and TOC_STORE.authenticate("mindaugas", SETTINGS.web_password)),
-        }
-        print("STAGE_LOGIN_DIAGNOSTIC " + json.dumps(_diagnostic), flush=True)
-
-
 
 if (
     not PURCHASE_PRICE_ADJUSTMENTS_PATH.exists()
@@ -454,12 +432,6 @@ def login():
             request.form.get("username", ""),
             request.form.get("password", ""),
         )
-        if not actor:
-            actor = TOC_STORE.recover_stage_mindaugas_once(
-                request.form.get("username", ""), request.form.get("password", "")
-            )
-            if actor:
-                app.logger.info("Stage account recovery consumed for mindaugas; role unchanged")
         if actor:
             session.clear()
             session["actor_id"] = actor.id
