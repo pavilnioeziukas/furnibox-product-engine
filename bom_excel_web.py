@@ -113,7 +113,7 @@ def pilot_inventory():
         products = list({p['id']: p for p in products + linked}.values())
     templates = sorted({p['product_tmpl_id'][0] for p in products if p.get('product_tmpl_id')})
     boms = read('mrp.bom', [('product_tmpl_id', 'in', templates)],
-        ['id','product_tmpl_id','product_id','active','type','code','sequence','product_qty','product_uom_id','write_date'])
+        ['id','product_tmpl_id','product_id','active','type','code','sequence','product_qty','product_uom_id','write_date','company_id','version'])
     lines = read('mrp.bom.line', [('bom_id', 'in', [b['id'] for b in boms])],
         ['id','bom_id','product_id','product_qty','product_uom_id'])
     routes = sorted({r for p in products for r in p.get('route_ids', [])})
@@ -227,6 +227,13 @@ def register(app):
                         key: len(inventory[key])
                         for key in ('products', 'boms', 'lines', 'eco_types', 'eco_stages')
                     }), flush=True)
+                    target_templates = {p['product_tmpl_id'][0] for p in inventory['products']
+                        if p.get('default_code') in ('EUB-C-CAB03-SLF901', 'EUB-P-ACC02-MIS012')
+                        and p.get('product_tmpl_id')}
+                    print('REFORM_BOM_VERSION_EVIDENCE ' + str([
+                        b for b in inventory['boms']
+                        if b.get('product_tmpl_id') and b['product_tmpl_id'][0] in target_templates
+                    ]), flush=True)
                     interpreted = build_review(inventory)
                     print('REFORM_PILOT_REVIEW ' + str({
                         'non_bom_status': interpreted['card_status'],
