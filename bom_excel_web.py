@@ -132,6 +132,12 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 <h1>Reform pakeitimų peržiūra</h1>
 <p class="muted">Stage pilotas · 3 konkretūs atvejai · kortelių ir ECO kūrimas išjungtas</p>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% macro versions(evidence) %}
+{% if evidence.suggestion %}<p class="notice"><strong>Siūloma piloto bazė: BOM #{{ evidence.suggestion.id }}</strong> · {{ evidence.suggestion.reference }} · eiliškumas {{ evidence.suggestion.sequence }}.<br>Pagrindas: sutartas v10 etalonas, vienintelis aktyvus v10 su eiliškumu 0 ir vienodas įmonės bei BOM tipo kontekstas. Tai pasiūlymas peržiūrai, ne patvirtinimas ar leidimas vykdyti.</p>{% else %}<p class="notice">Vienareikšmio v10 kandidato pagal piloto sąlygas nerasta. Reikia rankinio pasirinkimo.</p>{% endif %}
+<div class="scroll"><table><tr><th>BOM</th><th>Šaltinio versija</th><th>Eiliškumas</th><th>Tipas / įmonė</th><th>PLM versija</th><th>Pakeista</th></tr>
+{% for b in evidence.candidates %}<tr><td><a target="_blank" rel="noopener" href="https://stageodoo.furnibox.lt/web#id={{ b.id }}&model=mrp.bom&view_type=form">#{{ b.id }}</a><br>{{ 'Aktyvus' if b.active else 'Archyvuotas' }}</td><td>{{ b.reference }}</td><td>{{ b.sequence }}</td><td>{{ b.type }}<br>{{ b.company }}</td><td>{{ b.version }}</td><td>{{ b.write_date }}</td></tr>{% endfor %}</table></div>
+<p class="meta">Šaltinio žyma „v10“ ir Odoo PLM revizijos numeris yra skirtingi laukai. Pasiūlymas nekeičia R16 būsenos „Reikia peržiūros“ ir nepakeičia patikros produkcijoje.</p>
+{% endmacro %}
 {% if review %}
 <span class="badge">Stage duomenys nuskaityti</span> <span class="badge pending">Laukia sprendimų ir patvirtinimų</span>
 <p class="meta">Pasirinktas šaltinis: <strong>{{ review.source.file }}</strong> · pateikė {{ review.source.submitted_by }} · {{ review.source.submitted_at }}.<br>Tai konkretaus eksporto pilotas. Naujesni Reform pateikimai automatiškai neįtraukiami.</p>
@@ -141,7 +147,7 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 <p>Pašalinti <code>{{ review.led.old }}</code><br>Pridėti <code>{{ review.led.new }}</code><br>Kiekis: {{ review.led.qty }}</p></div>
 <div class="box"><h3>Furnibox interpretacija</h3><p>Siūlomas produktas: <code>{{ review.led.target }}</code></p>
 <p>Tai sutartos interpretavimo taisyklės kandidatas. Konkreti BOM versija dar nepatvirtinta.</p></div></div>
-<h3>Odoo BOM, kuriuose rastas senas komponentas</h3>
+<h3>Kurios BOM versijos bazę siūlome?</h3>{{ versions(review.led_versions) }}<h3>Odoo BOM, kuriuose rastas senas komponentas</h3>
 {% if review.led_boms %}<div class="scroll"><table><thead><tr><th>Produktas / paskirtis</th><th>BOM / būsena</th><th>Dabar</th><th>Siūloma</th></tr></thead><tbody>
 {% for b in review.led_boms %}<tr><td><code>{{ b.code }}</code><br>{{ b.role }}</td>
 <td><a target="_blank" rel="noopener" href="https://stageodoo.furnibox.lt/web#id={{ b.id }}&model=mrp.bom&view_type=form">BOM #{{ b.id }}</a><br>{{ b.reference }} · {{ 'Aktyvus' if b.active else 'Archyvuotas' }}<br>{{ b.type }} · {{ b.write_date }}</td>
@@ -161,7 +167,7 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 <div class="grid"><div class="box"><h3>Eksporte pridėta eilutė</h3><p><code>{{ review.new_bom.sku }}</code><br>Komponentas <code>{{ review.new_bom.component }}</code><br>Kiekis {{ review.new_bom.qty }}</p></div>
 <div class="box"><h3>Sprendimas dabar</h3><p>{{ review.new_bom_classification.label }}. „Added“ reiškia skirtumą nuo etalono, o ne naujo BOM įrodymą. Vykdymas blokuojamas, kol nėra visos struktūros ir patvirtinimų.</p></div></div>
 {% if review.new_bom_products %}<h3>Stage rastos produkto kortelės</h3><ul>{% for p in review.new_bom_products %}<li>{{ p.code }} · {{ p.name }} · {{ 'Aktyvi' if p.active else 'Archyvuota' }}</li>{% endfor %}</ul>{% endif %}
-<ul><li>Gauti visą šio produkto BOM iš Poul pateikto workbook, ne vien skirtumų eksportą.</li><li>Sutikrinti esamus BOM ir jų versijas, nustatyti Manufacture arba KIT paskirtį.</li><li>Patvirtinti komponentus, kiekius, UOM ir operacijas; tada pasirinkti naują BOM arba esamo BOM korekciją.</li></ul>
+<h3>Esamos BOM versijos</h3>{{ versions(review.bom_versions) }}<ul><li>Gauti visą šio produkto BOM iš Poul pateikto workbook, ne vien skirtumų eksportą.</li><li>Sutikrinti esamus BOM ir jų versijas, nustatyti Manufacture arba KIT paskirtį.</li><li>Patvirtinti komponentus, kiekius, UOM ir operacijas; tada pasirinkti naują BOM arba esamo BOM korekciją.</li></ul>
 <p class="meta">Įrodymai: Changes eksporto eilutė {{ review.new_bom.export_row }}; šaltinio eilutė {{ review.new_bom.source_row }}.</p></section>
 <section><h2>Konfigūracijos pavyzdžiai — dar nepatvirtinti šablonai</h2><p class="muted">Šie nustatymai nuskaityti iš Stage. Jie nekopijuojami į naujas korteles.</p>
 {% for cfg in review.configs %}<details class="config"><summary>{{ cfg.product.code }} · {{ cfg.product.name }} · {{ 'Aktyvi' if cfg.product.active else 'Archyvuota' }}</summary><table><tr><th>Nustatymas</th><th>Dabar Odoo</th></tr>{% for name,value in cfg.fields %}<tr><td>{{ name }}</td><td>{{ value }}</td></tr>{% endfor %}</table></details>{% endfor %}
@@ -227,13 +233,6 @@ def register(app):
                         key: len(inventory[key])
                         for key in ('products', 'boms', 'lines', 'eco_types', 'eco_stages')
                     }), flush=True)
-                    target_templates = {p['product_tmpl_id'][0] for p in inventory['products']
-                        if p.get('default_code') in ('EUB-C-CAB03-SLF901', 'EUB-P-ACC02-MIS012')
-                        and p.get('product_tmpl_id')}
-                    print('REFORM_BOM_VERSION_EVIDENCE ' + str([
-                        b for b in inventory['boms']
-                        if b.get('product_tmpl_id') and b['product_tmpl_id'][0] in target_templates
-                    ]), flush=True)
                     interpreted = build_review(inventory)
                     print('REFORM_PILOT_REVIEW ' + str({
                         'non_bom_status': interpreted['card_status'],
@@ -246,6 +245,8 @@ def register(app):
                         'new_bom_product_matches': len(interpreted['new_bom_products']),
                         'bom_classification': interpreted['new_bom_classification'],
                         'led_classification': interpreted['led_classification'],
+                        'led_version_suggestion': interpreted['led_versions']['suggestion'],
+                        'bom_version_suggestion': interpreted['bom_versions']['suggestion'],
                         'ready_to_write': interpreted['ready_to_write'],
                     }), flush=True)
                 except Exception as exc:
