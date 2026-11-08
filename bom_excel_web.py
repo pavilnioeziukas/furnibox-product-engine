@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import secrets
 import socket
+import threading
 import xmlrpc.client
 
 from flask import Blueprint, abort, jsonify, render_template_string, request, session
@@ -170,3 +171,17 @@ def register(app):
         return render_template_string(PILOT_PAGE, data=data, error=error)
 
     app.register_blueprint(bp)
+    if os.getenv('RAILWAY_ENVIRONMENT_ID') == '67ee29c1-07f5-4242-aa13-d3e4972f16a9':
+        def probe_stage():
+            status = stage_status()
+            print('REFORM_STAGE_CONNECTION ' + status, flush=True)
+            if status == 'Stage API autentifikacija ir ECO laukų skaitymas patvirtinti.':
+                try:
+                    inventory = pilot_inventory()
+                    print('REFORM_STAGE_INVENTORY ' + str({
+                        key: len(inventory[key])
+                        for key in ('products', 'boms', 'lines', 'eco_types', 'eco_stages')
+                    }), flush=True)
+                except Exception as exc:
+                    print('REFORM_STAGE_INVENTORY_FAILED ' + type(exc).__name__, flush=True)
+        threading.Thread(target=probe_stage, daemon=True).start()
