@@ -148,6 +148,8 @@ if os.getenv("RAILWAY_ENVIRONMENT_ID") == "67ee29c1-07f5-4242-aa13-d3e4972f16a9"
             "recovery_consumed": bool(_db.get(_RecoveryReceipt, "stage-mindaugas-2026-11-08")),
             "initial_password_configured": bool(SETTINGS.initial_admin_password),
             "web_password_configured": bool(SETTINGS.web_password),
+            "odoo_host": __import__("urllib.parse", fromlist=["urlparse"]).urlparse(os.getenv("ODOO_URL", "")).hostname,
+            "admin_accepts_web": bool(SETTINGS.web_password and TOC_STORE.authenticate("admin", SETTINGS.web_password)),
             "mindaugas_accepts_initial": bool(SETTINGS.initial_admin_password and TOC_STORE.authenticate("mindaugas", SETTINGS.initial_admin_password)),
             "mindaugas_accepts_web": bool(SETTINGS.web_password and TOC_STORE.authenticate("mindaugas", SETTINGS.web_password)),
         }
