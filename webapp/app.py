@@ -3494,6 +3494,7 @@ def internal_reform_non_bom():
     if request.method == "GET":
         return render_template_string("""
 <h1>Reform Non-BOM review</h1>
+<p><a href="{{ url_for('reform_interpretation_rules') }}">Reform taisyklių registras</a></p>
 <form method="post" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ token }}">
 <label>Submitted Reform export <input name="workbook" type="file" accept=".xlsx" required></label>
@@ -3574,6 +3575,7 @@ details {margin: 1rem 0}
 summary {cursor: pointer; font-weight: 600}
 </style>
 <h1>Reform Non-BOM peržiūra</h1>
+<p><a href="{{ url_for('reform_interpretation_rules') }}">Reform taisyklių registras</a></p>
 <p>Patikrinta {{ rows|length }} eilučių. Pagal tiekėjo kodą rasta {{ vendor_count }}.</p>
 <p>Paketo kontrolinė suma <code>{{ digest }}</code></p>
 <p><a href="{{ url_for('internal_reform_non_bom') }}">Patikrinti kitą paketą</a></p>
@@ -3662,6 +3664,24 @@ def save_reform_decision():
             (package, fingerprint, decision, note, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
         )
     return render_template_string("<p>Sprendimas išsaugotas. Galite užverti šį skirtuką.</p>")
+
+
+
+@app.get("/reform-review/rules")
+def reform_interpretation_rules():
+    from flask import abort, render_template_string
+
+    if not auth_enabled() or not session.get("authenticated"):
+        abort(403)
+    rules = (BASE_DIR / "docs" / "reform-interpretation-rules.md").read_text(encoding="utf-8")
+    return render_template_string("""
+<!doctype html><html lang="lt"><meta charset="utf-8">
+<title>Reform taisyklių registras</title>
+<style>body {font: 16px system-ui; max-width: 1100px; margin: 2rem auto; padding: 1rem}
+pre {white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.6 system-ui}</style>
+<p><a href="{{ url_for('internal_reform_non_bom') }}">Grįžti į Non-BOM patikrą</a></p>
+<pre>{{ rules }}</pre></html>
+""", rules=rules)
 
 
 if __name__ == "__main__":
