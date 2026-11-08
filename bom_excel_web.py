@@ -121,7 +121,7 @@ def pilot_inventory():
         routes=read('stock.route', [('id','in',routes)], ['id','name','active']),
         eco_types=read('mrp.eco.type', [], ['id','name']),
         eco_stages=read('mrp.eco.stage', [], ['id','name','type_ids','allow_apply_change','final_stage','approval_ids']),
-        ready_to_write=False)
+        bom_scan_complete=True, ready_to_write=False)
 
 PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reform · Pakeitimų peržiūra</title>
@@ -136,7 +136,7 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 <span class="badge">Stage duomenys nuskaityti</span> <span class="badge pending">Laukia sprendimų ir patvirtinimų</span>
 <p class="meta">Pasirinktas šaltinis: <strong>{{ review.source.file }}</strong> · pateikė {{ review.source.submitted_by }} · {{ review.source.submitted_at }}.<br>Tai konkretaus eksporto pilotas. Naujesni Reform pateikimai automatiškai neįtraukiami.</p>
 <nav><a href="#led">1. LED korekcija</a><a href="#card">2. Naujos kortelės patikra</a><a href="#bom">3. Naujo BOM patikra</a></nav>
-<section id="led"><span class="badge pending">Reikia patvirtinti tikslinį BOM</span><h2>1. LED komponento pakeitimas</h2>
+<section id="led"><span class="badge pending">{{ review.led_classification.label }}</span><h2>1. LED komponento pakeitimas</h2><p>{{ review.led_classification.reason }}</p>
 <div class="grid"><div class="box"><h3>Poul pateikė</h3><p>Produktas: <code>{{ review.led.reform_sku }}</code></p>
 <p>Pašalinti <code>{{ review.led.old }}</code><br>Pridėti <code>{{ review.led.new }}</code><br>Kiekis: {{ review.led.qty }}</p></div>
 <div class="box"><h3>Furnibox interpretacija</h3><p>Siūlomas produktas: <code>{{ review.led.target }}</code></p>
@@ -157,9 +157,9 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 {% for p in review.matches %}<tr><td><a target="_blank" rel="noopener" href="https://stageodoo.furnibox.lt/web#id={{ p.id }}&model=product.product&view_type=form">{{ p.code }}</a><br>{{ p.name }}</td><td>{{ 'Aktyvi' if p.active else 'Archyvuota' }}</td><td>{{ p.basis }}</td></tr>{% endfor %}</table></div>{% endif %}
 <p class="notice">Stage patikra nepakeičia aktualios produkcinės patikros. Archyvuota kortelė savaime nėra leidimas kurti naują.</p>
 <p class="meta">Įrodymai: New Non-BOM items; Reform šaltinio eilutė {{ review.non_bom.row }}. Tikrintas tik Reform Supply & Logistics, UAB tiekėjo kodas.</p></section>
-<section id="bom"><span class="badge pending">Nepakanka duomenų naujam BOM</span><h2>3. Naujo BOM kandidatė</h2>
+<section id="bom"><span class="badge pending">{{ review.new_bom_classification.label }}</span><h2>3. BOM sukūrimas ar korekcija?</h2><p>{{ review.new_bom_classification.reason }}</p><p class="meta">Taisyklė R16 · rasti BOM ID: {{ review.new_bom_classification.bom_ids|join(", ") or "Nerasta" }}</p>
 <div class="grid"><div class="box"><h3>Eksporte pridėta eilutė</h3><p><code>{{ review.new_bom.sku }}</code><br>Komponentas <code>{{ review.new_bom.component }}</code><br>Kiekis {{ review.new_bom.qty }}</p></div>
-<div class="box"><h3>Sprendimas dabar</h3><p>Naujo BOM kurti dar negalima: „Added“ reiškia skirtumą nuo etalono, o ne įrodymą, kad produktas ar visas BOM yra naujas.</p></div></div>
+<div class="box"><h3>Sprendimas dabar</h3><p>{{ review.new_bom_classification.label }}. „Added“ reiškia skirtumą nuo etalono, o ne naujo BOM įrodymą. Vykdymas blokuojamas, kol nėra visos struktūros ir patvirtinimų.</p></div></div>
 {% if review.new_bom_products %}<h3>Stage rastos produkto kortelės</h3><ul>{% for p in review.new_bom_products %}<li>{{ p.code }} · {{ p.name }} · {{ 'Aktyvi' if p.active else 'Archyvuota' }}</li>{% endfor %}</ul>{% endif %}
 <ul><li>Gauti visą šio produkto BOM iš Poul pateikto workbook, ne vien skirtumų eksportą.</li><li>Sutikrinti esamus BOM ir jų versijas, nustatyti Manufacture arba KIT paskirtį.</li><li>Patvirtinti komponentus, kiekius, UOM ir operacijas; tada pasirinkti naują BOM arba esamo BOM korekciją.</li></ul>
 <p class="meta">Įrodymai: Changes eksporto eilutė {{ review.new_bom.export_row }}; šaltinio eilutė {{ review.new_bom.source_row }}.</p></section>
@@ -237,6 +237,8 @@ def register(app):
                         ],
                         'new_component_matches': len(interpreted['new_components']),
                         'new_bom_product_matches': len(interpreted['new_bom_products']),
+                        'bom_classification': interpreted['new_bom_classification'],
+                        'led_classification': interpreted['led_classification'],
                         'ready_to_write': interpreted['ready_to_write'],
                     }), flush=True)
                 except Exception as exc:
