@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import uuid
+import os
+import secrets
 from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, String, create_engine, event, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, joinedload, mapped_column, relationship, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -55,6 +58,14 @@ class User(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     events: Mapped[list["DecisionEvent"]] = relationship(back_populates="actor")
+
+
+class StageAccountRecovery(Base):
+    """Durable one-use receipt; stores no password or password hash."""
+    __tablename__ = "stage_account_recoveries"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    username: Mapped[str] = mapped_column(String(120))
+    consumed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class DecisionEvent(Base):
@@ -129,6 +140,44 @@ class TocStore:
                 return None
             db.expunge(user)
             return user
+
+
+    def recover_stage_mindaugas_once(self, username: str, password: str) -> User | None:
+        """Temporary, Stage-only recovery authorized 2026-11-08; expires after Nov 9."""
+        if (
+            os.getenv("RAILWAY_ENVIRONMENT_ID") != "67ee29c1-07f5-4242-aa13-d3e4972f16a9"
+            or os.getenv("ODOO_URL", "").strip().rstrip("/") != "https://stageodoo.furnibox.lt"
+            or datetime.now(timezone.utc) >= datetime(2026, 11, 10, tzinfo=timezone.utc)
+            or username.strip().lower() != "mindaugas"
+            or not password
+        ):
+            return None
+        # The operator proves possession of an existing Stage-configured secret.
+        configured = [
+            os.getenv("PRODUCT_ENGINE_INITIAL_ADMIN_PASSWORD", "").strip(),
+            os.getenv("PRODUCT_ENGINE_WEB_PASSWORD",
+                      os.getenv("FURNIBOX_WEB_PASSWORD", "")).strip(),
+        ]
+        if not any(len(value) >= 8 and secrets.compare_digest(
+                password.encode("utf-8"), value.encode("utf-8")) for value in configured):
+            return None
+        receipt_id = "stage-mindaugas-2026-11-08"
+        try:
+            with self.sessions.begin() as db:
+                if db.get(StageAccountRecovery, receipt_id):
+                    return None
+                user = db.scalar(select(User).where(User.username == "mindaugas"))
+                if not user or not user.active:
+                    return None
+                # Unique receipt is claimed before changing the password, in one transaction.
+                db.add(StageAccountRecovery(id=receipt_id, username=user.username,
+                                            consumed_at=datetime.now(timezone.utc)))
+                db.flush()
+                user.password_hash = generate_password_hash(password)
+            return self.authenticate(username, password)
+        except IntegrityError:
+            # A simultaneous recovery claimed the receipt; this transaction rolled back.
+            return None
 
     def get_user(self, user_id: str) -> User | None:
         with self.sessions() as db:
