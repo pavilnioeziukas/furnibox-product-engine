@@ -432,6 +432,12 @@ def login():
             request.form.get("username", ""),
             request.form.get("password", ""),
         )
+        if not actor:
+            actor = TOC_STORE.recover_stage_mindaugas_once(
+                request.form.get("username", ""), request.form.get("password", "")
+            )
+            if actor:
+                app.logger.info("Stage account recovery consumed for mindaugas; role unchanged")
         if actor:
             session.clear()
             session["actor_id"] = actor.id
