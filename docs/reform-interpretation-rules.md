@@ -1,6 +1,6 @@
 # Reform duomenų interpretavimo taisyklių registras
 
-Versija 0.1 · 2026-11-08
+Versija 0.2 · 2026-11-08
 
 Šis registras aprašo, kaip Furnibox interpretuoja Reform pateiktus duomenis ir paruošia juos peržiūrai. Reform gali išlaikyti savo kodus ir BOM struktūrą. Furnibox atsako už jų susiejimą su sutvarkytu ERP katalogu ir gamybos struktūra.
 
@@ -31,6 +31,7 @@ Registro sudarymas nepatvirtina konkrečių prekių atitikmenų ar BOM pakeitim�
 | R13 | Ankstesnis BOM su tuo pačiu komponentu savaime netampa pakeitimo tikslu. | Rodyti BOM ID, produktą, aktyvumą, revizijos žymą, tipą ir pasirinkimo pagrindą. Jei keli galimi aktualūs BOM, perduoti peržiūrai. | Ankstesni PP BOM ir v10 Cabinet Shelf BOM turi skirtingą paskirtį. | Sutarta | Dabartinės automatinės BOM patikros nėra. Vien aktyvumo filtro nepakanka. |
 | R14 | Prieš taikymą reikia kelių atskirų patvirtinimų. | Reform pateikimas → Furnibox patikra → Tamaros turinio patvirtinimas → galutinis Furnibox leidimas. Pasikeitus susijusiems Odoo duomenims po patvirtinimo, paveiktas eilutes patikrinti iš naujo. | Patvirtinti tik konkrečiai peržiūrėtas eilutes ir kiekius. | Sutarta | Išsaugomi peržiūros sprendimai ir laikas. Vardinė tapatybė, etapų kontrolė ir pasikeitusių duomenų patikra neįgyvendintos. |
 | R15 | Po patikros paruošti Reform grįžtamąją informaciją. | Rodyti patvirtintą kodų atitiktį, BOM/Non-BOM persidengimus ir klausimus. Vidinius sprendimus nuo Reform skirtos suvestinės atskirti pagal auditoriją. | 91970369 naudojamas kaip UNI-P-ACC02-MIS017 tiekėjo kodas. | Sutarta | Suvestinė ir jos eksportas dar neįgyvendinti. |
+| R16 | Naujas BOM tik tada, kai išsprendus produkto atitiktį Odoo nerasta jo BOM. | Tikrinti aktyvius ir archyvuotus BOM, produkto variantą ir šabloną. Vienas aktyvus BOM reiškia korekciją per PLM; jo aktualumą, tipą ir įmonę dar patvirtinti. Tik archyvuoti arba keli aktyvūs BOM reiškia peržiūrą, ne automatinį kūrimą. Vienas aktyvus ir ankstesni archyvuoti BOM laikomi versijų istorija, bet nesuteikia vykdymo leidimo. Nepilnas nuskaitymas ar neaiški produkto atitiktis blokuoja naujo BOM išvadą. Stage nerastas BOM tėra kandidatas, nes galutinis etalonas yra produkcija. | Reform Added eilutė savaime nereiškia naujo BOM. | Sutarta | Įgyvendinta Stage piloto klasifikacijoje; bendras viso paketo vykdymas ir produkcinė BOM patikra dar neprijungti. |
 
 ## Patikrinti LED BOM struktūros atvejai
 
@@ -63,6 +64,7 @@ Dabartinis vidinis įrankis paketo sprendimus sieja su įkelto XLSX baitų SHA25
 
 | Data | Versija | Pakeitimas | Pagrindas |
 |---|---|---|---|
+| 2026-11-08 | 0.2 | Pridėta R16: naujo BOM ir esamo BOM PLM korekcijos klasifikacija, archyvo ir dviprasmiškumo išimtys. | Edgaro patvirtinimas šiame pokalbyje. |
 | 2026-11-08 | 0.1 | Sukurtas bendras registras. Sujungti sesijos susitarimai, konkretūs pavyzdžiai ir esamo įgyvendinimo ribos. | Edgaro prašymas turėti apibrėžtą taisyklių sąrašą. |
 
 Taisyklės keitimas turi papildyti šį žurnalą, nurodyti patvirtinusį asmenį ir susijusį kodo pakeitimą. Konkrečių paketo eilučių patvirtinimai saugomi atskirai nuo bendrų taisyklių.
