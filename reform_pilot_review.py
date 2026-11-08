@@ -67,6 +67,30 @@ def classify_bom(products, boms, *, scan_complete=False):
     return result
 
 
+
+def pilot_version_evidence(products, boms):
+    """Propose the agreed v10 baseline in this pilot only; never authorize execution."""
+    candidates = []
+    if len(products) != 1:
+        return dict(candidates=[], suggestion=None, ready_to_write=False)
+    p = products[0]
+    for b in boms:
+        if relation_id(b.get("product_tmpl_id")) != relation_id(p.get("product_tmpl_id")):
+            continue
+        if b.get("product_id") and relation_id(b["product_id"]) != p["id"]:
+            continue
+        candidates.append(dict(id=b["id"], reference=b.get("code") or "Be nuorodos",
+            sequence=b.get("sequence"), type=b.get("type"), active=b.get("active", False),
+            company=label(b.get("company_id")), version=b.get("version"),
+            write_date=b.get("write_date") or ""))
+    preferred = [b for b in candidates if b["active"] and
+                 b["reference"] == "BOM_for Furnibox_v10" and b["sequence"] == 0]
+    # Different companies or BOM purposes require an explicit selection.
+    context = {(b["company"], b["type"]) for b in candidates if b["active"]}
+    suggestion = preferred[0] if len(preferred) == 1 and len(context) == 1 and p.get("active") else None
+    return dict(candidates=candidates, suggestion=suggestion, ready_to_write=False)
+
+
 def build_review(data):
     products = data["products"]
     by_id = {p["id"]: p for p in products}
@@ -149,4 +173,6 @@ def build_review(data):
                     scan_complete=data.get("bom_scan_complete", False)),
                 new_bom_classification=classify_bom(exact(NEW_BOM["sku"]), data["boms"],
                     scan_complete=data.get("bom_scan_complete", False)),
+                led_versions=pilot_version_evidence(exact(LED["target"]), data["boms"]),
+                bom_versions=pilot_version_evidence(exact(NEW_BOM["sku"]), data["boms"]),
                 configs=configs, ready_to_write=False)
