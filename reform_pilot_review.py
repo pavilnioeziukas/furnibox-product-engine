@@ -32,6 +32,41 @@ def label(value):
     return str(value)
 
 
+
+def classify_bom(products, boms, *, scan_complete=False):
+    """R16: classify existence independently of export change labels or component deltas."""
+    result = dict(status="review", label="Reikia peržiūros", reason="",
+                  bom_ids=[], ready_to_write=False)
+    if not scan_complete:
+        result["reason"] = "BOM nuskaitymas nepilnas; negalima spręsti, kad BOM nėra."
+        return result
+    if len(products) != 1 or not products[0].get("active"):
+        result["reason"] = "Produkto atitikmuo nėra vienareikšmis ir aktyvus."
+        return result
+    product = products[0]
+    template = relation_id(product.get("product_tmpl_id"))
+    if not template:
+        result["reason"] = "Trūksta produkto šablono tapatybės."
+        return result
+    matches = list({b["id"]: b for b in boms
+                    if relation_id(b.get("product_tmpl_id")) == template
+                    and (not b.get("product_id") or relation_id(b["product_id"]) == product["id"])}.values())
+    result["bom_ids"] = [b["id"] for b in matches]
+    active = [b for b in matches if b.get("active")]
+    if not matches:
+        result.update(status="new_candidate", label="Kandidatas naujam BOM",
+            reason="Šiam produktui Stage nerasta nei aktyvaus, nei archyvuoto BOM. Reikia produkcinės patikros, visos struktūros ir patvirtinimų.")
+    elif len(active) == 1:
+        result.update(status="plm_update", label="Esamo BOM korekcija per PLM",
+            reason="Rastas vienas aktyvus BOM. Prieš PLM vykdymą patvirtinti jo aktualumą, paskirtį ir konkrečią keitimo apimtį.",
+            proposed_bom_id=active[0]["id"])
+    elif not active:
+        result["reason"] = "Rasti tik archyvuoti BOM. Reikia sprendimo dėl atkūrimo arba naujos versijos; naujo BOM automatiškai nekurti."
+    else:
+        result["reason"] = "Rasti keli aktyvūs BOM. Reikia nustatyti tinkamą tipą, įmonę, variantą ir aktualią versiją."
+    return result
+
+
 def build_review(data):
     products = data["products"]
     by_id = {p["id"]: p for p in products}
@@ -110,4 +145,8 @@ def build_review(data):
                 matches=list(matches.values()), led=LED, led_boms=rows, led_blockers=led_blockers,
                 new_components=[display_product(p) for p in new_components],
                 new_bom=NEW_BOM, new_bom_products=[display_product(p) for p in exact(NEW_BOM["sku"])],
+                led_classification=classify_bom(exact(LED["target"]), data["boms"],
+                    scan_complete=data.get("bom_scan_complete", False)),
+                new_bom_classification=classify_bom(exact(NEW_BOM["sku"]), data["boms"],
+                    scan_complete=data.get("bom_scan_complete", False)),
                 configs=configs, ready_to_write=False)
