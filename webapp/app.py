@@ -3669,19 +3669,59 @@ def save_reform_decision():
 
 @app.get("/reform-review/rules")
 def reform_interpretation_rules():
-    from flask import abort, render_template_string
+    from flask import abort, render_template
 
     if not auth_enabled() or not session.get("authenticated"):
         abort(403)
-    rules = (BASE_DIR / "docs" / "reform-interpretation-rules.md").read_text(encoding="utf-8")
-    return render_template_string("""
-<!doctype html><html lang="lt"><meta charset="utf-8">
-<title>Reform taisyklių registras</title>
-<style>body {font: 16px system-ui; max-width: 1100px; margin: 2rem auto; padding: 1rem}
-pre {white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.6 system-ui}</style>
-<p><a href="{{ url_for('internal_reform_non_bom') }}">Grįžti į Non-BOM patikrą</a></p>
-<pre>{{ rules }}</pre></html>
-""", rules=rules)
+    source = (BASE_DIR / "docs" / "reform-interpretation-rules.md").read_text(encoding="utf-8")
+    sections = {}
+    section = ""
+    for line in source.splitlines():
+        if line.startswith("## "):
+            section = line[3:]
+            sections[section] = []
+        else:
+            sections.setdefault(section, []).append(line)
+
+    def table_rows(name):
+        return [
+            [cell.strip() for cell in line.strip().strip("|").split("|")]
+            for line in sections.get(name, [])
+            if line.startswith("|") and not line.startswith("|---")
+        ]
+
+    themes = {
+        "products": "Prekių atitikmenys",
+        "bom": "BOM struktūra",
+        "process": "Pateikimas ir patvirtinimai",
+    }
+    rules = []
+    for row in table_rows("Taisyklės")[1:]:
+        if len(row) != 6:
+            abort(500, "Invalid rule register table.")
+        number = int(row[0][1:])
+        category = "products" if 3 <= number <= 9 else "bom" if 10 <= number <= 13 else "process"
+        rules.append(dict(
+            id=row[0], title=row[1], conditions=row[2], example=row[3],
+            agreement=row[4], implementation=row[5],
+            category=category, category_label=themes[category],
+            pending="tikslintin" in row[4].casefold(),
+        ))
+    support = []
+    for name in ("Peržiūros rezultato reikalavimai", "Dar nepatvirtinti arba neatlikti darbai"):
+        paragraphs = [text.strip() for text in "\n".join(sections.get(name, [])).split("\n\n") if text.strip()]
+        if name.startswith("Dar "):
+            paragraphs = [line.strip() for line in sections.get(name, []) if line.strip()]
+        support.append((name, paragraphs))
+    log = table_rows("Pakeitimų žurnalas")
+    support.append(("Registro istorija", [" · ".join(row) for row in log[1:]]))
+    version = next((line for line in sections.get("", []) if line.startswith("Versija ")), "")
+    return render_template(
+        "reform_rules.html", rules=rules, version=version,
+        pending_count=sum(rule["pending"] for rule in rules),
+        filters=[("all", "Visos"), *themes.items(), ("pending", "Reikia patikslinti")],
+        examples=table_rows("Patikrinti LED BOM struktūros atvejai"), support=support,
+    )
 
 
 if __name__ == "__main__":
