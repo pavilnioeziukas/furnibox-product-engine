@@ -33,12 +33,12 @@ def label(value):
 
 
 
-def classify_bom(products, boms, *, scan_complete=False):
-    """R16: classify existence independently of export change labels or component deltas."""
+def select_bom(products, boms, *, scan_complete=False):
+    """R16: choose a unique lowest sequence in a resolved active BOM context."""
     result = dict(status="review", label="Reikia peržiūros", reason="",
-                  bom_ids=[], ready_to_write=False)
+                  bom_ids=[], selected=None, ready_to_write=False)
     if not scan_complete:
-        result["reason"] = "BOM nuskaitymas nepilnas; negalima spręsti, kad BOM nėra."
+        result["reason"] = "BOM nuskaitymas nepilnas; negalima nustatyti aktualaus BOM."
         return result
     if len(products) != 1 or not products[0].get("active"):
         result["reason"] = "Produkto atitikmuo nėra vienareikšmis ir aktyvus."
@@ -48,47 +48,62 @@ def classify_bom(products, boms, *, scan_complete=False):
     if not template:
         result["reason"] = "Trūksta produkto šablono tapatybės."
         return result
+    company = relation_id(product.get("company_id"))
     matches = list({b["id"]: b for b in boms
                     if relation_id(b.get("product_tmpl_id")) == template
-                    and (not b.get("product_id") or relation_id(b["product_id"]) == product["id"])}.values())
+                    and (not b.get("product_id") or relation_id(b["product_id"]) == product["id"])
+                    and (not company or not b.get("company_id")
+                         or relation_id(b["company_id"]) == company)}.values())
     result["bom_ids"] = [b["id"] for b in matches]
     active = [b for b in matches if b.get("active")]
     if not matches:
         result.update(status="new_candidate", label="Kandidatas naujam BOM",
-            reason="Šiam produktui Stage nerasta nei aktyvaus, nei archyvuoto BOM. Reikia produkcinės patikros, visos struktūros ir patvirtinimų.")
-    elif len(active) == 1:
-        result.update(status="plm_update", label="Esamo BOM korekcija per PLM",
-            reason="Rastas vienas aktyvus BOM. Prieš PLM vykdymą patvirtinti jo aktualumą, paskirtį ir konkrečią keitimo apimtį.",
-            proposed_bom_id=active[0]["id"])
-    elif not active:
-        result["reason"] = "Rasti tik archyvuoti BOM. Reikia sprendimo dėl atkūrimo arba naujos versijos; naujo BOM automatiškai nekurti."
-    else:
-        result["reason"] = "Rasti keli aktyvūs BOM. Reikia nustatyti tinkamą tipą, įmonę, variantą ir aktualią versiją."
+            reason="Stage nerasta nei aktyvaus, nei archyvuoto tinkamo BOM. Prieš kūrimą reikia produkcinės patikros, visos struktūros ir patvirtinimų.")
+        return result
+    if not active:
+        result["reason"] = "Rasti tik archyvuoti BOM. Naujo BOM automatiškai nekurti."
+        return result
+    contexts = {(relation_id(b.get("company_id")), b.get("type")) for b in active}
+    if len(contexts) != 1 or any(not b.get("type") for b in active):
+        result["reason"] = "BOM tipas arba įmonės kontekstas nevienareikšmis; pirmiausia nustatyti tinkamą paskirtį."
+        return result
+    if any(type(b.get("sequence")) is not int for b in active):
+        result["reason"] = "Trūksta patikimos sequence reikšmės; automatinė atranka blokuojama."
+        return result
+    minimum = min(b["sequence"] for b in active)
+    lowest = [b for b in active if b["sequence"] == minimum]
+    result["minimum_sequence"] = minimum
+    if len(lowest) != 1:
+        result["reason"] = "Keli aktyvūs BOM turi vienodą mažiausią sequence (" + str(minimum) + "). Reikia peržiūros."
+        return result
+    selected = lowest[0]
+    result.update(status="plm_update", label="Esamo BOM korekcija per PLM",
+        selected=selected, proposed_bom_id=selected["id"],
+        reason="Pasirinktas BOM #" + str(selected["id"]) + ": vienintelis mažiausias sequence = "
+               + str(minimum) + ". Pavadinimas ir versijos žyma atrankai nenaudojami. Keitimo apimčiai dar reikia patvirtinimų.")
     return result
 
 
+def classify_bom(products, boms, *, scan_complete=False):
+    result = select_bom(products, boms, scan_complete=scan_complete)
+    return {key: value for key, value in result.items() if key != "selected"}
 
-def pilot_version_evidence(products, boms):
-    """Propose the agreed v10 baseline in this pilot only; never authorize execution."""
+
+def pilot_version_evidence(products, boms, *, scan_complete=False):
+    """Show the same sequence selection used by classification; never authorize writes."""
+    selection = select_bom(products, boms, scan_complete=scan_complete)
     candidates = []
-    if len(products) != 1:
-        return dict(candidates=[], suggestion=None, ready_to_write=False)
-    p = products[0]
     for b in boms:
-        if relation_id(b.get("product_tmpl_id")) != relation_id(p.get("product_tmpl_id")):
-            continue
-        if b.get("product_id") and relation_id(b["product_id"]) != p["id"]:
+        if b["id"] not in selection["bom_ids"]:
             continue
         candidates.append(dict(id=b["id"], reference=b.get("code") or "Be nuorodos",
             sequence=b.get("sequence"), type=b.get("type"), active=b.get("active", False),
             company=label(b.get("company_id")), version=b.get("version"),
             write_date=b.get("write_date") or ""))
-    preferred = [b for b in candidates if b["active"] and
-                 b["reference"] == "BOM_for Furnibox_v10" and b["sequence"] == 0]
-    # Different companies or BOM purposes require an explicit selection.
-    context = {(b["company"], b["type"]) for b in candidates if b["active"]}
-    suggestion = preferred[0] if len(preferred) == 1 and len(context) == 1 and p.get("active") else None
-    return dict(candidates=candidates, suggestion=suggestion, ready_to_write=False)
+    selected = selection.get("selected")
+    suggestion = next((b for b in candidates if selected and b["id"] == selected["id"]), None)
+    return dict(candidates=candidates, suggestion=suggestion, reason=selection["reason"],
+                ready_to_write=False)
 
 
 def build_review(data):
@@ -141,13 +156,14 @@ def build_review(data):
                         lines=[dict(id=line["id"], qty=line.get("product_qty"),
                                     uom=label(line.get("product_uom_id"))) for line in matching]))
     new_components = [p for p in exact(LED["new"]) if p.get("active")]
-    target_boms = [b for b in rows if b["code"] == LED["target"] and b["active"]]
-    led_blockers = ["Patvirtinti, kad šis Odoo BOM yra aktuali versija; vien aktyvumo nepakanka.",
-                    "Patikrinti pakeitimo poveikį kitiems gaminiams ir gauti turinio patvirtinimus."]
-    if not target_boms:
-        led_blockers.insert(0, "Stage nerastas aktyvus siūlomo tikslo BOM su senu komponentu.")
-    elif len(target_boms) > 1:
-        led_blockers.insert(0, "Keli aktyvūs tikslo BOM: būtina pasirinkti konkrečią versiją.")
+    selection = classify_bom(exact(LED["target"]), data["boms"],
+                             scan_complete=data.get("bom_scan_complete", False))
+    selected_id = selection.get("proposed_bom_id")
+    led_blockers = ["Patikrinti pakeitimo poveikį kitiems gaminiams ir gauti turinio patvirtinimus."]
+    if not selected_id:
+        led_blockers.insert(0, selection["reason"])
+    elif not any(b["id"] == selected_id for b in rows):
+        led_blockers.insert(0, "Pagal sequence pasirinktame BOM seno komponento nėra. Aukštesnio sequence BOM vietoje jo automatiškai nepasirenkame.")
     if len(new_components) != 1:
         led_blockers.insert(0, "Naujo komponento aktyvus atitikmuo nėra vienareikšmis.")
     routes = {r["id"]: r.get("name", "") for r in data.get("routes", [])}
@@ -173,6 +189,8 @@ def build_review(data):
                     scan_complete=data.get("bom_scan_complete", False)),
                 new_bom_classification=classify_bom(exact(NEW_BOM["sku"]), data["boms"],
                     scan_complete=data.get("bom_scan_complete", False)),
-                led_versions=pilot_version_evidence(exact(LED["target"]), data["boms"]),
-                bom_versions=pilot_version_evidence(exact(NEW_BOM["sku"]), data["boms"]),
+                led_versions=pilot_version_evidence(exact(LED["target"]), data["boms"],
+                    scan_complete=data.get("bom_scan_complete", False)),
+                bom_versions=pilot_version_evidence(exact(NEW_BOM["sku"]), data["boms"],
+                    scan_complete=data.get("bom_scan_complete", False)),
                 configs=configs, ready_to_write=False)
