@@ -3724,6 +3724,10 @@ def reform_interpretation_rules():
     )
 
 
+from reform_single_component_audit import register as register_single_component_audit
+register_single_component_audit(app)
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
