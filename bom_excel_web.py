@@ -133,10 +133,10 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 <p class="muted">Stage pilotas · 3 konkretūs atvejai · kortelių ir ECO kūrimas išjungtas</p>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% macro versions(evidence) %}
-{% if evidence.suggestion %}<p class="notice"><strong>Siūloma piloto bazė: BOM #{{ evidence.suggestion.id }}</strong> · {{ evidence.suggestion.reference }} · eiliškumas {{ evidence.suggestion.sequence }}.<br>Pagrindas: sutartas v10 etalonas, vienintelis aktyvus v10 su eiliškumu 0 ir vienodas įmonės bei BOM tipo kontekstas. Tai pasiūlymas peržiūrai, ne patvirtinimas ar leidimas vykdyti.</p>{% else %}<p class="notice">Vienareikšmio v10 kandidato pagal piloto sąlygas nerasta. Reikia rankinio pasirinkimo.</p>{% endif %}
+{% if evidence.suggestion %}<p class="notice"><strong>Pagal sequence pasirinktas BOM: BOM #{{ evidence.suggestion.id }}</strong> · {{ evidence.suggestion.reference }} · eiliškumas {{ evidence.suggestion.sequence }}.<br>{{ evidence.reason }} Atranka nesuteikia leidimo vykdyti pakeitimų.</p>{% else %}<p class="notice">{{ evidence.reason }}</p>{% endif %}
 <div class="scroll"><table><tr><th>BOM</th><th>Šaltinio versija</th><th>Eiliškumas</th><th>Tipas / įmonė</th><th>PLM versija</th><th>Pakeista</th></tr>
 {% for b in evidence.candidates %}<tr><td><a target="_blank" rel="noopener" href="https://stageodoo.furnibox.lt/web#id={{ b.id }}&model=mrp.bom&view_type=form">#{{ b.id }}</a><br>{{ 'Aktyvus' if b.active else 'Archyvuotas' }}</td><td>{{ b.reference }}</td><td>{{ b.sequence }}</td><td>{{ b.type }}<br>{{ b.company }}</td><td>{{ b.version }}</td><td>{{ b.write_date }}</td></tr>{% endfor %}</table></div>
-<p class="meta">Šaltinio žyma „v10“ ir Odoo PLM revizijos numeris yra skirtingi laukai. Pasiūlymas nekeičia R16 būsenos „Reikia peržiūros“ ir nepakeičia patikros produkcijoje.</p>
+<p class="meta">Atrankos kriterijus — mažiausias tinkamų aktyvių BOM sequence. Pavadinimas ir PLM revizijos numeris yra informaciniai laukai. Prieš vykdymą būtini patvirtinimai ir aktualių produkcinių duomenų patikra.</p>
 {% endmacro %}
 {% if review %}
 <span class="badge">Stage duomenys nuskaityti</span> <span class="badge pending">Laukia sprendimų ir patvirtinimų</span>
@@ -152,7 +152,7 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 {% for b in review.led_boms %}<tr><td><code>{{ b.code }}</code><br>{{ b.role }}</td>
 <td><a target="_blank" rel="noopener" href="https://stageodoo.furnibox.lt/web#id={{ b.id }}&model=mrp.bom&view_type=form">BOM #{{ b.id }}</a><br>{{ b.reference }} · {{ 'Aktyvus' if b.active else 'Archyvuotas' }}<br>{{ b.type }} · {{ b.write_date }}</td>
 <td><code>{{ review.led.old }}</code>{% for l in b.lines %}<p>Eilutė #{{ l.id }}: {{ l.qty }} {{ l.uom }}</p>{% endfor %}</td>
-<td>{% if b.code == review.led.target and b.active %}<code>{{ review.led.new }}</code><p>Kiekį ir UOM išlaikyti tik patikrinus vienetų suderinamumą.</p>{% else %}Automatinis pakeitimas nesiūlomas{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<td>{% if b.id == review.led_classification.proposed_bom_id %}<code>{{ review.led.new }}</code><p>Kiekį ir UOM išlaikyti tik patikrinus vienetų suderinamumą.</p>{% else %}Automatinis pakeitimas nesiūlomas{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% else %}<p class="notice">Stage nerasta BOM eilutė su senu komponentu. Jokio keitimo nesiūlome.</p>{% endif %}
 <h3>Kas stabdo vykdymą</h3><ul>{% for item in review.led_blockers %}<li>{{ item }}</li>{% endfor %}</ul>
 <p class="meta">Įrodymai: Changes eksporto eilutės {{ review.led.removed_export_row }} ir {{ review.led.added_export_row }}; šaltinio eilutė {{ review.led.source_row }}.</p></section>
