@@ -9,7 +9,8 @@ import socket
 import threading
 import xmlrpc.client
 
-from flask import Blueprint, abort, jsonify, render_template_string, request, session
+from flask import Blueprint, abort, jsonify, render_template_string, request, session, redirect, url_for
+from reform_pilot_decisions import DecisionLog, decision_scope
 
 from bom_excel_review import read_rows, require_stage, review_rows
 from reform_pilot_review import PILOT_CODES, NON_BOM, build_review
@@ -126,7 +127,7 @@ def pilot_inventory():
 PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reform · Pakeitimų peržiūra</title>
 <style>
-:root{font-family:system-ui;color:#17332e;background:#f3f6f5}*{box-sizing:border-box}body{max-width:1160px;margin:32px auto;padding:0 20px 50px}a{color:#126451}h1{font-size:32px;margin:16px 0 8px}h2{font-size:23px}h3{font-size:17px}p{line-height:1.55}.muted{color:#5b6e68}.badge{display:inline-block;background:#e3eee9;border-radius:20px;padding:6px 12px;font-size:13px}.pending{background:#fff1d7;color:#79530c}.error{color:#9f2b25;background:#fff0ed;padding:20px;border-radius:12px}section{background:white;border:1px solid #dce5e0;border-radius:14px;padding:26px;margin:20px 0;scroll-margin-top:20px}nav{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}nav a{padding:10px 14px;background:#fff;border:1px solid #dce5e0;border-radius:8px;text-decoration:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.box{background:#f4f7f5;border-radius:10px;padding:18px;min-width:0}code{font-size:14px;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:12px;border-bottom:1px solid #e1e7e3;vertical-align:top}.scroll{overflow-x:auto}li{margin:10px 0;line-height:1.5}summary{cursor:pointer;padding:12px 0;font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.notice{border-left:4px solid #bc8a29;padding:12px 18px;background:#fff9ec}.meta{font-size:13px}.config{border-top:1px solid #e1e7e3;margin-top:16px;padding-top:12px}@media(max-width:700px){.grid{grid-template-columns:1fr}body{padding:0 12px}section{padding:18px}h1{font-size:26px}}
+:root{font-family:system-ui;color:#17332e;background:#f3f6f5}*{box-sizing:border-box}body{max-width:1160px;margin:32px auto;padding:0 20px 50px}a{color:#126451}h1{font-size:32px;margin:16px 0 8px}h2{font-size:23px}h3{font-size:17px}p{line-height:1.55}.muted{color:#5b6e68}.badge{display:inline-block;background:#e3eee9;border-radius:20px;padding:6px 12px;font-size:13px}.pending{background:#fff1d7;color:#79530c}.error{color:#9f2b25;background:#fff0ed;padding:20px;border-radius:12px}section{background:white;border:1px solid #dce5e0;border-radius:14px;padding:26px;margin:20px 0;scroll-margin-top:20px}nav{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}button{padding:9px 13px;border:1px solid #96b5a8;border-radius:7px;background:#e9f1ec;cursor:pointer;margin:4px}button:disabled{opacity:.45;cursor:default}nav a{padding:10px 14px;background:#fff;border:1px solid #dce5e0;border-radius:8px;text-decoration:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.box{background:#f4f7f5;border-radius:10px;padding:18px;min-width:0}code{font-size:14px;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:12px;border-bottom:1px solid #e1e7e3;vertical-align:top}.scroll{overflow-x:auto}li{margin:10px 0;line-height:1.5}summary{cursor:pointer;padding:12px 0;font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.notice{border-left:4px solid #bc8a29;padding:12px 18px;background:#fff9ec}.meta{font-size:13px}.config{border-top:1px solid #e1e7e3;margin-top:16px;padding-top:12px}@media(max-width:700px){.grid{grid-template-columns:1fr}body{padding:0 12px}section{padding:18px}h1{font-size:26px}}
 </style>
 <a href="/bom-excel/">← Grįžti</a>
 <h1>Reform pakeitimų peržiūra</h1>
@@ -172,14 +173,47 @@ PILOT_PAGE = '''<!doctype html><html lang="lt"><meta charset="utf-8"><meta name=
 <section><h2>Konfigūracijos pavyzdžiai — dar nepatvirtinti šablonai</h2><p class="muted">Šie nustatymai nuskaityti iš Stage. Jie nekopijuojami į naujas korteles.</p>
 {% for cfg in review.configs %}<details class="config"><summary>{{ cfg.product.code }} · {{ cfg.product.name }} · {{ 'Aktyvi' if cfg.product.active else 'Archyvuota' }}</summary><table><tr><th>Nustatymas</th><th>Dabar Odoo</th></tr>{% for name,value in cfg.fields %}<tr><td>{{ name }}</td><td>{{ value }}</td></tr>{% endfor %}</table></details>{% endfor %}
 </section>
-<section><h2>Patvirtinimai ir PLM</h2><p>Interpretacija → Tamaros turinio patvirtinimas → galutinis Furnibox leidimas → vykdymas.</p><p>Šis ekranas dar nefiksuoja patvirtinimų. Nei atverstas puslapis, nei vienas rastas BOM nėra patvirtinimas.</p>
+<section id="decisions"><h2>Sprendimų ir patvirtinimų žurnalas</h2>
+{% if saved %}<p class="badge">Sprendimas išsaugotas. Odoo nepakeistas.</p>{% endif %}
+<p>Prisijungta: <strong>{{ actor.username if actor else 'Nėra vardinės tapatybės' }}</strong>. Sprendėjo vardas imamas iš paskyros; jo įrašyti kito asmens vardu negalima.</p>
+<p class="notice">Turinio tvirtintojas ir galutinio leidimo tvirtintojas turi būti atskirai paskirti vardinėms paskyroms. Bendras „admin“ prisijungimas savaime nesuteikia teisės tvirtinti Tamaros vardu. Tai Stage piloto žurnalas; Odoo rašymas išjungtas.</p>
+{% for d in decisions %}<div class="config"><h3>{{ d.title }} · BOM #{{ d.scope.payload.target_bom_id or 'neparinktas' }}</h3>
+<p>1. Pasirinkimas: <strong>{{ 'Užfiksuotas' if d.state.selection else 'Laukia' }}</strong> →
+2. Turinio patvirtinimas: <strong>{{ 'Patvirtinta' if d.state.content else 'Laukia' }}</strong> →
+3. Galutinis leidimas: <strong>{{ 'Suteiktas' if d.state.release else 'Laukia' }}</strong></p>
+{% if d.state.stale_history %}<p class="notice">Duomenys pasikeitė. Ankstesni šio atvejo patvirtinimai nebegalioja.</p>{% endif %}
+{% if d.state.rejected %}<p class="notice">Ši apimtis atmesta. Norint tęsti, reikia naujo pasirinkimo.</p>{% endif %}
+{% if d.scope.blockers %}<ul>{% for b in d.scope.blockers %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+<p class="meta">Apimties kontrolinė suma: <code>{{ d.scope.fingerprint[:16] }}</code>. Išsaugomas konkretus pakeitimas, BOM, komponentų eilutės ir susijusios kortelės.</p>
+<form method="post" action="/bom-excel/reform-pilot/decision">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="case" value="{{ d.scope.case }}"><input type="hidden" name="fingerprint" value="{{ d.scope.fingerprint }}">
+<label>Pastaba / atmetimo priežastis<br><textarea name="note" maxlength="2000" rows="2" style="width:100%;max-width:700px"></textarea></label><p>
+<button name="action" value="select" {% if not d.can_select or not d.scope.selectable %}disabled{% endif %}>Užfiksuoti BOM ir pakeitimo pasirinkimą</button>
+<button name="action" value="content" {% if not d.can_content or not d.scope.content_ready or not d.state.selection %}disabled{% endif %}>Patvirtinti turinį</button>
+<button name="action" value="release" {% if not d.can_release or not d.scope.content_ready or not d.state.content %}disabled{% endif %}>Suteikti galutinį leidimą</button>
+<button name="action" value="reject" {% if not d.can_select %}disabled{% endif %}>Atmesti</button></p></form>
+{% if not d.can_content or not d.can_release %}<p class="meta">Patvirtinimo mygtukai neaktyvūs, kol paskyrai nėra paskirta atitinkama teisė. Pasirinkimo įrašas nėra turinio patvirtinimas.</p>{% endif %}
+<details><summary>Istorija ({{ d.history|length }})</summary><div class="scroll"><table><tr><th>Kada (UTC)</th><th>Kas</th><th>Veiksmas</th><th>Pastaba</th><th>Apimtis</th></tr>
+{% for e in d.history|reverse %}<tr><td>{{ e.occurred_at }}</td><td>{{ e.actor_name }}</td><td>{{ {'observe':'Duomenų patikra','select':'Pasirinkimas','content':'Turinio patvirtinimas','release':'Galutinis leidimas','reject':'Atmetimas'}.get(e.action,e.action) }}</td><td>{{ e.note }}</td><td>{{ e.fingerprint[:12] }} · {{ 'Dabartinė' if e.fingerprint == d.scope.fingerprint else 'Ankstesnė' }}</td></tr>{% endfor %}</table></div></details></div>{% endfor %}</section>
+<section><h2>PLM parengtis</h2><p>Interpretacija → Tamaros turinio patvirtinimas → galutinis Furnibox leidimas → vykdymas.</p><p>Sprendimai fiksuojami žurnale. Nei atverstas puslapis, nei vienas rastas BOM nėra patvirtinimas.</p>
 <p>Stage rasta {{ data.eco_types|length }} PLM tipai ir {{ data.eco_stages|length }} etapai. Jie dar nesusieti su šio paketo patvirtinimo eiga.</p>
 <details><summary>Techniniai duomenys ir šaltinio kontrolinė suma</summary><p>Eksporto SHA-256: <code>{{ review.source.sha256 }}</code></p><p>Kontrolinė suma identifikuoja naudotą failą; savaime nepatvirtina jo autentiškumo.</p>
 {% for title, rows in [('PLM tipai',data.eco_types),('PLM etapai',data.eco_stages)] %}<h3>{{ title }}</h3><pre>{{ rows|tojson(indent=2) }}</pre>{% endfor %}</details></section>
 {% endif %}</html>'''
 
-def register(app):
+def register(app, actor_resolver=None, state_dir=None):
     bp = Blueprint('bom_excel', __name__)
+    decision_log = DecisionLog(Path(state_dir or '/app/web_state') / 'reform-pilot-decisions.sqlite3')
+    def named_actor():
+        actor = actor_resolver() if actor_resolver else None
+        return dict(id=actor.id, username=actor.username, role=actor.role) if actor else None
+    def approver_ids(key):
+        return set(value.strip() for value in os.getenv(key, '').split(',') if value.strip())
+    def check_stage():
+        require_stage(os.getenv('ODOO_URL', '').strip().rstrip('/'))
+        if os.getenv('RAILWAY_ENVIRONMENT_ID') != '67ee29c1-07f5-4242-aa13-d3e4972f16a9':
+            abort(403)
+
 
     @bp.route('/bom-excel/', methods=['GET', 'POST'])
     def preview():
@@ -218,8 +252,46 @@ def register(app):
             data = pilot_inventory()
         except Exception as exc:
             error = 'Stage nuskaitymas nepavyko (' + type(exc).__name__ + '). Patikrinkite Stage ryšį ir skaitymo teises.'
-        return render_template_string(PILOT_PAGE, data=data, error=error,
-                                      review=build_review(data) if data is not None else None)
+        review = build_review(data) if data is not None else None
+        decisions = []
+        actor = named_actor()
+        csrf = session.setdefault('reform_pilot_csrf', secrets.token_urlsafe(32))
+        if review:
+            for case, title in [('led', 'LED korekcija'), ('bom', 'Priedo BOM korekcija')]:
+                scope = decision_scope(data, review, case)
+                decision_log.observe(scope)
+                history = decision_log.history(case)
+                state = decision_log.state(history, scope['fingerprint'])
+                decisions.append(dict(scope=scope, title=title, history=history, state=state,
+                    can_select=bool(actor and actor['role'] in ('administrator','management','production_manager')),
+                    can_content=bool(actor and actor['id'] in approver_ids('REFORM_CONTENT_APPROVER_IDS')),
+                    can_release=bool(actor and actor['id'] in approver_ids('REFORM_RELEASE_APPROVER_IDS'))))
+        return render_template_string(PILOT_PAGE, data=data, error=error, review=review,
+            decisions=decisions, csrf=csrf, actor=actor, saved=request.args.get('saved') == '1')
+
+    @bp.post('/bom-excel/reform-pilot/decision')
+    def pilot_decision():
+        check_stage()
+        actor = named_actor()
+        if not actor:
+            abort(403)
+        token = session.get('reform_pilot_csrf', '')
+        if not token or not hmac.compare_digest(request.form.get('csrf', ''), token):
+            abort(400)
+        try:
+            data = pilot_inventory()
+            review = build_review(data)
+            scope = decision_scope(data, review, request.form.get('case', ''))
+            decision_log.observe(scope)
+            decision_log.record(scope, request.form.get('fingerprint', ''),
+                request.form.get('action', ''), actor, request.form.get('note', ''),
+                approver_ids('REFORM_CONTENT_APPROVER_IDS'), approver_ids('REFORM_RELEASE_APPROVER_IDS'))
+        except PermissionError as exc:
+            return render_template_string('<h1>Sprendimas neišsaugotas</h1><p>{{ message }}</p><a href="/bom-excel/reform-pilot/">Grįžti į peržiūrą</a>', message=str(exc)), 403
+        except ValueError as exc:
+            return render_template_string('<h1>Reikia pakartotinės peržiūros</h1><p>{{ message }}</p><a href="/bom-excel/reform-pilot/">Atnaujinti peržiūrą</a>', message=str(exc)), 409
+        return redirect(url_for('bom_excel.reform_pilot', saved='1') + '#decisions')
+
 
     app.register_blueprint(bp)
     if os.getenv('RAILWAY_ENVIRONMENT_ID') == '67ee29c1-07f5-4242-aa13-d3e4972f16a9':
@@ -234,6 +306,19 @@ def register(app):
                         for key in ('products', 'boms', 'lines', 'eco_types', 'eco_stages')
                     }), flush=True)
                     interpreted = build_review(inventory)
+                    print('REFORM_PILOT_DECISIONS ' + str({
+                        'audit_ready': True,
+                        'content_approver_count': len(approver_ids('REFORM_CONTENT_APPROVER_IDS')),
+                        'release_approver_count': len(approver_ids('REFORM_RELEASE_APPROVER_IDS')),
+                        'scopes': [
+                            {'case': case, 'target': scope['payload']['target_bom_id'],
+                             'content_ready': scope['content_ready'], 'blockers': scope['blockers']}
+                            for case in ('led', 'bom')
+                            for scope in [decision_scope(inventory, interpreted, case)]
+                        ],
+                        'odoo_writes_enabled': False,
+                    }), flush=True)
+
                     print('REFORM_PILOT_REVIEW ' + str({
                         'non_bom_status': interpreted['card_status'],
                         'non_bom_match_count': len(interpreted['matches']),
