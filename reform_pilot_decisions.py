@@ -45,7 +45,7 @@ def decision_scope(data, review, case):
                 blockers.append("Nesutampa komponentų matavimo vienetai.")
     else:
         blockers.append("Šis skirtumų eksportas nepateikia visos BOM struktūros; turinio patvirtinimas blokuojamas.")
-    payload = dict(rule_version="0.3", case=case, source=review["source"], target_bom_id=target,
+    payload = dict(rule_version="0.4", case=case, source=review["source"], target_bom_id=target,
                    change=change, boms=sorted(boms, key=lambda r: r["id"]),
                    lines=sorted(lines, key=lambda r: r["id"]),
                    products=sorted(products, key=lambda r: r["id"]), blockers=blockers,
