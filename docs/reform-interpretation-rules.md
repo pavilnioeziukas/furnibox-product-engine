@@ -1,6 +1,6 @@
 # Reform duomenų interpretavimo taisyklių registras
 
-Versija 0.3 · 2026-11-09
+Versija 0.4 · 2026-11-09
 
 Šis registras aprašo, kaip Furnibox interpretuoja Reform pateiktus duomenis ir paruošia juos peržiūrai. Reform gali išlaikyti savo kodus ir BOM struktūrą. Furnibox atsako už jų susiejimą su sutvarkytu ERP katalogu ir gamybos struktūra.
 
@@ -64,6 +64,7 @@ Dabartinis vidinis įrankis paketo sprendimus sieja su įkelto XLSX baitų SHA25
 
 | Data | Versija | Pakeitimas | Pagrindas |
 |---|---|---|---|
+| 2026-11-09 | 0.4 | Papildyta R14 įgyvendinimo būsena: Stage sprendimų žurnalas, vardinių paskyrų kontrolė, atskiri patvirtinimai ir pasikeitusių duomenų apsauga. | Sutarto peržiūros proceso realizacija. |
 | 2026-11-09 | 0.3 | R16 patikslinta: aktualus BOM atrenkamas pagal vienintelį mažiausią sequence, ne pagal v10 pavadinimą. | Edgaro patvirtinta atrankos taisyklė. |
 | 2026-11-08 | 0.2 | Pridėta R16: naujo BOM ir esamo BOM PLM korekcijos klasifikacija, archyvo ir dviprasmiškumo išimtys. | Edgaro patvirtinimas šiame pokalbyje. |
 | 2026-11-08 | 0.1 | Sukurtas bendras registras. Sujungti sesijos susitarimai, konkretūs pavyzdžiai ir esamo įgyvendinimo ribos. | Edgaro prašymas turėti apibrėžtą taisyklių sąrašą. |
