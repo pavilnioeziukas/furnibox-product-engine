@@ -2573,7 +2573,8 @@ def health():
 
 
 from bom_excel_web import register as register_bom_excel
-register_bom_excel(app)
+register_bom_excel(app, actor_resolver=lambda: TOC_STORE.get_user(session["actor_id"])
+                   if session.get("actor_id") else None, state_dir=STATE_DIR)
 
 
 if __name__ == "__main__":
