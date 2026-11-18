@@ -6,12 +6,6 @@
 <form class="panel" method="get" style="display:flex;flex-wrap:wrap;align-items:end;gap:20px">
   <label>Nuo <input type="date" name="start" value="{{ start }}" required></label>
   <label>Iki <input type="date" name="end" value="{{ end }}" required></label>
-  <fieldset>
-    <legend>SO žymos</legend>
-    {% for tag in so_tags %}
-    <label><input type="checkbox" name="so_tag" value="{{ tag }}"{% if tag in selected_tags %} checked{% endif %}> {{ tag }}</label>
-    {% endfor %}
-  </fieldset>
   <button class="primary" name="run" value="1">Rodyti ataskaitą</button>
 </form>
 <p class="muted">SO laikotarpis taikomas patvirtinimo datai Lietuvos laiku, įskaitant abi pasirinktas dienas. Sąskaitoms ir kreditinėms – išrašymo data. Įtraukiamos tik užregistruotos sąskaitos.</p>
