@@ -99,7 +99,7 @@ def test_cabinet_types_are_separate_and_totals_stay_unrounded():
                     rows.append({'order_id': [10, 'SO10'], 'product_id': [pid, 'Cabinet'],
                                  'product_uom_qty': qty, 'product_uom': [1, 'Units']})
             if model == 'account.move.line':
-                rows.append({'move_id': [21, 'CN21'], 'product_id': [103, 'Cabinet'],
+                rows.append({'id': 5, 'move_id': [21, 'CN21'], 'product_id': [103, 'Cabinet'],
                              'quantity': 2, 'product_uom_id': [1, 'Units']})
             return rows
     report = build_report(Mixed(), '2026-09-01', '2026-09-30')
@@ -143,3 +143,51 @@ def test_page_in_real_app_and_auth(monkeypatch, tmp_path):
     monkeypatch.setenv('FURNIBOX_WEB_PASSWORD', 'test-password')
     webapp.SETTINGS = webapp.ProductEngineSettings.from_env(webapp.BASE_DIR)
     assert client.get('/sales-quantities?run=1').status_code == 302
+
+
+def test_so_tag_filter_combined_invoice_and_credit_from_older_order():
+    class Tagged(FakeClient):
+        def search_read_all(self, model, domain, fields, context):
+            if model == 'sale.order' and domain[0][0] == 'id':
+                assert domain[0] == ['id', 'in', [11]]
+                return [{'id': 11, 'name': 'SO11', 'tag_ids': [2, 3]}]
+            if model == 'sale.order.line' and domain[0][0] == 'id':
+                assert domain[0] == ['id', 'in', [8, 9]]
+                return [{'id': i, 'order_id': [11, 'SO11']} for i in (8, 9)]
+            if model == 'crm.tag':
+                assert ['name', 'in', ['Pakuojamas', 'Renkamas Furniboxe']] in domain
+                return [{'id': 1, 'name': 'Pakuojamas'}, {'id': 2, 'name': 'Renkamas Furniboxe'}]
+            rows = super().search_read_all(model, domain, fields, context)
+            if model == 'sale.order':
+                rows[0]['tag_ids'] = [1]
+            if model == 'account.move.line':
+                assert 'sale_line_ids' in fields
+                rows[0]['sale_line_ids'] = [1]
+                rows[1]['sale_line_ids'] = [8]
+                rows.extend([
+                    {**rows[0], 'id': 5, 'quantity': 4, 'product_uom_id': [1, 'Units'],
+                     'sale_line_ids': [8, 9]},
+                    {**rows[0], 'id': 6, 'quantity': 100, 'product_uom_id': [1, 'Units'],
+                     'sale_line_ids': []},
+                ])
+            return rows
+
+    def report(*tags):
+        return build_report(Tagged(), '2026-09-01', '2026-09-30', tags)
+
+    packed = report('Pakuojamas')
+    assembled = report('Renkamas Furniboxe')
+    both = report('Pakuojamas', 'Renkamas Furniboxe')
+    assert packed['summary'][0]['so'] == 10
+    assert whole_quantity(packed['summary'][0]['invoice']) == '24'
+    assert packed['summary'][0]['credit'] == 0
+    assert assembled['summary'][0]['so'] == 0
+    assert assembled['summary'][0]['invoice'] == 4
+    assert assembled['summary'][0]['credit'] == 3
+    assert assembled['summary'][0]['net'] == 1
+    assert {row['document'] for row in assembled['details']} == {'INV20', 'CN21'}
+    assert all(row['orders'] == [{'name': 'SO11', 'tags': ['Renkamas Furniboxe']}]
+               for row in assembled['details'])
+    assert whole_quantity(both['summary'][0]['net']) == '25'
+    assert len(both['details']) == 4
+    assert whole_quantity(report()['summary'][0]['invoice']) == '128'
