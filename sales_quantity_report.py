@@ -5,6 +5,8 @@ import re
 from zoneinfo import ZoneInfo
 
 LABELS = {'assembled': 'Surenkami cabinet (-A)', 'flatpack': 'Flatpack cabinet', 'shelf': 'Shelf'}
+SO_TAGS = ('Pakuojamas', 'Renkamas Furniboxe')
+
 # Finished Reform SKUs only: never packaging, hardware, panels or shelf parts.
 CODE = re.compile(r'^(?:EUB|USB)-C-CAB\d+-(BAS|BSK|BNF|BOH|COS|HCO|HBI|HIG|TOP|UPP|WAC|WAL|SLF)\d+(?: CUSTOM)?(-A)?$')
 
@@ -39,7 +41,7 @@ def relation_id(value):
     return value[0] if value else None
 
 
-def build_report(client, start, end):
+def build_report(client, start, end, selected_tags=()):
     lower, upper = period(start, end)
     client.authenticate()
     user = client.execute('res.users', 'read', [[client.uid]], {'fields': ['company_id']})[0]
@@ -51,7 +53,7 @@ def build_report(client, start, end):
     # Older Odoo versions have confirmation_date; current versions write date_order on confirmation.
     confirmation = 'confirmation_date' if 'confirmation_date' in fields else 'date_order'
     orders = read('sale.order', [['company_id', '=', company[0]], ['state', 'in', ['sale', 'done']],
-        [confirmation, '>=', lower], [confirmation, '<', upper]], ['name', confirmation])
+        [confirmation, '>=', lower], [confirmation, '<', upper]], ['name', confirmation, 'tag_ids'])
     invoices = read('account.move', [['company_id', '=', company[0]], ['state', '=', 'posted'],
         ['move_type', 'in', ['out_invoice', 'out_refund']], ['invoice_date', '>=', start],
         ['invoice_date', '<=', end]], ['name', 'invoice_date', 'move_type'])
@@ -63,7 +65,57 @@ def build_report(client, start, end):
         for offset in range(0, len(docs), 500):
             domain = [[link, 'in', [d['id'] for d in docs[offset:offset+500]]], ['product_id', '!=', False]]
             domain += [['display_type', '=', False]] if link == 'order_id' else [['display_type', 'in', [False, 'product']]]
-            destination.extend(read(model, domain, [link, 'product_id', quantity, unit]))
+            line_fields = [link, 'product_id', quantity, unit]
+            if link == 'move_id':
+                line_fields.append('sale_line_ids')
+            destination.extend(read(model, domain, line_fields))
+
+    orders_by_id = {order['id']: order for order in orders}
+    sale_line_ids = sorted({line_id for line in invoice_lines for line_id in line.get('sale_line_ids', [])})
+    order_by_sale_line = {
+        line['id']: relation_id(line['order_id']) for line in so_lines if 'id' in line
+    }
+    missing_line_ids = sorted(set(sale_line_ids) - order_by_sale_line.keys())
+    for offset in range(0, len(missing_line_ids), 500):
+        batch = missing_line_ids[offset:offset + 500]
+        order_by_sale_line.update({
+            line['id']: relation_id(line['order_id'])
+            for line in read('sale.order.line', [['id', 'in', batch]], ['order_id'])
+        })
+    # Invoice dates are independent of order confirmation dates.
+    missing_order_ids = sorted({oid for oid in order_by_sale_line.values() if oid} - orders_by_id.keys())
+    for offset in range(0, len(missing_order_ids), 500):
+        batch = missing_order_ids[offset:offset + 500]
+        orders_by_id.update({
+            order['id']: order for order in read('sale.order',
+                [['id', 'in', batch], ['company_id', '=', company[0]]], ['name', 'tag_ids'])
+        })
+    tag_ids = sorted({tag_id for order in orders_by_id.values() for tag_id in order.get('tag_ids', [])})
+    tag_names = {
+        tag['id']: tag['name'] for tag in read('crm.tag',
+            [['id', 'in', tag_ids], ['name', 'in', list(SO_TAGS)]], ['name'])
+    } if tag_ids else {}
+    for order in orders_by_id.values():
+        order['report_tags'] = sorted({
+            tag_names[tag_id] for tag_id in order.get('tag_ids', []) if tag_id in tag_names
+        })
+    selected_tags = set(selected_tags)
+    if selected_tags:
+        orders = [order for order in orders if selected_tags.intersection(order['report_tags'])]
+        matching_order_ids = {order['id'] for order in orders}
+        so_lines = [line for line in so_lines if relation_id(line['order_id']) in matching_order_ids]
+    invoice_orders = {}
+    for line in invoice_lines:
+        linked_ids = {
+            order_by_sale_line.get(line_id) for line_id in line.get('sale_line_ids', [])
+        }
+        invoice_orders[line['id']] = [
+            orders_by_id[order_id] for order_id in sorted(linked_ids & orders_by_id.keys())
+            if not selected_tags or selected_tags.intersection(orders_by_id[order_id]['report_tags'])
+        ]
+    if selected_tags:
+        invoice_lines = [line for line in invoice_lines if invoice_orders[line['id']]]
+
     product_ids = sorted({relation_id(line['product_id']) for line in so_lines + invoice_lines})
     products = {}
     for offset in range(0, len(product_ids), 500):
@@ -99,7 +151,10 @@ def build_report(client, start, end):
             doc_date = doc[confirmation] if kind == 'so' else doc['invoice_date']
             if kind == 'so':
                 doc_date = datetime.fromisoformat(doc_date).replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Europe/Vilnius')).strftime('%Y-%m-%d %H:%M:%S')
-            details.append({'kind': kind, 'document': doc['name'], 'date': doc_date, 'code': code,
+            linked_orders = [doc] if kind == 'so' else invoice_orders[line['id']]
+            details.append({'orders': [
+                {'name': order['name'], 'tags': order['report_tags']} for order in linked_orders
+            ], 'kind': kind, 'document': doc['name'], 'date': doc_date, 'code': code,
                 'category': LABELS[category], 'product_type': product_type,
                 'quantity': signed, 'unit': target_unit['name']})
     for category, row in summary.items():

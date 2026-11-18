@@ -6,9 +6,16 @@
 <form class="panel" method="get" style="display:flex;flex-wrap:wrap;align-items:end;gap:20px">
   <label>Nuo <input type="date" name="start" value="{{ start }}" required></label>
   <label>Iki <input type="date" name="end" value="{{ end }}" required></label>
+  <fieldset>
+    <legend>SO žymos</legend>
+    {% for tag in so_tags %}
+    <label><input type="checkbox" name="so_tag" value="{{ tag }}"{% if tag in selected_tags %} checked{% endif %}> {{ tag }}</label>
+    {% endfor %}
+  </fieldset>
   <button class="primary" name="run" value="1">Rodyti ataskaitą</button>
 </form>
 <p class="muted">SO laikotarpis taikomas patvirtinimo datai Lietuvos laiku, įskaitant abi pasirinktas dienas. Sąskaitoms ir kreditinėms – išrašymo data. Įtraukiamos tik užregistruotos sąskaitos.</p>
+{% if selected_tags %}<p class="muted">Filtruojama pagal susieto SO dabartines žymas. Rodomos eilutės, susietos bent su viena pasirinkta žyma.</p>{% endif %}
 {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 {% if report %}
 <p><strong>{{ report.company }}</strong> · {{ report.start }} – {{ report.end }} <span class="muted">· Atnaujinta {{ report.generated }}</span></p>
@@ -21,8 +28,8 @@
 </table></div>
 <p class="muted">Kiekiai rodomi suapvalinti iki sveikų skaičių. Bendros sumos skaičiuojamos iš nesuapvalintų kiekių. Spintelių tipai nustatomi pagal „Internal Reference“ (BAS, UPP, TOP ir kt.).</p>
 {% if not report.details %}<p class="empty">Pasirinktu laikotarpiu atitinkančių prekių eilučių nerasta.</p>{% endif %}
-<details class="panel" style="margin-top:24px"><summary>Dokumentų eilutės ({{ report.details|length }})</summary><div style="overflow:auto;max-height:65vh"><table><thead><tr><th>Tipas</th><th>Dokumentas</th><th>Data</th><th>Internal Reference</th><th>Kategorija</th><th>Qty</th><th>Vienetas</th></tr></thead><tbody>
-{% for row in report.details %}<tr><td>{{ {'so':'SO','invoice':'Sąskaita','credit':'Kreditinė'}[row.kind] }}</td><td>{{ row.document }}</td><td>{{ row.date }}</td><td>{{ row.code }}</td><td>{{ row.category }} · {{ row.product_type }}</td><td>{{ row.quantity|whole_quantity }}</td><td>{{ row.unit }}</td></tr>{% endfor %}
+<details class="panel" style="margin-top:24px"><summary>Dokumentų eilutės ({{ report.details|length }})</summary><div style="overflow:auto;max-height:65vh"><table><thead><tr><th>Tipas</th><th>Dokumentas</th><th>Data</th><th>Susijęs SO</th><th>SO žymos</th><th>Internal Reference</th><th>Kategorija</th><th>Qty</th><th>Vienetas</th></tr></thead><tbody>
+{% for row in report.details %}<tr><td>{{ {'so':'SO','invoice':'Sąskaita','credit':'Kreditinė'}[row.kind] }}</td><td>{{ row.document }}</td><td>{{ row.date }}</td><td>{% for order in row.orders %}{{ order.name }}{% if not loop.last %}<br>{% endif %}{% else %}–{% endfor %}</td><td>{% for order in row.orders %}{{ order.tags|join(', ') or '–' }}{% if not loop.last %}<br>{% endif %}{% else %}–{% endfor %}</td><td>{{ row.code }}</td><td>{{ row.category }} · {{ row.product_type }}</td><td>{{ row.quantity|whole_quantity }}</td><td>{{ row.unit }}</td></tr>{% endfor %}
 </tbody></table></div></details>
 <details class="panel" style="margin-top:16px"><summary>Neįtraukti produktų kodai ({{ report.excluded|length }})</summary><p>FPACK, APACK, furnitūra ir kiti komponentai atskirai neskaičiuojami. Neatpažinti kodai pateikiami čia patikrai.</p><div style="overflow:auto;max-height:40vh"><table><thead><tr><th>Internal Reference</th><th>Pavadinimas</th></tr></thead><tbody>{% for code, name in report.excluded|dictsort %}<tr><td>{{ code }}</td><td>{{ name }}</td></tr>{% endfor %}</tbody></table></div></details>
 {% endif %}
