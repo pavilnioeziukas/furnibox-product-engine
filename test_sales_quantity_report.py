@@ -44,6 +44,8 @@ class FakeClient:
         return {self.field: {'type': 'datetime'}}
     def search_read_all(self, model, domain, fields, context):
         self.calls.append((model, domain, context))
+        if model == 'account.move.line' and ['account_id.code', '=', '201000'] in domain:
+            return []
         return {
             'sale.order': [{'id': 10, 'name': 'SO10', self.field: '2026-09-01 10:00:00'}],
             'account.move': [{'id': 20, 'name': 'INV20', 'invoice_date': '2026-09-01', 'move_type': 'out_invoice', 'amount_untaxed_signed': 136},
@@ -213,3 +215,40 @@ def test_invoice_amounts_do_not_double_count_lines_with_both_tags():
     by_tag = {row['label']: row['invoice'] for row in report['rows']}
     assert by_tag == {'Pakuojamas': 0, 'Renkamas Furniboxe': 0, 'Kita / be žymos': 0, 'Abi žymos': 120}
     assert report['total']['invoice'] == 120
+
+
+def test_material_ledger_uses_one_side_once_and_keeps_unassigned_orders():
+    from sales_quantity_report import add_material_costs
+
+    def read(model, domain, fields):
+        if model == 'account.move.line':
+            if ['account_id.code', '=', '201000'] in domain:
+                assert ['date', '<=', '2026-10-31'] in domain
+                return [
+                    {'move_id': [1, 'STJ1'], 'product_id': [9, 'Material'], 'balance': -60},
+                    {'move_id': [2, 'STJ2'], 'product_id': [9, 'Material'], 'balance': -12},
+                    {'move_id': [3, 'STJ3'], 'product_id': [9, 'Material'], 'balance': -999},
+                ]
+            return [{'move_id': [i, f'STJ{i}']} for i in (1, 2)]
+        return {
+            'stock.valuation.layer': [
+                {'account_move_id': [i, f'STJ{i}'], 'stock_move_id': [i, 'Movement'],
+                 'product_id': [9, 'Material']} for i in (1, 1, 2)
+            ],
+            'stock.move': [{'id': i, 'raw_material_production_id': [i, 'MO']} for i in (1, 2)],
+            'mrp.production': [{'id': 1, 'origin': 'SO1', 'procurement_group_id': False},
+                               {'id': 2, 'origin': 'MO5', 'procurement_group_id': False}],
+            'sale.order': [{'id': 7, 'name': 'SO1', 'tag_ids': [8]}],
+            'crm.tag': [{'id': 8, 'name': 'Pakuojamas'}],
+        }[model]
+
+    results = {'rows': [{'label': 'Pakuojamas', 'net': Decimal(100)},
+                        {'label': 'Kita / be žymos', 'net': Decimal(0)}],
+               'total': {'net': Decimal(100)}}
+    add_material_costs(read, results, '2026-10-01', '2026-10-31', 1)
+    assert results['rows'][0]['material_cost'] == 60
+    assert results['rows'][0]['throughput'] == 40
+    assert results['rows'][1]['material_cost'] == 12
+    assert results['rows'][1]['throughput'] is None
+    assert results['total']['material_cost'] == 72
+    assert results['total']['throughput'] == 28

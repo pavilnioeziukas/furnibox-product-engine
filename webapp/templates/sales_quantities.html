@@ -16,17 +16,19 @@
 <h2>Pardavimo sąskaitų sumos</h2>
 <p class="muted">Sumos be PVM ({{ report.amounts.currency }}) pagal išrašymo datą. Suvestinė apima visas užregistruotas pardavimo sąskaitas ir kreditines per pasirinktą laikotarpį. Grupės nustatomos pagal dabartines susietų SO žymas. „Kita / be žymos“ apima likutį, kurio negalima priskirti šioms žymoms.</p>
 <div class="table-wrap"><table>
-<thead><tr><th>SO žyma</th><th>Išrašyta sąskaitų</th><th>Kreditinės</th><th>Po kreditinių</th></tr></thead>
+<thead><tr><th>SO žyma</th><th>Išrašyta sąskaitų</th><th>Kreditinės</th><th>Po kreditinių</th><th>Medžiagų savikaina</th><th>Pralaidumas %</th></tr></thead>
 <tbody>
 {% for row in [report.amounts.total] + report.amounts.rows %}
 <tr{% if loop.first %} style="background:#edf3ee;font-weight:700"{% endif %}>
   <th scope="row">{{ row.label | default('Iš viso') }}</th>
-  {% for field in ('invoice', 'credit', 'net') %}
+  {% for field in ('invoice', 'credit', 'net', 'material_cost') %}
   <td>{{ '{:,.2f}'.format(row[field]).replace(',', ' ').replace('.', ',') }}</td>
   {% endfor %}
+  <td>{{ '{:.2f}'.format(row.throughput).replace('.', ',') ~ ' %' if row.throughput is not none else '–' }}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>
+<p class="muted">Medžiagų savikaina pagal DK nurašymo datą (201000 → 202000), susietus gamybos užsakymus ir dabartines SO žymas. Pralaidumas = (pajamos po kreditinių − laikotarpio medžiagų savikaina) / pajamos po kreditinių.</p>
 <h2>Cabinet ir shelf kiekiai</h2>
 <div class="table-wrap"><table>
 <thead><tr><th>Kategorija</th><th>Patvirtintų SO qty</th><th>Sąskaitų qty</th><th>Kreditinių qty</th><th>Sąskaitų qty po kreditinių</th></tr></thead>
