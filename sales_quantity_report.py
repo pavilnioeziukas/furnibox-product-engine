@@ -70,7 +70,76 @@ def invoice_amount_summary(invoices, invoice_lines, invoice_orders):
     return {'rows': list(rows.values()), 'total': totals, 'currency': currency}
 
 
-def build_report(client, start, end, selected_tags=()):
+def add_material_costs(read, amounts, start, end, company_id):
+    """Count posted material issues once, on their ledger posting date."""
+    from collections import defaultdict
+
+    def related(model, field, ids, fields, extra=()):
+        ids = sorted(set(ids))
+        for offset in range(0, len(ids), 500):
+            yield from read(model, [[field, 'in', ids[offset:offset + 500]], *extra], fields)
+
+    company = ['company_id', '=', company_id]
+    credits = read('account.move.line', [company, ['move_id.state', '=', 'posted'],
+        ['move_id.move_type', '=', 'entry'], ['account_id.code', '=', '201000'],
+        ['date', '>=', start], ['date', '<=', end], ['balance', '!=', 0]],
+        ['move_id', 'balance', 'product_id'])
+    entry_ids = {relation_id(line['move_id']) for line in credits}
+    wip_entries = {relation_id(line['move_id']) for line in related(
+        'account.move.line', 'move_id', entry_ids, ['move_id'],
+        [company, ['account_id.code', '=', '202000'], ['balance', '!=', 0]])}
+    layers = list(related('stock.valuation.layer', 'account_move_id', wip_entries,
+                          ['account_move_id', 'stock_move_id', 'product_id'], [company]))
+    raw_moves = {move['id']: relation_id(move['raw_material_production_id'])
+                 for move in related('stock.move', 'id',
+                     {relation_id(layer['stock_move_id']) for layer in layers if layer['stock_move_id']},
+                     ['raw_material_production_id'], [company, ['state', '=', 'done'],
+                     ['raw_material_production_id', '!=', False]])}
+    productions_by_line = defaultdict(set)
+    for layer in layers:
+        production = raw_moves.get(relation_id(layer['stock_move_id']))
+        if production:
+            key = relation_id(layer['account_move_id']), relation_id(layer['product_id'])
+            productions_by_line[key].add(production)
+
+    productions = {row['id']: row for row in related('mrp.production', 'id',
+        {pid for ids in productions_by_line.values() for pid in ids},
+        ['origin', 'procurement_group_id'], [company])}
+    groups = {row['id']: relation_id(row['sale_id']) for row in related('procurement.group', 'id',
+        {relation_id(row['procurement_group_id']) for row in productions.values() if row['procurement_group_id']},
+        ['sale_id'])}
+    origins = {row['origin'] for row in productions.values() if row['origin']}
+    orders = {row['id']: row for row in related('sale.order', 'id',
+        {oid for oid in groups.values() if oid}, ['name', 'tag_ids'], [company])}
+    orders.update({row['id']: row for row in related('sale.order', 'name', origins, ['name', 'tag_ids'], [company])})
+    orders_by_name = {row['name']: row for row in orders.values()}
+    tags = {row['id']: row['name'] for row in related('crm.tag', 'id',
+        {tid for order in orders.values() for tid in order['tag_ids']}, ['name'],
+        [['name', 'in', list(SO_TAGS)]])}
+
+    costs = defaultdict(Decimal)
+    for line in credits:
+        production_ids = productions_by_line.get((relation_id(line['move_id']), relation_id(line['product_id'])))
+        if not production_ids:
+            continue
+        labels = set()
+        for production_id in production_ids:
+            production = productions.get(production_id, {})
+            order = orders.get(groups.get(relation_id(production.get('procurement_group_id'))))
+            order = order or orders_by_name.get(production.get('origin'))
+            selected = {tags[tid] for tid in order['tag_ids'] if tid in tags} if order else set()
+            labels.add('Abi žymos' if len(selected) > 1 else next(iter(selected), 'Kita / be žymos'))
+        group = next(iter(labels)) if len(labels) == 1 else 'Kita / be žymos'
+        costs[group] -= Decimal(str(line['balance']))
+
+    for row in amounts['rows']:
+        row['material_cost'] = costs[row['label']]
+    amounts['total']['material_cost'] = sum(costs.values(), Decimal(0))
+    for row in [*amounts['rows'], amounts['total']]:
+        row['throughput'] = (row['net'] - row['material_cost']) / row['net'] * 100 if row['net'] > 0 else None
+
+
+def build_report(client, start, end, selected_tags=(), *, include_materials=False):
     lower, upper = period(start, end)
     client.authenticate()
     user = client.execute('res.users', 'read', [[client.uid]], {'fields': ['company_id']})[0]
@@ -144,6 +213,8 @@ def build_report(client, start, end, selected_tags=()):
             orders_by_id[order_id] for order_id in sorted(linked_ids & orders_by_id.keys())
         ]
     amounts = invoice_amount_summary(invoices, invoice_lines, invoice_orders)
+    if include_materials:
+        add_material_costs(read, amounts, start, end, company[0])
     invoice_lines = [line for line in invoice_lines if line['product_id']]
     if selected_tags:
         for line_id, linked_orders in invoice_orders.items():

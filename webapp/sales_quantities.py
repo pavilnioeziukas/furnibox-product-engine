@@ -26,7 +26,7 @@ def index():
             period(start, end)
             if set(requested_tags) - set(SO_TAGS):
                 raise ValueError('Pasirinkite galiojančią SO žymą.')
-            report = build_report(report_client(), start, end, selected_tags)
+            report = build_report(report_client(), start, end, selected_tags, include_materials=True)
         except ValueError as exc:
             error, status = str(exc), 400
         except Exception:
