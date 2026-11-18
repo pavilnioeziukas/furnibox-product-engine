@@ -41,6 +41,35 @@ def relation_id(value):
     return value[0] if value else None
 
 
+def invoice_amount_summary(invoices, invoice_lines, invoice_orders):
+    """Reconcile untaxed amounts in company currency to posted documents."""
+    other = 'Kita / be žymos'
+    overlap = 'Abi žymos'
+    groups = (*SO_TAGS, other, overlap)
+    rows = {name: {'label': name, 'invoice': Decimal(0), 'credit': Decimal(0)} for name in groups}
+    totals = {'invoice': Decimal(0), 'credit': Decimal(0)}
+    kinds = {}
+    for doc in invoices:
+        kind = 'credit' if doc['move_type'] == 'out_refund' else 'invoice'
+        kinds[doc['id']] = kind
+        amount = Decimal(str(doc['amount_untaxed_signed']))
+        totals[kind] += -amount if kind == 'credit' else amount
+    for line in invoice_lines:
+        tags = {tag for order in invoice_orders[line['id']] for tag in order['report_tags']}
+        if tags:
+            group = overlap if len(tags) > 1 else next(iter(tags))
+            kind = kinds[relation_id(line['move_id'])]
+            balance = Decimal(str(line['balance']))
+            rows[group][kind] += balance if kind == 'credit' else -balance
+    # The remainder includes untagged lines and any unallocated invoice adjustments.
+    for kind in totals:
+        rows[other][kind] = totals[kind] - sum(rows[group][kind] for group in (*SO_TAGS, overlap))
+    for row in [*rows.values(), totals]:
+        row['net'] = row['invoice'] - row['credit']
+    currency = next((doc['company_currency_id'][1] for doc in invoices if doc.get('company_currency_id')), 'EUR')
+    return {'rows': list(rows.values()), 'total': totals, 'currency': currency}
+
+
 def build_report(client, start, end, selected_tags=()):
     lower, upper = period(start, end)
     client.authenticate()
@@ -56,18 +85,20 @@ def build_report(client, start, end, selected_tags=()):
         [confirmation, '>=', lower], [confirmation, '<', upper]], ['name', confirmation, 'tag_ids'])
     invoices = read('account.move', [['company_id', '=', company[0]], ['state', '=', 'posted'],
         ['move_type', 'in', ['out_invoice', 'out_refund']], ['invoice_date', '>=', start],
-        ['invoice_date', '<=', end]], ['name', 'invoice_date', 'move_type'])
+        ['invoice_date', '<=', end]], ['name', 'invoice_date', 'move_type', 'amount_untaxed_signed', 'company_currency_id'])
     so_lines, invoice_lines = [], []
     # Batch ID domains to avoid oversized RPC requests for long periods.
     for model, docs, destination, link, quantity, unit in (
         ('sale.order.line', orders, so_lines, 'order_id', 'product_uom_qty', 'product_uom'),
         ('account.move.line', invoices, invoice_lines, 'move_id', 'quantity', 'product_uom_id')):
         for offset in range(0, len(docs), 500):
-            domain = [[link, 'in', [d['id'] for d in docs[offset:offset+500]]], ['product_id', '!=', False]]
+            domain = [[link, 'in', [d['id'] for d in docs[offset:offset+500]]]]
+            if link == 'order_id':
+                domain.append(['product_id', '!=', False])
             domain += [['display_type', '=', False]] if link == 'order_id' else [['display_type', 'in', [False, 'product']]]
             line_fields = [link, 'product_id', quantity, unit]
             if link == 'move_id':
-                line_fields.append('sale_line_ids')
+                line_fields.extend(['sale_line_ids', 'balance'])
             destination.extend(read(model, domain, line_fields))
 
     orders_by_id = {order['id']: order for order in orders}
@@ -111,9 +142,14 @@ def build_report(client, start, end, selected_tags=()):
         }
         invoice_orders[line['id']] = [
             orders_by_id[order_id] for order_id in sorted(linked_ids & orders_by_id.keys())
-            if not selected_tags or selected_tags.intersection(orders_by_id[order_id]['report_tags'])
         ]
+    amounts = invoice_amount_summary(invoices, invoice_lines, invoice_orders)
+    invoice_lines = [line for line in invoice_lines if line['product_id']]
     if selected_tags:
+        for line_id, linked_orders in invoice_orders.items():
+            invoice_orders[line_id] = [
+                order for order in linked_orders if selected_tags.intersection(order['report_tags'])
+            ]
         invoice_lines = [line for line in invoice_lines if invoice_orders[line['id']]]
 
     product_ids = sorted({relation_id(line['product_id']) for line in so_lines + invoice_lines})
@@ -164,5 +200,5 @@ def build_report(client, start, end, selected_tags=()):
             type_row['net'] = type_row['invoice'] - type_row['credit']
             row['types'].append(type_row)
     return {'start': start, 'end': end, 'company': company[1], 'confirmation_field': confirmation,
-        'summary': list(summary.values()), 'details': details, 'excluded': excluded,
+        'amounts': amounts, 'summary': list(summary.values()), 'details': details, 'excluded': excluded,
         'generated': datetime.now(ZoneInfo('Europe/Vilnius')).strftime('%Y-%m-%d %H:%M:%S')}

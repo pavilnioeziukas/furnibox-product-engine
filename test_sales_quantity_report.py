@@ -46,8 +46,8 @@ class FakeClient:
         self.calls.append((model, domain, context))
         return {
             'sale.order': [{'id': 10, 'name': 'SO10', self.field: '2026-09-01 10:00:00'}],
-            'account.move': [{'id': 20, 'name': 'INV20', 'invoice_date': '2026-09-01', 'move_type': 'out_invoice'},
-                             {'id': 21, 'name': 'CN21', 'invoice_date': '2026-09-15', 'move_type': 'out_refund'}],
+            'account.move': [{'id': 20, 'name': 'INV20', 'invoice_date': '2026-09-01', 'move_type': 'out_invoice', 'amount_untaxed_signed': 136},
+                             {'id': 21, 'name': 'CN21', 'invoice_date': '2026-09-15', 'move_type': 'out_refund', 'amount_untaxed_signed': -20}],
             'sale.order.line': [{'id': 1, 'order_id': [10, 'SO10'], 'product_id': [100, 'Cabinet'], 'product_uom_qty': 10, 'product_uom': [1, 'Units']},
                                 {'id': 2, 'order_id': [10, 'SO10'], 'product_id': [101, 'FPACK'], 'product_uom_qty': 99, 'product_uom': [1, 'Units']}],
             'account.move.line': [{'id': 3, 'move_id': [20, 'INV20'], 'product_id': [100, 'Cabinet'], 'quantity': 2, 'product_uom_id': [2, 'Dozens']},
@@ -162,13 +162,13 @@ def test_so_tag_filter_combined_invoice_and_credit_from_older_order():
                 rows[0]['tag_ids'] = [1]
             if model == 'account.move.line':
                 assert 'sale_line_ids' in fields
-                rows[0]['sale_line_ids'] = [1]
-                rows[1]['sale_line_ids'] = [8]
+                rows[0].update(sale_line_ids=[1], balance=-100)
+                rows[1].update(sale_line_ids=[8], balance=20)
                 rows.extend([
                     {**rows[0], 'id': 5, 'quantity': 4, 'product_uom_id': [1, 'Units'],
-                     'sale_line_ids': [8, 9]},
+                     'sale_line_ids': [8, 9], 'balance': -25},
                     {**rows[0], 'id': 6, 'quantity': 100, 'product_uom_id': [1, 'Units'],
-                     'sale_line_ids': []},
+                     'sale_line_ids': [], 'balance': -8},
                 ])
             return rows
 
@@ -191,3 +191,25 @@ def test_so_tag_filter_combined_invoice_and_credit_from_older_order():
     assert whole_quantity(both['summary'][0]['net']) == '25'
     assert len(both['details']) == 4
     assert whole_quantity(report()['summary'][0]['invoice']) == '128'
+
+    amounts = packed['amounts']
+    assert amounts == assembled['amounts'] == both['amounts']
+    assert amounts['total'] == {'invoice': 136, 'credit': 20, 'net': 116}
+    by_tag = {row['label']: row for row in amounts['rows']}
+    assert by_tag['Pakuojamas']['invoice'] == 100
+    assert by_tag['Renkamas Furniboxe']['net'] == 5
+    assert by_tag['Kita / be žymos']['invoice'] == 11
+    assert sum(row['net'] for row in amounts['rows']) == amounts['total']['net']
+
+
+def test_invoice_amounts_do_not_double_count_lines_with_both_tags():
+    from sales_quantity_report import invoice_amount_summary
+
+    report = invoice_amount_summary(
+        [{'id': 1, 'move_type': 'out_invoice', 'amount_untaxed_signed': 120}],
+        [{'id': 2, 'move_id': [1, 'INV'], 'balance': -120}],
+        {2: [{'report_tags': ['Pakuojamas']}, {'report_tags': ['Renkamas Furniboxe']}]},
+    )
+    by_tag = {row['label']: row['invoice'] for row in report['rows']}
+    assert by_tag == {'Pakuojamas': 0, 'Renkamas Furniboxe': 0, 'Kita / be žymos': 0, 'Abi žymos': 120}
+    assert report['total']['invoice'] == 120
