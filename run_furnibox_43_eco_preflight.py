@@ -1,4 +1,7 @@
 """Read-only Odoo preflight for the first outstanding Furnibox #43 BOM."""
+import argparse
+import json
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from config import load_settings
@@ -10,6 +13,28 @@ SKU = "APACK-EU-C-CAB01-BAS009-A"
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("package", type=Path)
+    args = parser.parse_args()
+    try:
+        package = json.loads(args.package.read_text(encoding="utf-8-sig"))
+        rows = [row for row in package["records"] if row["source_bom_id"] == BOM_ID]
+        valid = (
+            package["ticket"] == 43 and package["mode"] == "create_inactive_revisions"
+            and len(rows) == 1 and rows[0]["sku"] == SKU and len(rows[0]["changes"]) == 1
+        )
+        change = rows[0]["changes"][0] if valid else {}
+        valid = valid and (
+            change["field"] == "operation_duration_minutes"
+            and change["source_operation_id"] == OPERATION_ID
+            and change["expected"] == 50 and change["desired"] == 35
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        valid = False
+    if not valid:
+        print("JSON pakete nerastas patvirtintas BOM 49502 pakeitimas.")
+        return 1
+
     settings = load_settings()
     if urlsplit(settings.url).hostname != "odoo.furnibox.lt":
         print("Patikra skirta produkcinei odoo.furnibox.lt aplinkai.")
