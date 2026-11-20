@@ -193,6 +193,17 @@ if (
 
 
 BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
+    "furnibox_43_eco_preflight": {
+        "title": "Patikrinti Furnibox #43 BOM prieš ECO",
+        "description": (
+            "Patikrina produkcinio BOM 49502 operaciją ir esamus ECO. "
+            "Odoo duomenų nekeičia."
+        ),
+        "script": "run_furnibox_43_eco_preflight.py",
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": [],
+    },
     "bom_archive_blockers": {
         "title": "Patikrinti BOM archyvavimo blokatorius",
         "description": (
