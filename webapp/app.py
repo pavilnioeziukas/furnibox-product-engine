@@ -165,6 +165,15 @@ if (
 
 
 BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
+    "furnibox_43_eco_stage": {
+        "title": "Parengti PLM reviziją (Stage bandymas)",
+        "description": "Sukuria ir patikrina vieną neaktyvią BOM reviziją.",
+        "script": "run_furnibox_43_eco_stage.py",
+        "requires_eco_package": True,
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": ["{upload}"],
+    },
     "mo_component_consumption_audit": {
         "title": "Audituoti užbaigtų MO komponentų sunaudojimą",
         "description": (
@@ -358,6 +367,9 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
         "needs_dataset_arg": True,
     },
 }
+
+if os.getenv("RAILWAY_ENVIRONMENT_NAME") != "staging":
+    BUILTIN_ACTIONS.pop("furnibox_43_eco_stage")
 
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
@@ -2324,6 +2336,17 @@ def start_job(
     upload_path = (
         latest_upload()
     )
+    package_data = None
+    if action.get("requires_eco_package"):
+        if not session.get("authenticated"):
+            abort(403)
+        uploaded = request.files.get("eco_package")
+        if uploaded is None or not (uploaded.filename or "").lower().endswith(".json"):
+            abort(400, "Įkelkite ECO paketo JSON failą.")
+        package_data = uploaded.stream.read(2_000_001)
+        if not package_data or len(package_data) > 2_000_000:
+            abort(400, "ECO paketo failas tuščias arba viršija 2 MB.")
+
 
     if (
         action[
@@ -2384,6 +2407,9 @@ def start_job(
     )
 
     job_dir.mkdir()
+    if package_data is not None:
+        upload_path = job_dir / "eco_package.json"
+        upload_path.write_bytes(package_data)
 
     write_job(
         job_dir,
