@@ -193,6 +193,18 @@ if (
 
 
 BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
+    "furnibox_43_eco_stage": {
+        "title": "Parengti PLM reviziją (Stage bandymas)",
+        "description": (
+            "Įkelkite #43 JSON paketą. Sukuria vieną neaktyvią Stage reviziją "
+            "ir sutikrina 35 min. revizijoje bei 50 min. aktyviame BOM."
+        ),
+        "script": "run_furnibox_43_eco_stage.py",
+        "requires_eco_package": True,
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": ["{upload}"],
+    },
     "furnibox_43_eco_preflight": {
         "title": "Patikrinti Furnibox #43 ECO paketą",
         "requires_eco_package": True,
@@ -457,6 +469,12 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
         "needs_dataset_arg": True,
     },
 }
+
+if (
+    os.getenv("RAILWAY_ENVIRONMENT_NAME") != "staging"
+    or not SETTINGS.web_password
+):
+    BUILTIN_ACTIONS.pop("furnibox_43_eco_stage")
 
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
