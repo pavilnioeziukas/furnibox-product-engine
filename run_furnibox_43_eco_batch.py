@@ -170,9 +170,13 @@ def main():
         return op["sequence"], pair(op["workcenter_id"])
 
     if args.activate:
-        stages = find("mrp.eco.stage", [["name", "=", "Validated"], ["type_ids", "in", [type_id[0]["id"]]]], ["id"])
-        demand(len(stages) == 1, "Validated BOM stage could not be identified")
-        stage = stages[0]["id"]
+        seed = one(ECO, [379], ["stage_id", "type_id"])
+        if seed["stage_id"] and seed["stage_id"][1].startswith("Validated") and pair(seed["type_id"]) == type_id[0]["id"]:
+            stage = pair(seed["stage_id"])
+        else:
+            stages = find("mrp.eco.stage", [["name", "in", ["Validated", "Validated (BOM)"]]], ["id"])
+            demand(len(stages) == 1, "Validated BOM stage could not be identified")
+            stage = stages[0]["id"]
 
     def activate(row):
         bid = row["source_bom_id"]
@@ -190,11 +194,6 @@ def main():
         op_ids = [change["source_operation_id"] for change in row["changes"] if change["source_operation_id"]]
         old_ops = {op["id"]: op for op in read(OP, sorted(set(op_ids)), of)} if op_ids else {}
         new_ops = read(OP, target["operation_ids"], of) if op_ids else []
-        desired_by_operation = {}
-        for change in row["changes"]:
-            oid = change["source_operation_id"]
-            if oid:
-                desired_by_operation.setdefault(oid, {})[FIELDS[change["field"]]] = change["desired"]
         for change in row["changes"]:
             field = FIELDS[change["field"]]
             oid = change["source_operation_id"]
@@ -202,8 +201,7 @@ def main():
             expected, desired = change["expected"], change["desired"]
             if oid:
                 demand(pair(old["bom_id"]) == bid, "Source operation belongs to another BOM")
-                matches = [op for op in new_ops if signature(op) == signature(old)
-                           and all(equals(op[k], val) for k, val in desired_by_operation[oid].items())]
+                matches = [op for op in new_ops if signature(op) == signature(old) and equals(op[field], desired)]
                 demand(len(matches) == 1 and pair(matches[0]["bom_id"]) == rid, f"Revision operation differs: {oid}, {field}")
                 new = matches[0]
             else:
@@ -293,8 +291,7 @@ def main():
             failures += 1
             result.update(status="blocked", reason=str(exc))
         print(json.dumps(result, ensure_ascii=False), flush=True)
-    outcome = "effective" if args.activate else ("verified" if args.write else "ready")
-    print(json.dumps({"checked": len(records), outcome: len(records) - failures, "blocked": failures}), flush=True)
+    print(json.dumps({"checked": len(records), "verified" if args.write else "ready": len(records) - failures, "blocked": failures}), flush=True)
     raise SystemExit(bool(failures))
 
 
