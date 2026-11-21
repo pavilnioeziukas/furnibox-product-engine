@@ -193,6 +193,30 @@ if (
 
 
 BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
+    "furnibox_43_eco_stage": {
+        "title": "Parengti PLM reviziją (Stage bandymas)",
+        "description": (
+            "Įkelkite #43 JSON paketą. Sukuria vieną neaktyvią Stage reviziją "
+            "ir sutikrina 35 min. revizijoje bei 50 min. aktyviame BOM."
+        ),
+        "script": "run_furnibox_43_eco_stage.py",
+        "requires_eco_package": True,
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": ["{upload}"],
+    },
+    "furnibox_43_eco_preflight": {
+        "title": "Patikrinti Furnibox #43 ECO paketą",
+        "requires_eco_package": True,
+        "description": (
+            "Patikrina produkcinio BOM 49502 operaciją ir esamus ECO. "
+            "Odoo duomenų nekeičia."
+        ),
+        "script": "run_furnibox_43_eco_preflight.py",
+        "requires_upload": False,
+        "collect_changed_outputs": False,
+        "args": ["{upload}"],
+    },
     "bom_archive_blockers": {
         "title": "Patikrinti BOM archyvavimo blokatorius",
         "description": (
@@ -445,6 +469,12 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
         "needs_dataset_arg": True,
     },
 }
+
+if (
+    os.getenv("RAILWAY_ENVIRONMENT_NAME") != "staging"
+    or not SETTINGS.web_password
+):
+    BUILTIN_ACTIONS.pop("furnibox_43_eco_stage")
 
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
@@ -2408,6 +2438,14 @@ def start_job(
     upload_path = (
         latest_upload()
     )
+    package_data = None
+    if action.get("requires_eco_package"):
+        package = request.files.get("eco_package")
+        if package is None or not (package.filename or "").lower().endswith(".json"):
+            abort(400, "Įkelkite ECO paketo JSON failą.")
+        package_data = package.stream.read(2_000_001)
+        if not package_data or len(package_data) > 2_000_000:
+            abort(400, "ECO paketo failas tuščias arba viršija 2 MB.")
 
     if (
         action[
@@ -2468,6 +2506,9 @@ def start_job(
     )
 
     job_dir.mkdir()
+    if package_data is not None:
+        upload_path = job_dir / "eco_package.json"
+        upload_path.write_bytes(package_data)
 
     write_job(
         job_dir,
