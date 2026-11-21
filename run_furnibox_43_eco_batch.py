@@ -170,20 +170,10 @@ def main():
         return op["sequence"], pair(op["workcenter_id"])
 
     if args.activate:
-        seed = one(ECO, [380], ["stage_id", "type_id"])
-        if seed["stage_id"] and "validated" in seed["stage_id"][1].casefold() and pair(seed["type_id"]) == type_id[0]["id"]:
-            stage = pair(seed["stage_id"])
-        else:
-            stages = find("mrp.eco.stage", [["name", "in", ["Validated", "Validated (BOM)"]]], ["id"])
-            demand(len(stages) == 1, "Validated BOM stage could not be identified")
-            stage = stages[0]["id"]
-        progress_seed = one(ECO, [381], ["stage_id", "type_id", "state", "bom_id"])
-        if progress_seed["stage_id"] and pair(progress_seed["type_id"]) == type_id[0]["id"] and progress_seed["state"] != "done" and pair(progress_seed["stage_id"]) != stage:
-            progress_stage = pair(progress_seed["stage_id"])
-        else:
-            stages = find("mrp.eco.stage", [["name", "ilike", "In Progress"]], ["id"])
-            demand(len(stages) == 1 and stages[0]["id"] != stage, "In Progress BOM stage could not be identified")
-            progress_stage = stages[0]["id"]
+        validated_stage = one("mrp.eco.stage", [7], ["name"])
+        demand("validated" in validated_stage["name"].casefold(), "Validated BOM stage could not be identified")
+        stage = validated_stage["id"]
+        progress_stage = 6
 
     def activate(row):
         bid = row["source_bom_id"]
@@ -221,7 +211,7 @@ def main():
         if eco["state"] != "done":
             demand(source["active"] and not target["active"], "Unexpected BOM activation state")
             if pair(eco["stage_id"]) != stage:
-                demand(pair(eco["stage_id"]) == progress_stage, "Unexpected ECO stage")
+                demand(pair(eco["stage_id"]) in (False, progress_stage), "Unexpected ECO stage")
                 call(ECO, "write", [eid], {"stage_id": stage})
             current = one(ECO, [eid], ["stage_id", "state", "allow_apply_change"])
             demand(pair(current["stage_id"]) == stage and current["state"] != "done" and current["allow_apply_change"],
