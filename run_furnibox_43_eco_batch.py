@@ -1,6 +1,7 @@
 """Create inactive Furnibox #43 PLM revisions. Dry run unless --write."""
 import argparse
 import hashlib
+from html import escape
 import json
 import math
 from pathlib import Path
@@ -44,6 +45,7 @@ def main():
     parser.add_argument("--validate-package", action="store_true")
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--activate", action="store_true")
+    parser.add_argument("--log-notes", action="store_true")
     parser.add_argument("--retry-connection-refused", action="store_true")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--start-method", default="action_new_revision")
@@ -66,8 +68,8 @@ def main():
         retry_ids = {entry["bom"] for entry in blocked}
         records = [row for row in records if row["source_bom_id"] in retry_ids]
     activation = {}
-    if args.activate:
-        demand(not args.write and not args.retry_connection_refused, "Conflicting execution modes")
+    if args.activate or args.log_notes:
+        demand(not (args.activate and args.log_notes) and not args.write and not args.retry_connection_refused, "Conflicting execution modes")
         run_dir = args.package.parent.parent
         for run_id, count in (("717189f3e67b", 1721), ("c292f9b65dee", 74)):
             log = (run_dir / run_id / "run.log").read_text(encoding="utf-8")
@@ -82,6 +84,10 @@ def main():
         activation.update({bid: (eid, None) for bid, eid in zip(sorted(COMPLETED), range(372, 378))})
         demand(len({value[0] for value in activation.values()}) == 1801, "Duplicate ECO")
         records = package["records"]
+        if args.log_notes:
+            records = [{"source_bom_id": 49496, "sku": "APACK-EU-C-CAB01-BAS003-A",
+                        "changes": [{"source_operation_id": 14954, "field": "operation_duration_minutes",
+                                     "expected": 50, "desired": 35}]}] + records
     demand(len({row["source_bom_id"] for row in records}) == len(records), "Duplicate source BOM")
     for row in records:
         keys = [(c["source_operation_id"], FIELDS[c["field"]]) for c in row["changes"]]
@@ -208,7 +214,9 @@ def main():
                        "Routing differs from approved change")
             else:
                 demand(equals(old[field], expected) and equals(new[field], desired), f"Value differs: {field}")
-        if eco["state"] != "done":
+        if args.log_notes:
+            demand(eco["state"] == "done", "ECO is not effective")
+        elif eco["state"] != "done":
             demand(source["active"] and not target["active"], "Unexpected BOM activation state")
             if pair(eco["stage_id"]) != stage:
                 demand(pair(eco["stage_id"]) in (False, progress_stage), "Unexpected ECO stage")
@@ -224,6 +232,41 @@ def main():
         flags = {row["id"]: row["active"] for row in read(BOM, [bid, rid], ["active"])}
         demand(flags == {bid: False, rid: True} and one(ECO, [eid], ["state"])["state"] == "done",
                "Activation could not be verified")
+        if args.log_notes:
+            marker = "Furnibox #43 • BOM pakeitimų auditas"
+            domain = [["model", "=", ECO], ["res_id", "=", eid], ["body", "ilike", marker]]
+            existing = call("mail.message", "search_count", domain)
+            demand(existing <= 1, "Duplicate audit notes")
+            if not existing:
+                labels = {
+                    "bom_operation_type": "Gamybos operacijos tipas",
+                    "manufacturing_lead_days": "Gamybos terminas (d.)",
+                    "prepare_manufacturing_days": "Pasiruošimo gamybai terminas (d.)",
+                    "operation_duration_minutes": "trukmė (min.)",
+                    "operation_name": "Operacijos pavadinimas",
+                }
+
+                def display(value):
+                    if value is None:
+                        return "nepriskirta"
+                    if isinstance(value, float):
+                        return f"{value:g}"
+                    return str(value)
+
+                lines = []
+                for change in row["changes"]:
+                    key = change["field"]
+                    label = labels[key]
+                    if key == "operation_duration_minutes":
+                        name = old_ops[change["source_operation_id"]]["name"]
+                        label = f"{name} — {label}"
+                    lines.append(f'{label}: {display(change["expected"])} → {display(change["desired"])}')
+                body = "<p>" + escape(marker) + "</p><ul>" + "".join(
+                    "<li>" + escape(line) + "</li>" for line in lines
+                ) + "</ul>"
+                call(ECO, "message_post", [eid], body=body, message_type="comment",
+                     subtype_xmlid="mail.mt_note", partner_ids=[], context={"mail_notify_force_send": False})
+                demand(call("mail.message", "search_count", domain) == 1, "Audit note could not be verified")
         return eid, rid
 
     def execute(row, bom, operations, title, ecos, targets):
@@ -276,9 +319,9 @@ def main():
     for row in records:
         result = {"bom": row["source_bom_id"], "sku": row["sku"]}
         try:
-            if args.activate:
+            if args.activate or args.log_notes:
                 result["eco"], result["revision"] = activate(row)
-                result["status"] = "effective"
+                result["status"] = "noted" if args.log_notes else "effective"
             else:
                 prepared = plan(row)
                 if args.write:

@@ -544,6 +544,14 @@ if os.getenv("RAILWAY_ENVIRONMENT_NAME") == "production":
         "args": ["{upload}", "--activate"],
     }
 
+    BUILTIN_ACTIONS["furnibox_43_log_notes"] = {
+        **BUILTIN_ACTIONS["furnibox_43_create_revisions"],
+        "title": "Furnibox #43 – įrašyti ECO audito pastabas",
+        "description": "Įrašo patvirtintų pakeitimų santrauką į įsigaliojusių ECO vidines pastabas.",
+        "confirmation_label": "Patvirtinu Furnibox #43 vidines ECO pastabas",
+        "args": ["{upload}", "--log-notes"],
+    }
+
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
     enabled_actions=SETTINGS.enabled_actions,
