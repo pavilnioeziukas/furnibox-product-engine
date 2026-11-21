@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 from urllib.parse import urlsplit
+from xmlrpc.client import Fault
 
 from config import load_settings
 from odoo_client import OdooClient
@@ -86,7 +87,12 @@ def run(package_path):
         eco = {"new_bom_id": False}
 
     if not eco["new_bom_id"]:
-        execute("mrp.eco", "action_new_revision", [eid])
+        try:
+            execute("mrp.eco", "action_new_revision", [eid])
+        except Fault as error:
+            # Odoo can commit the revision before serializing its empty response.
+            if not error.faultString.rstrip().endswith("TypeError: cannot marshal None unless allow_none is enabled"):
+                raise
     eco = require_one(search(
         "mrp.eco", [["id", "=", eid]], ["new_bom_id"], context=INACTIVE_CONTEXT
     ), "ECO")
