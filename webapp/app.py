@@ -529,6 +529,13 @@ if os.getenv("RAILWAY_ENVIRONMENT_NAME") == "production":
         "args": ["{upload}", "--write"],
     }
 
+    BUILTIN_ACTIONS["furnibox_43_retry_revisions"] = {
+        **BUILTIN_ACTIONS["furnibox_43_create_revisions"],
+        "title": "Furnibox #43 – užbaigti 74 ECO revizijas",
+        "description": "Tęsia tik ankstesnio paleidimo metu dėl ryšio klaidos nebaigtas revizijas.",
+        "args": ["{upload}", "--write", "--retry-connection-refused"],
+    }
+
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
     enabled_actions=SETTINGS.enabled_actions,
@@ -3067,7 +3074,7 @@ def start_job(
     if action is None:
         abort(404)
 
-    if action_key == "furnibox_43_create_revisions":
+    if action_key in {"furnibox_43_create_revisions", "furnibox_43_retry_revisions"}:
         preflight_dir = RUN_DIR / "2946ace5c715"
         if not (preflight_dir / "job.json").is_file():
             abort(409, "Reikalingas sėkmingas ECO paketo sutikrinimas.")

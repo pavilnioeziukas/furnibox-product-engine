@@ -43,6 +43,7 @@ def main():
     parser.add_argument("package", type=Path)
     parser.add_argument("--validate-package", action="store_true")
     parser.add_argument("--write", action="store_true")
+    parser.add_argument("--retry-connection-refused", action="store_true")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--start-method", default="action_new_revision")
     args = parser.parse_args()
@@ -51,6 +52,18 @@ def main():
     package = json.loads(raw)
     demand(package["ticket"] == 43 and package["mode"] == "create_inactive_revisions", "Unexpected package")
     records = [row for row in package["records"] if row["source_bom_id"] not in COMPLETED]
+    if args.retry_connection_refused:
+        log_path = args.package.parent.parent / "717189f3e67b" / "run.log"
+        entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()
+                   if line.startswith('{"bom":')]
+        expected_ids = {row["source_bom_id"] for row in records}
+        demand(len(entries) == len(expected_ids) and {entry["bom"] for entry in entries} == expected_ids,
+               "Prior run log does not cover the approved package")
+        blocked = [entry for entry in entries if entry["status"] == "blocked"]
+        demand(len(blocked) == 74 and all(entry["reason"] == "[Errno 111] Connection refused" for entry in blocked),
+               "Prior run does not contain the expected 74 connection failures")
+        retry_ids = {entry["bom"] for entry in blocked}
+        records = [row for row in records if row["source_bom_id"] in retry_ids]
     demand(len({row["source_bom_id"] for row in records}) == len(records), "Duplicate source BOM")
     for row in records:
         keys = [(c["source_operation_id"], FIELDS[c["field"]]) for c in row["changes"]]
