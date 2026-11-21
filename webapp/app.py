@@ -2338,8 +2338,7 @@ def start_job(
     )
     package_data = None
     if action.get("requires_eco_package"):
-        if not session.get("authenticated"):
-            abort(403)
+        require_toc_actor()
         uploaded = request.files.get("eco_package")
         if uploaded is None or not (uploaded.filename or "").lower().endswith(".json"):
             abort(400, "Įkelkite ECO paketo JSON failą.")
