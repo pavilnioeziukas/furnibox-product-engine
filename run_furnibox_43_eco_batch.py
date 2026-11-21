@@ -196,6 +196,7 @@ def main():
             failures += 1
             result.update(status="blocked", reason=str(exc))
         print(json.dumps(result, ensure_ascii=False), flush=True)
+    print(json.dumps({"checked": len(records), "verified" if args.write else "ready": len(records) - failures, "blocked": failures}), flush=True)
     raise SystemExit(bool(failures))
 
 

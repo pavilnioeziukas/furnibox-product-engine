@@ -518,6 +518,17 @@ if os.getenv("RAILWAY_ENVIRONMENT_NAME") == "production":
         "args": ["{upload}"],
     }
 
+    BUILTIN_ACTIONS["furnibox_43_create_revisions"] = {
+        "title": "Furnibox #43 – kurti neaktyvias ECO revizijas",
+        "description": "Sukuria arba sutikrina neaktyvias PLM revizijas pagal patvirtintą paketą.",
+        "script": "run_furnibox_43_eco_batch.py",
+        "requires_upload": False,
+        "requires_eco_package": True,
+        "requires_confirmation": True,
+        "confirmation_label": "Patvirtinu neaktyvių ECO revizijų kūrimą Furnibox produkcijoje",
+        "args": ["{upload}", "--write"],
+    }
+
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
     enabled_actions=SETTINGS.enabled_actions,
@@ -3055,6 +3066,14 @@ def start_job(
 
     if action is None:
         abort(404)
+
+    if action_key == "furnibox_43_create_revisions":
+        preflight_dir = RUN_DIR / "2946ace5c715"
+        if not (preflight_dir / "job.json").is_file():
+            abort(409, "Reikalingas sėkmingas ECO paketo sutikrinimas.")
+        preflight = read_job(preflight_dir)
+        if preflight.get("action") != "furnibox_43_preflight" or preflight.get("status") != "PASS":
+            abort(409, "ECO paketo sutikrinimas dar nepraėjo.")
 
     prune_completed_jobs()
 
