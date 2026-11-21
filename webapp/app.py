@@ -508,6 +508,16 @@ BUILTIN_ACTIONS: dict[str, dict[str, Any]] = {
     },
 }
 
+if os.getenv("RAILWAY_ENVIRONMENT_NAME") == "production":
+    BUILTIN_ACTIONS["furnibox_43_preflight"] = {
+        "title": "Furnibox #43 – sutikrinti ECO paketą",
+        "description": "Sutikrina patvirtintą JSON paketą su produkciniais Odoo BOM.",
+        "script": "run_furnibox_43_eco_batch.py",
+        "requires_upload": False,
+        "requires_eco_package": True,
+        "args": ["{upload}"],
+    }
+
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
     enabled_actions=SETTINGS.enabled_actions,
@@ -3066,6 +3076,17 @@ def start_job(
             ),
         )
 
+    package_data = None
+    if action.get("requires_eco_package"):
+        if not session.get("authenticated"):
+            abort(403)
+        uploaded = request.files.get("eco_package")
+        if not uploaded or not (uploaded.filename or "").lower().endswith(".json"):
+            abort(400, "Įkelkite patvirtintą ECO paketo JSON.")
+        package_data = uploaded.stream.read(1024 * 1024 + 1)
+        if len(package_data) > 1024 * 1024:
+            abort(413)
+
     so_number = (
         request.form.get(
             "so_number",
@@ -3115,6 +3136,9 @@ def start_job(
 
     try:
         job_dir.mkdir()
+        if package_data is not None:
+            upload_path = job_dir / "eco-package.json"
+            upload_path.write_bytes(package_data)
     except OSError:
         with _jobs_lock:
             _reserved_jobs.discard(job_id)
