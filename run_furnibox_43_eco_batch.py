@@ -43,6 +43,7 @@ def main():
     parser.add_argument("package", type=Path)
     parser.add_argument("--validate-package", action="store_true")
     parser.add_argument("--write", action="store_true")
+    parser.add_argument("--activate", action="store_true")
     parser.add_argument("--retry-connection-refused", action="store_true")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--start-method", default="action_new_revision")
@@ -64,6 +65,23 @@ def main():
                "Prior run does not contain the expected 74 connection failures")
         retry_ids = {entry["bom"] for entry in blocked}
         records = [row for row in records if row["source_bom_id"] in retry_ids]
+    activation = {}
+    if args.activate:
+        demand(not args.write and not args.retry_connection_refused, "Conflicting execution modes")
+        run_dir = args.package.parent.parent
+        for run_id, count in (("717189f3e67b", 1721), ("c292f9b65dee", 74)):
+            log = (run_dir / run_id / "run.log").read_text(encoding="utf-8")
+            entries = [json.loads(line) for line in log.splitlines() if line.startswith('{"bom":')]
+            verified = [entry for entry in entries if entry["status"] == "verified"]
+            demand(len(verified) == count, "Activation audit is incomplete")
+            for entry in verified:
+                bid = entry["bom"]
+                demand(bid not in activation, "Duplicate verified BOM")
+                activation[bid] = (entry["eco"], entry["revision"])
+        demand(set(activation) == {r["source_bom_id"] for r in records}, "Verified BOMs differ from approved package")
+        activation.update({bid: (eid, None) for bid, eid in zip(sorted(COMPLETED), range(372, 378))})
+        demand(len({value[0] for value in activation.values()}) == 1801, "Duplicate ECO")
+        records = package["records"]
     demand(len({row["source_bom_id"] for row in records}) == len(records), "Duplicate source BOM")
     for row in records:
         keys = [(c["source_operation_id"], FIELDS[c["field"]]) for c in row["changes"]]
@@ -151,6 +169,68 @@ def main():
     def signature(op):
         return op["sequence"], pair(op["workcenter_id"])
 
+    if args.activate:
+        stages = find("mrp.eco.stage", [["name", "=", "Validated"], ["type_ids", "in", [type_id[0]["id"]]]], ["id"])
+        demand(len(stages) == 1, "Validated BOM stage could not be identified")
+        stage = stages[0]["id"]
+
+    def activate(row):
+        bid = row["source_bom_id"]
+        eid, audited_revision = activation[bid]
+        eco = one(ECO, [eid], ["bom_id", "new_bom_id", "type_id", "stage_id", "state", "allow_apply_change", "name"])
+        rid = pair(eco["new_bom_id"])
+        demand(pair(eco["bom_id"]) == bid and rid and rid != bid and pair(eco["type_id"]) == type_id[0]["id"],
+               "ECO does not match approved BOM")
+        demand(rid == audited_revision if audited_revision else "Furnibox #43" in eco["name"],
+               "ECO revision does not match audit")
+        source = one(BOM, [bid], bf)
+        target = one(BOM, [rid], bf)
+        demand(source["product_tmpl_id"] == target["product_tmpl_id"] and source["product_id"] == target["product_id"],
+               "Revision belongs to a different product")
+        op_ids = [change["source_operation_id"] for change in row["changes"] if change["source_operation_id"]]
+        old_ops = {op["id"]: op for op in read(OP, sorted(set(op_ids)), of)} if op_ids else {}
+        new_ops = read(OP, target["operation_ids"], of) if op_ids else []
+        desired_by_operation = {}
+        for change in row["changes"]:
+            oid = change["source_operation_id"]
+            if oid:
+                desired_by_operation.setdefault(oid, {})[FIELDS[change["field"]]] = change["desired"]
+        for change in row["changes"]:
+            field = FIELDS[change["field"]]
+            oid = change["source_operation_id"]
+            old = old_ops[oid] if oid else source
+            expected, desired = change["expected"], change["desired"]
+            if oid:
+                demand(pair(old["bom_id"]) == bid, "Source operation belongs to another BOM")
+                matches = [op for op in new_ops if signature(op) == signature(old)
+                           and all(equals(op[k], val) for k, val in desired_by_operation[oid].items())]
+                demand(len(matches) == 1 and pair(matches[0]["bom_id"]) == rid, f"Revision operation differs: {oid}, {field}")
+                new = matches[0]
+            else:
+                new = target
+            if field == "picking_type_id":
+                demand(pair(old[field]) == (route(expected) if expected else False) and pair(new[field]) == route(desired),
+                       "Routing differs from approved change")
+            else:
+                demand(equals(old[field], expected) and equals(new[field], desired), f"Value differs: {field}")
+        if eco["state"] != "done":
+            demand(source["active"] and not target["active"], "Unexpected BOM activation state")
+            if pair(eco["stage_id"]) != stage:
+                demand(eco["stage_id"] and eco["stage_id"][1].startswith("In Progress"), "Unexpected ECO stage")
+                call(ECO, "write", [eid], {"stage_id": stage})
+            current = one(ECO, [eid], ["stage_id", "state", "allow_apply_change"])
+            demand(pair(current["stage_id"]) == stage and current["state"] != "done" and current["allow_apply_change"],
+                   "Odoo does not allow Apply Changes")
+            try:
+                call(ECO, "action_apply", [eid])
+            except Fault as error:
+                if not error.faultString.rstrip().endswith("TypeError: cannot marshal None unless allow_none is enabled"):
+                    raise
+        flags = {row["id"]: row["active"] for row in read(BOM, [bid, rid], ["active"])}
+        demand(flags == {bid: False, rid: True} and one(ECO, [eid], ["state"])["state"] == "done",
+               "Activation could not be verified")
+        return eid, rid
+
     def execute(row, bom, operations, title, ecos, targets):
         bid = row["source_bom_id"]
         demand(one(BOM, [bid], bf) == bom, "BOM changed after validation")
@@ -201,15 +281,20 @@ def main():
     for row in records:
         result = {"bom": row["source_bom_id"], "sku": row["sku"]}
         try:
-            prepared = plan(row)
-            if args.write:
-                result["eco"], result["revision"] = execute(row, *prepared)
-            result["status"] = "verified" if args.write else "ready"
+            if args.activate:
+                result["eco"], result["revision"] = activate(row)
+                result["status"] = "effective"
+            else:
+                prepared = plan(row)
+                if args.write:
+                    result["eco"], result["revision"] = execute(row, *prepared)
+                result["status"] = "verified" if args.write else "ready"
         except (ValueError, KeyError, OSError, RuntimeError, Fault) as exc:
             failures += 1
             result.update(status="blocked", reason=str(exc))
         print(json.dumps(result, ensure_ascii=False), flush=True)
-    print(json.dumps({"checked": len(records), "verified" if args.write else "ready": len(records) - failures, "blocked": failures}), flush=True)
+    outcome = "effective" if args.activate else ("verified" if args.write else "ready")
+    print(json.dumps({"checked": len(records), outcome: len(records) - failures, "blocked": failures}), flush=True)
     raise SystemExit(bool(failures))
 
 

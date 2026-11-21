@@ -536,6 +536,14 @@ if os.getenv("RAILWAY_ENVIRONMENT_NAME") == "production":
         "args": ["{upload}", "--write", "--retry-connection-refused"],
     }
 
+    BUILTIN_ACTIONS["furnibox_43_activate_revisions"] = {
+        **BUILTIN_ACTIONS["furnibox_43_create_revisions"],
+        "title": "Furnibox #43 – aktyvuoti patikrintas ECO revizijas",
+        "description": "Taiko tik patvirtinto paketo ECO, sutikrina naują aktyvią BOM ir registruoja kiekvieną rezultatą.",
+        "confirmation_label": "Patvirtinu Furnibox #43 BOM pakeitimų įsigaliojimą produkcijoje",
+        "args": ["{upload}", "--activate"],
+    }
+
 ACTIONS = load_actions(
     BUILTIN_ACTIONS,
     enabled_actions=SETTINGS.enabled_actions,
